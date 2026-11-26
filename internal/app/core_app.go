@@ -1714,10 +1714,6 @@ func (app *Application) RenderFragmentStatus(w http.ResponseWriter, status int, 
 	app.renderFragmentStatus(w, status, page, define, data)
 }
 
-func (app *Application) MarketPrices(ctx context.Context) (map[int64]esi.MarketPrice, error) {
-	return app.marketPrices(ctx)
-}
-
 func (app *Application) MarketRegions() []module.RegionOption {
 	out := make([]module.RegionOption, 0, len(marketRegions))
 	for _, r := range marketRegions {
@@ -1878,10 +1874,6 @@ func (app *Application) OwnerCorporations(ctx context.Context, o standing.Owner)
 	return app.ownerCorporations(ctx, o)
 }
 
-func (app *Application) ResolvedAllianceName(ctx context.Context, allianceID int64) (string, bool) {
-	return app.resolvedAllianceName(ctx, allianceID)
-}
-
 func (app *Application) SendEVEMail(ctx context.Context, from db.Character, recipientID int64, recipientType, subject, body string, approvedCost int) error {
 	return app.sendEVEMail(ctx, from, recipientID, recipientType, subject, body, approvedCost)
 }
@@ -1955,10 +1947,6 @@ func (app *Application) PutESI(ctx context.Context, token, path string, body any
 
 func (app *Application) PostESIPublic(ctx context.Context, path string, body, out any) error {
 	return app.esi.PostJSON(ctx, path, body, out)
-}
-
-func (app *Application) MarketFetchDue(ctx context.Context, kind string, gate time.Duration) bool {
-	return app.marketFetchDue(ctx, kind, gate)
 }
 
 func (app *Application) HistoryFetchDue(ctx context.Context, key module.MarketKey) bool {

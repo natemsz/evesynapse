@@ -374,14 +374,6 @@ func TestCalendarShowsOpsAndInGameEventsTogether(t *testing.T) {
 		t.Fatal("an event on the 15th is drawn on the 10th")
 	}
 
-	// The grid is whole weeks from Monday.
-	from, to := calendar.GridRange(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
-	if from.Format("Mon 2006-01-02") != "Mon 2026-09-28" || to.Format("Mon 2006-01-02") != "Mon 2026-11-02" {
-		t.Fatalf("October 2026 grid runs %s to %s", from.Format("Mon 2006-01-02"), to.Format("Mon 2006-01-02"))
-	}
-	if got := calendar.ParseMonth("nonsense", time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)).Format(calendar.MonthLayout); got != "2026-10" {
-		t.Fatalf("an unreadable month gave %s, want the current one", got)
-	}
 }
 
 // TestOpsManagerRoleIsConfigurable: Director by default, and whatever

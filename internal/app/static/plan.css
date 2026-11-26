@@ -1,7 +1,7 @@
 /* --- build planner --- Decision map columns, inspector, Gantt,
    buy list and waterfall for /planner/. Data colors are fixed
    hues (build green, buy blue, risk red, critical ember) so the
-   coding survives both themes; surfaces reuse theme variables. */
+   coding survives every scheme; surfaces reuse theme variables. */
 #plan { --plan-build: #3fce7a; --plan-buy: #5eb8ff; --plan-risk: #ff5a4e; --plan-fee: #ffd27a; }
 /* The planner page sits on the layout framework (layout.css): the
    search in the page head, the plan's figures on stat tiles. Width
@@ -298,7 +298,6 @@ proportional bar under the text, colored by the decision. */
 .plan-cost { font-size: var(--fs-lg); font-weight: 700; }
 .plan-node .plan-bar { height: 0.7rem; margin: 0.4rem 0 0.1rem; }
 .plan-fill.plan-risk { background: var(--plan-risk); }
-.me-wrap { display: inline; }
 #me-fields label { margin-right: 0.6rem; }
 #me-hint { margin-left: 0.4rem; }
 .plan-bar { background: #262626; border-radius: 3px; height: 0.55rem; margin: 0.3rem 0; overflow: hidden; }

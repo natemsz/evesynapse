@@ -44,39 +44,12 @@ func (q *Queries) DeleteDemoBattleFights(ctx context.Context, userID int64) erro
 	return err
 }
 
-const deleteDemoBattleKillAttackers = `-- name: DeleteDemoBattleKillAttackers :exec
-DELETE FROM kill_attackers WHERE killmail_id = ANY($1::bigint[])
-`
-
-func (q *Queries) DeleteDemoBattleKillAttackers(ctx context.Context, killmailIds []int64) error {
-	_, err := q.db.Exec(ctx, deleteDemoBattleKillAttackers, killmailIds)
-	return err
-}
-
-const deleteDemoBattleKillDetails = `-- name: DeleteDemoBattleKillDetails :exec
-DELETE FROM kill_details WHERE killmail_id = ANY($1::bigint[])
-`
-
-func (q *Queries) DeleteDemoBattleKillDetails(ctx context.Context, killmailIds []int64) error {
-	_, err := q.db.Exec(ctx, deleteDemoBattleKillDetails, killmailIds)
-	return err
-}
-
 const deleteDemoBattleKillInvolvement = `-- name: DeleteDemoBattleKillInvolvement :exec
 DELETE FROM kill_involvement WHERE killmail_id = ANY($1::bigint[])
 `
 
 func (q *Queries) DeleteDemoBattleKillInvolvement(ctx context.Context, killmailIds []int64) error {
 	_, err := q.db.Exec(ctx, deleteDemoBattleKillInvolvement, killmailIds)
-	return err
-}
-
-const deleteDemoBattleKillPrices = `-- name: DeleteDemoBattleKillPrices :exec
-DELETE FROM kill_line_prices WHERE killmail_id = ANY($1::bigint[])
-`
-
-func (q *Queries) DeleteDemoBattleKillPrices(ctx context.Context, killmailIds []int64) error {
-	_, err := q.db.Exec(ctx, deleteDemoBattleKillPrices, killmailIds)
 	return err
 }
 
@@ -234,15 +207,6 @@ DELETE FROM ops WHERE corporation_id = $1
 // The demo corporation's ops; SRP claims filed against them cascade.
 func (q *Queries) DeleteDemoOps(ctx context.Context, corporationID int64) error {
 	_, err := q.db.Exec(ctx, deleteDemoOps, corporationID)
-	return err
-}
-
-const deleteDemoOrderHealth = `-- name: DeleteDemoOrderHealth :exec
-DELETE FROM order_health WHERE character_id = $1
-`
-
-func (q *Queries) DeleteDemoOrderHealth(ctx context.Context, characterID int64) error {
-	_, err := q.db.Exec(ctx, deleteDemoOrderHealth, characterID)
 	return err
 }
 

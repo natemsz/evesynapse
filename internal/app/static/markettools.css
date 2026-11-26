@@ -19,7 +19,6 @@
 .mk-title { margin: 0; color: var(--gold); }
 .mk-title small { color: var(--muted); font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0; text-transform: none; }
 .mk-note { margin: var(--space-3) 0 0; color: var(--muted); }
-.mk-lead { margin: 0 0 var(--space-3); color: var(--muted); }
 .mk-gold { color: var(--gold); font-weight: 600; }
 
 .mk-table td:first-child { white-space: normal; min-width: 11rem; }
@@ -45,8 +44,6 @@
    cell carries a meter against the page's best. */
 .sc .l-panes { --l-insp: 22rem; }
 .sc-hero { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); }
-.sc-purpose { flex: 1 1 26rem; min-width: 0; margin: 0; color: var(--muted); max-width: 70ch; }
-.sc-purpose b { color: var(--text); font-weight: 600; }
 .sc-mech { flex: 0 1 26rem; display: grid; grid-template-columns: auto minmax(4rem, 1fr) auto; align-items: center; gap: var(--space-2); min-width: 0; }
 .sc-node { display: flex; flex-direction: column; gap: 0.1rem; padding: var(--space-2) var(--space-3); border: 1px solid var(--hairline); border-radius: var(--r-sm); background: var(--surface-inset); font-family: var(--font-num); font-size: var(--fs-md); font-weight: 600; white-space: nowrap; }
 .sc-node small, .sc-bridge small { color: var(--muted); font-family: var(--font-display); font-size: var(--fs-xs); font-weight: var(--fw-display); letter-spacing: 0.06em; text-transform: uppercase; }

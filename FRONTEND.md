@@ -54,9 +54,9 @@ bearing ones.
   core; it is at the practical size ceiling,
   so a feature with substantial styles gets its own file, linked
   in base.html after `plan.css`, see `plan.css`,
-  `tradeideas.css`), `bg.css` (wallpaper). Both themes are one
-  stylesheet: dark by default, light under
-  `html[data-theme="light"]`.
+  `tradeideas.css`), `bg.css` (wallpaper). There is one theme, the
+  dark one; the faction colour schemes (`html[data-scheme]`) and the
+  colour-blind modes (`html[data-vision]`) re-tone its tokens.
 - Every asset URL carries `?v={{.AssetVersion}}`. Cache-busting
   depends on it; never link a static file without it.
 
@@ -732,8 +732,7 @@ holds it for every page on the framework.
   console), `--surface-float` (drawers, bars, anything over
   content), `--surface-inset` (a box inside a pane), `--hairline`.
 - Selection: `--sel-bg`, `--sel-edge` and `--sel-row`, all from the
-  theme's accent, so every scheme and the light theme highlight in
-  their own colour. Never a fixed colour for "selected".
+  theme's accent, so every scheme highlights in its own colour. Never a fixed colour for "selected".
 - `--tap`: the smallest touch target (2.75rem).
 
 ### Type roles

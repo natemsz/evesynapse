@@ -53,10 +53,6 @@ func TestEmberGlassAndSkyRules(t *testing.T) {
 			t.Errorf("style.css is missing the Ember rule %q", want)
 		}
 	}
-	// Light theme keeps the shadow and drops the glow.
-	if !strings.Contains(style, `html[data-theme="light"] .brief-card:hover`) {
-		t.Error("the light theme's shadow-only briefing hover is missing")
-	}
 	// The glass recipe holds at every width: no blur-off tier, no
 	// alpha compensation. The <720px block keeps only the fleet
 	// Location hiding (a layout rule, not a surface rule).

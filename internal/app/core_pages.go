@@ -42,7 +42,6 @@ type pageData struct {
 	ProfitBlueprint *profitBlueprintView
 	Items           *itemsView
 	Search          *searchPageView
-	Skills          *skillsView
 	SkillsChars     []assetCharLink
 	Sync            *syncView
 	Admin           *adminView
@@ -217,7 +216,7 @@ func sectionForPage(page string) string {
 	switch page {
 	case "home.html":
 		return "home"
-	case "character.html", "characters.html", "skills.html",
+	case "character.html", "characters.html",
 		"assets.html",
 		"killmails.html", "notifications.html":
 		return "pilot"

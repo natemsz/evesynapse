@@ -55,13 +55,6 @@
   --subnav-h: 2.6rem;
   --l-top: calc(var(--sticky-top) + var(--subnav-h));
 }
-html[data-theme="light"] {
-  --surface-page: #f6f2e8;
-  --surface-pane: #fdfbf6;
-  --surface-inset: #fdfbf6;
-  --hairline: #dcd1bc;
-  --sel-bg: color-mix(in srgb, var(--accent) 11%, var(--panel));
-}
 /* A page with no sub-nav parks its sticky bars under the top bar. */
 .page-shell:not(:has(> .subnav nav)) #main-content { --l-top: var(--sticky-top); }
 /* A page without section tabs renders the bar empty: it takes no
@@ -234,10 +227,6 @@ html:has(.page-shell > .subnav nav) { scroll-padding-top: var(--subnav-h); }
   border-radius: var(--r-md);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
-html[data-theme="light"] .subnav .tabs-more-panel {
-  background: color-mix(in srgb, var(--panel) 94%, #fff);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
 .subnav .tabs-more-panel[hidden] { display: none; }
 .subnav .tabs-more-panel a {
   display: block;
@@ -251,7 +240,6 @@ html[data-theme="light"] .subnav .tabs-more-panel {
 .subnav .tabs-more-panel a.active { background: var(--sel-bg); color: var(--text-bright); }
 /* Schemes paint the active tab's text in their highlight. */
 html[data-scheme] .subnav a.active { color: var(--sch-hi); }
-html[data-theme="light"] .subnav { background: color-mix(in srgb, var(--panel) 86%, transparent); }
 /* The page body is one connected column instead of a floating
    card: it runs down to the footer on every page, and at the top
    it hangs from whichever bar the page has, the sub-nav where
@@ -494,8 +482,6 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 
 /* Panel: the standard solid block on the page. */
 .l-panel { min-width: 0; padding: var(--space-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--surface-inset); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045); }
-html[data-theme="light"] .l-panel,
-html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05); }
 .l-panel > h2:first-child, .l-panel > h3:first-child { margin-top: 0; }
 
 /* ---- The console ----
@@ -584,7 +570,6 @@ html[data-theme="light"] .l-stat { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.05);
 }
 .l-pane-bar > .searchwrap, .l-pane-bar > form, .l-pane-bar > input[type="search"] { flex: 1 1 14rem; min-width: 0; }
 .l-pane-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
 
 /* Back: shown only when the pane it returns to is off screen. */
 .l-back {

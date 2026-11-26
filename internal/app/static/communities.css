@@ -10,8 +10,6 @@
 
 .cm-empty { margin: 0; color: var(--muted); }
 .cm-sub { display: block; color: var(--muted); font-size: var(--fs-xs); }
-.cm-clip { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; max-width: 52ch; }
-.cm-num { text-align: right; white-space: nowrap; }
 .cm-table-box { min-width: 0; overflow-x: auto; }
 .cm-table { width: 100%; }
 .cm-date { white-space: nowrap; }

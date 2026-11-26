@@ -34,7 +34,6 @@
 .fo-h { margin: 0 0 var(--space-3); color: var(--gold); }
 .fo-tabs > [role="tabpanel"] + [role="tabpanel"] { margin-top: var(--space-5); }
 .fo-bar.tabs-on ~ [role="tabpanel"] + [role="tabpanel"] { margin-top: 0; }
-.fo-lead { max-width: 70ch; margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--fs-sm); }
 .fo-note { margin: var(--space-3) 0 0; color: var(--muted); }
 .fo-key { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
 

@@ -28,7 +28,7 @@ func TestFitTipLinesByModuleKind(t *testing.T) {
 	doc := &fitview.FitDoc{Charges: map[int64]int64{}}
 	lines := func(typeID int64, state string) string {
 		var b strings.Builder
-		for _, l := range fitview.FitTipLines(res, nil, doc, typeID, state, fitview.FitEffAttrs(res, nil, typeID, state)) {
+		for _, l := range fitview.FitTipLines(res, nil, doc, typeID, state, fitview.FitEffAttrsCharge(res, nil, typeID, state, 0)) {
 			b.WriteString(l.Label)
 			b.WriteString("|")
 			b.WriteString(l.Value)

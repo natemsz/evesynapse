@@ -102,7 +102,7 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
      inset from the screen edges, and scrolls its own height. */
   .ld-menu { position: fixed; top: 64px; left: 8px; right: 8px; width: auto; }
 }
-.ld-blk, .ld-feat { scroll-margin-top: 92px; }
+.ld-blk { scroll-margin-top: 92px; }
 .ld-hsp { flex: 1; }
 
 .ld-btn { display: inline-block; padding: 9px 18px; border-radius: var(--r-sm); font-family: Rajdhani, sans-serif; font-weight: 500; font-size: var(--fs-md); text-decoration: none; border: 1px solid transparent; cursor: pointer; white-space: nowrap; flex: none; }
@@ -146,27 +146,11 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 
 .ld-glass { background: linear-gradient(180deg, rgba(12, 8, 6, 0.58), rgba(12, 8, 6, 0) 52%), rgba(19, 14, 10, 0.84); backdrop-filter: blur(9px) saturate(1.15); -webkit-backdrop-filter: blur(9px) saturate(1.15); border: 1px solid rgba(255, 106, 0, 0.16); border-radius: var(--r-lg); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45); }
 
-.ld-preview { padding: 20px 22px; }
-.ld-pv-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-.ld-pv-head h2 { font-size: var(--fs-2xl); margin: 0; }
-.ld-pv-head span { color: var(--faint, #8a7a66); font-size: var(--fs-sm); }
-.ld-bar { display: block; width: 100%; height: 6px; margin-top: 8px; }
-.ld-bar-track { fill: rgba(255, 255, 255, 0.09); }
-.ld-bar-fill { fill: #f97116; }
-
 /* The preview reuses the home KPI and briefing markup; the site
    sheet gives .kpis its own glass surface with the full-strength
    backdrop blur and caps brief cards at a third of their row.
    Inside the landing preview the design's flat values win: no
    nested glass, no nested blur, the design's tile geometry. */
-.ld-preview .kpis { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 0; background: none; border: none; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.ld-preview .kpi { background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: var(--r-md); padding: 13px 14px; }
-.ld-preview .kpi-k { color: var(--faint, #8a7a66); font-size: var(--fs-xs); letter-spacing: 0.14em; }
-.ld-preview .kpi-v { font-family: Rajdhani, sans-serif; font-size: var(--fs-4xl); font-weight: 700; }
-.ld-preview .kpi-sub { color: var(--ld-dim); font-size: var(--fs-xs); }
-.ld-preview .brief-card { flex: none; max-width: none; padding: 12px 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.07); border-left: 3px solid #ffb35c; border-radius: var(--r-md); font-size: var(--fs-sm); }
-.ld-preview .brief-card.sev-critical { border-left-color: #ff5148; }
-.ld-preview .brief-card.sev-info { border-left-color: #57b6ff; }
 
 /* Accessibility on the landing: in-text links carry an
    underline so they never rely on color alone (buttons keep the
@@ -178,24 +162,11 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 /* The landing keeps the accent for its inline links; the
    app's links use the secondary tone. */
 .ld-main a:not(.ld-btn) { color: var(--accent); }
-.ld-preview .brief-card .sev { background: rgba(26, 12, 7, 0.88); animation: none; }
-.ld-preview .brief-card.sev-critical .sev { color: #ffb3ab; }
-.ld-preview .brief-card.sev-warning .sev { color: #ffab5e; }
-.ld-preview .brief-card.sev-info .sev { color: #a9e4ff; }
 
 /* Product screenshots: real captures in a browser chrome frame,
    flat on the sky. The frame says "this is the actual product"
    before a word of caption is read. */
-.ld-shot { margin: 30px 0 0; }
-.ld-browser { max-width: 1050px; margin: 0 auto; border-radius: var(--r-lg); overflow: hidden; border: 1px solid rgba(255, 140, 40, 0.4); background: #17100b; box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8), 0 0 70px rgba(255, 110, 0, 0.18); }
-.ld-browser-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
-.ld-dot { width: 11px; height: 11px; border-radius: 50%; background: #3a2c20; flex: none; }
-.ld-dot-on { background: #f97116; }
-.ld-url { margin-left: 10px; background: rgba(255, 255, 255, 0.06); border-radius: var(--r-sm); padding: 4px 12px; font-size: var(--fs-xs); color: #cdbca6; }
-.ld-browser img { display: block; width: 100%; height: auto; }
-.ld-shot figcaption { text-align: center; color: var(--ld-dim); font-size: var(--fs-md); margin-top: 16px; }
 .ld-ctas-center { justify-content: center; }
-.ld-brief { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
 
 .ld-blk { padding: 64px 0 8px; }
 .ld-blk h2 { font-size: clamp(var(--fs-5xl), 3.6vw, var(--fs-6xl)); font-weight: 700; margin-bottom: 10px; }
@@ -219,43 +190,13 @@ body::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height
 /* Alternating feature sections: copy on one side, the product
    (or a panel shaped like it) on the other, swapping sides
    down the page. */
-.ld-feat { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; padding: 64px 0 8px; }
-.ld-feat-txt h2 { font-size: clamp(var(--fs-4xl), 3.4vw, var(--fs-6xl)); font-weight: 700; margin-bottom: 10px; }
-.ld-feat-txt .ld-lede { max-width: 32em; }
-.ld-blurbs { margin-top: 20px; display: grid; gap: 14px; }
-.ld-blurb h3 { font-size: var(--fs-md); color: var(--gold); margin-bottom: 3px; }
-.ld-blurb p { color: var(--ld-dim); font-size: var(--fs-xl); max-width: 32em; }
-.ld-feat .ld-shot { margin: 0; }
-.ld-feat .ld-brief { grid-template-columns: 1fr; }
 
 /* Panels that stand in for a product screen: costed build
    rows and the system heat board. Every figure on them is a
    labeled sample. */
-.ld-panel { padding: 20px 22px; }
-.ld-panel h3 { font-size: var(--fs-xl); margin-bottom: 4px; }
-.ld-cap { color: var(--faint, #8a7a66); font-size: var(--fs-xs); margin-bottom: 12px; }
-.ld-prow { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.06); font-size: var(--fs-md); }
-.ld-prow:last-of-type { border-bottom: none; }
-.ld-tag { display: inline-block; font-size: var(--fs-xs); font-weight: 700; border-radius: var(--r-xs); padding: 0 8px; margin-left: 8px; }
-.ld-tag-have { background: rgba(67, 214, 138, 0.14); color: #43d68a; border: 1px solid rgba(67, 214, 138, 0.35); }
-.ld-tag-buy { background: rgba(255, 179, 92, 0.13); color: var(--gold); border: 1px solid rgba(255, 179, 92, 0.35); }
-.ld-ptotal { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.07); font-family: Rajdhani, sans-serif; font-size: var(--fs-lg); flex-wrap: wrap; }
-.ld-ptotal b { color: var(--gold); }
-.ld-sec { display: inline-block; min-width: 30px; text-align: center; padding: 0 6px; border-radius: var(--r-xs); font-size: var(--fs-xs); font-weight: 700; background: rgba(63, 212, 192, 0.16); color: #3fd4c0; border: 1px solid rgba(63, 212, 192, 0.4); }
 
 /* The corporation loop, stacked: doctrines feed fits, fits
    feed replacement, replacement runs beside Discord. */
-.ld-vloop { display: grid; gap: 0; }
-.ld-vnode { padding: 16px 18px; }
-.ld-vnode h3 { font-size: var(--fs-xl); margin-bottom: 4px; }
-.ld-vnode p { color: var(--ld-dim); font-size: var(--fs-md); }
-.ld-varrow { text-align: center; color: var(--accent); font-size: var(--fs-2xl); line-height: 1.6; }
-
-.ld-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
-.ld-stat { padding: 12px 18px; font-family: Rajdhani, sans-serif; }
-.ld-stat b { font-size: var(--fs-3xl); color: var(--gold); }
-.ld-stat span { color: var(--ld-dim); font-size: var(--fs-sm); display: block; font-family: "Eve Sans Neue", sans-serif; }
-.ld-stat-note { color: var(--ld-dim); font-size: var(--fs-xs); margin-top: 10px; max-width: 46rem; }
 
 .ld-tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; }
 .ld-tgroup { padding: 18px; }
@@ -385,13 +326,9 @@ div.ld-gal-ambient > video, div.ld-gal-ambient > img { display: block; width: 10
   .ld-hero { padding-top: 164px; padding-bottom: calc(8px + clamp(110px, 22vh, 210px)); }
   .ld-trust, .ld-tools { grid-template-columns: 1fr; }
   .ld-styles { grid-template-columns: 1fr; }
-  .ld-feat { grid-template-columns: 1fr; gap: 22px; }
-  .ld-feat-vis { order: 2; }
-  .ld-brief { grid-template-columns: 1fr; }
   .ld-tm-grid { grid-template-columns: 1fr; }
   /* The planner card's three totals wrap as a left-aligned
      group instead of stretching across the card's full width. */
-  .ld-ptotal { justify-content: flex-start; column-gap: 20px; }
   /* The Tools menu narrows to two columns. */
   .ld-menu { grid-template-columns: 1fr 1fr; }
 }

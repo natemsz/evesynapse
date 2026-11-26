@@ -32,10 +32,6 @@ try {
     // still paints right on shell-less responses.
     document.documentElement.setAttribute("data-nav", "rail");
   }
-  var savedTheme = window.localStorage.getItem("evesynapse-theme");
-  if (savedTheme === "light" || savedTheme === "dark") {
-    document.documentElement.setAttribute("data-theme", savedTheme);
-  }
   // The theme is an account setting (Settings, Interface tab):
   // on a signed-in load the server renders the account's saved
   // theme onto <html> itself, and the meta tag rendered just

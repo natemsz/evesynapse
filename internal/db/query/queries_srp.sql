@@ -30,16 +30,6 @@ DELETE FROM owner_permissions
 WHERE owner_kind = sqlc.arg(owner_kind)::text AND owner_id = sqlc.arg(owner_id)::bigint
   AND kind = 'group' AND ref = sqlc.arg(ref)::text;
 
--- name: GetSRPSettings :one
-SELECT * FROM srp_settings WHERE corporation_id = $1;
-
--- name: SetSRPSettings :exec
-INSERT INTO srp_settings (corporation_id, policy, updated_at)
-VALUES ($1, $2, $3)
-ON CONFLICT (corporation_id) DO UPDATE SET
-    policy     = excluded.policy,
-    updated_at = excluded.updated_at;
-
 -- The stored killmails among those named whose victim is one of the
 -- characters named: a pilot's own losses.
 -- name: ListLossDetails :many

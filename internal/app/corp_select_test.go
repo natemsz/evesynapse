@@ -81,9 +81,9 @@ func TestCorporationPagesShowOneCorporation(t *testing.T) {
 	f.post(director, "/corporations/settings/save", save)
 	srp, _ := f.q.GetOwnerPermission(f.ctx, db.GetOwnerPermissionParams{OwnerKind: ownerCorporation, OwnerID: discordCorp, Permission: permSRP})
 	keeps, _ := f.q.GetOwnerPermission(f.ctx, db.GetOwnerPermissionParams{OwnerKind: ownerCorporation, OwnerID: discordCorp, Permission: permDoctrines})
-	policy, _ := f.q.GetSRPSettings(f.ctx, discordCorp)
-	if srp.Ref != "Accountant" || keeps.Ref != "Fitting_Manager" || policy.Policy != "Doctrine ships only." {
-		t.Fatalf("saved settings: srp %+v, doctrines %+v, policy %q", srp, keeps, policy.Policy)
+	policy, _ := f.q.GetDefaultSRPPolicy(f.ctx, db.GetDefaultSRPPolicyParams{OwnerKind: ownerCorporation, OwnerID: discordCorp})
+	if srp.Ref != "Accountant" || keeps.Ref != "Fitting_Manager" || policy.PolicyText != "Doctrine ships only." {
+		t.Fatalf("saved settings: srp %+v, doctrines %+v, policy %q", srp, keeps, policy.PolicyText)
 	}
 	mustContain(t, "settings after saving", get(corpSettingsPath), `value="eve_role:Fitting_Manager" selected`, "Doctrine ships only.")
 	if _, body := getPage(t, f.app, stranger, corpSettingsPath); !strings.Contains(body, "no settings for you to change") {

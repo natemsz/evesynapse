@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	json "github.com/goccy/go-json"
 	"html/template"
 	"math"
 	"net/http"
@@ -893,52 +892,8 @@ func (app *Application) resolveExactTypeName(ctx context.Context, query string) 
 	}
 }
 
-// marketPrices returns the full /markets/prices/ guide keyed by type
-// ID, cached in memory until the response's Expires header says
-// otherwise (6h fallback). A failed refresh serves the stale cache
-// when one exists.
-func (app *Application) marketPrices(ctx context.Context) (map[int64]esi.MarketPrice, error) {
-	app.pricesMu.Lock()
-	if len(app.prices) > 0 && time.Now().Before(app.pricesExpiry) {
-		prices := app.prices
-		app.pricesMu.Unlock()
-		return prices, nil
-	}
-	stale := app.prices
-	app.pricesMu.Unlock()
-
-	body, header, err := app.esi.FetchRawLong(ctx, "", "/markets/prices/")
-	if err != nil {
-		if len(stale) > 0 {
-			logging.Warnf("market: refresh prices failed (%v); serving stale cache", err)
-			return stale, nil
-		}
-		return nil, err
-	}
-	var rows []esi.MarketPrice
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, fmt.Errorf("market: decode prices: %w", err)
-	}
-
-	prices := make(map[int64]esi.MarketPrice, len(rows))
-	for _, row := range rows {
-		prices[row.TypeID] = row
-	}
-	expiry := time.Now().Add(6 * time.Hour)
-	if exp := header.Get("Expires"); exp != "" {
-		if t, perr := http.ParseTime(exp); perr == nil {
-			expiry = t
-		}
-	}
-	app.pricesMu.Lock()
-	app.prices = prices
-	app.pricesExpiry = expiry
-	app.pricesMu.Unlock()
-	return prices, nil
-}
-
-// cachedPrices returns the in-memory /markets/prices/ cache when a
-// Market visit has populated it, nil otherwise. It never fetches:
+// cachedPrices returns the in-memory /markets/prices/ cache once the
+// worker's guide price refresh has filled it, nil before. It never fetches:
 // render-path consumers (killmail values) show ", " until the cache
 // exists rather than blocking a page on the price guide.
 func (app *Application) cachedPrices() map[int64]esi.MarketPrice {

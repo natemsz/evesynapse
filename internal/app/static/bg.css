@@ -62,8 +62,7 @@ html:where(:not([data-backdrop="glow"]):not([data-tier="minimalistic"]):not([dat
    into those files, so no filter runs over the backdrop layer
    at paint time. The scheme muted tier below rides the same
    twins. The glow state swaps the art for the signature top
-   horizon glow over the warm black ground. The light theme
-   paints no backdrop layer at all, so the choice rests there. */
+   horizon glow over the warm black ground. */
 html[data-backdrop="full"] {
   --glass: color-mix(in srgb, var(--panel) 78%, transparent);
 }
@@ -197,11 +196,6 @@ html[data-backdrop="glow"] body::before {
   border-color: color-mix(in srgb, var(--accent) 22%, transparent);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
-[data-theme="light"] .page-body:not(:has(.home-grid)) .legal-stack > .card {
-  background: #fdfbf6;
-  border-color: #d9cfba;
-  box-shadow: 0 4px 18px rgba(90, 70, 40, 0.18);
-}
 .legal-text {
   white-space: pre-wrap;
   font-family: var(--font-mono);
@@ -226,16 +220,12 @@ html[data-backdrop="glow"] body::before {
   -webkit-backdrop-filter: blur(30px) saturate(1.45);
   backdrop-filter: blur(30px) saturate(1.45);
 }
-html[data-theme="light"] .charselector-dropdown {
-  background-color: #fdfbf6;
-  border-color: #d9cfba;
-}
 
 /* The flyout glass: one recipe for every panel that floats over
    the page from the chrome (the notifications menu, the character
    switcher's menu, the first-run notification prompt, the rail's
    category flyouts). The tokens hang off the html element, where
-   the colour schemes and the light theme set --panel and
+   the colour schemes set --panel and
    --accent, so each scheme tints the glass and its edge. The
    blur only bites where the panel's ancestry lets it sample the
    page: the header and the sidebar are backdrop roots, so the
@@ -248,10 +238,6 @@ html[data-theme="light"] .charselector-dropdown {
   --flyout-edge: color-mix(in srgb, var(--accent) 25%, transparent);
   --flyout-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
   --flyout-frost: blur(30px) saturate(1.45);
-}
-html[data-theme="light"] {
-  --flyout-edge: #d8cdb8;
-  --flyout-shadow: 0 6px 22px rgba(60, 40, 10, 0.25);
 }
 .switcher .menu, .switcher-menu, .notify-menu, .notify-prompt {
   background: var(--flyout-bg);
@@ -349,10 +335,6 @@ body:has(main .suggest:not([hidden])) main {
   border-color: color-mix(in srgb, var(--accent) 22%, transparent);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   backdrop-filter: blur(10px) saturate(1.2);
-}
-html[data-theme="light"] .btn.btn-quiet {
-  background: rgba(253, 251, 246, 0.72);
-  border-color: #d3c7ae;
 }
 /* Inside glass that already blurs, the page panel, the
    notify menu, the quiet pill keeps its paint and drops the
@@ -928,9 +910,6 @@ html[data-scheme] .sidebar .branch > summary:focus-visible { outline-color: var(
    end stop. Legend swatches follow their series. */
 html[data-scheme] .legend-price { background: var(--sch-core); }
 html[data-scheme] .legend-volume { background: var(--sch-end); }
-html[data-scheme] .legend-isk { background: var(--sch-core); }
-html[data-scheme] .legend-assets { background: var(--sch-end); }
-html[data-scheme] .legend-total { background: var(--sch-hi); }
 html[data-scheme] .pchart .chart-line { stroke: var(--sch-core); }
 html[data-scheme] .pchart .chart-line-stacked { stroke: var(--sch-hi); }
 html[data-scheme] .chart-area-stop-top { stop-color: var(--sch-core); }
@@ -939,8 +918,6 @@ html[data-scheme] .pchart .chart-dot { fill: var(--sch-core); }
 html[data-scheme] .pchart .chart-dot-stacked { fill: var(--sch-hi); }
 html[data-scheme] .pchart .cdot { fill: var(--sch-core); }
 html[data-scheme] .pchart .cdot-stacked { fill: var(--sch-hi); }
-html[data-scheme] .pchart .chart-band.band-isk { fill: var(--sch-core); }
-html[data-scheme] .pchart .chart-band.band-assets { fill: var(--sch-end); }
 html[data-scheme] .pchart .chart-volbar { fill: var(--sch-end); }
 
 /* The Settings page's theme picker: one row per look, a swatch,
@@ -1112,21 +1089,7 @@ html[data-vision="blueyellow"] .map {
 /* Starfield-only switch (Settings, Interface tab: data-stars-only="1"
    on <html>). Swaps every interior page backdrop to one pure black
    seamless starfield regardless of active scheme, leaving the landing
-   page, light theme and Minimalistic mode untouched. */
-html[data-stars-only="1"]:not([data-theme="light"]):not([data-backdrop="glow"]):not([data-tier="minimalistic"]) body:has(.page-body)::before {
-  background-color: #020203;
-  background-image: url("/static/stars-minimal.webp?v=abe974ddcae1b29e");
-  background-image: image-set(
-    url("/static/stars-minimal.avif?v=963518d4ac13c96a") type("image/avif") 1x,
-    url("/static/stars-minimal-2x.avif?v=0b8475f664569d43") type("image/avif") 2x,
-    url("/static/stars-minimal.webp?v=abe974ddcae1b29e") type("image/webp") 1x,
-    url("/static/stars-minimal-2x.webp?v=cb3159ba31115bd8") type("image/webp") 2x
-  );
-  background-repeat: repeat;
-  background-size: 768px 768px;
-  background-position: 0 0;
-  filter: none;
-}
+   page and Minimalistic mode untouched. */
 .stars-only-row.is-disabled .scheme-swatch,
 .stars-only-row.is-disabled .scheme-meta { opacity: .55; }
 .stars-only-swatch {

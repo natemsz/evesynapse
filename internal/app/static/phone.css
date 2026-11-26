@@ -124,9 +124,9 @@
 
   /* Swipe rows: a row of chips or pills that would wrap into a
      ragged block scrolls sideways as one line instead, edge to
-     edge with the page glass, its right edge fading. New chip
-     rows take .swipe-row; existing rows join the list. */
-  .swipe-row, .region-pills, .browse-sorts {
+     edge with the page glass, its right edge fading. A new chip
+     row joins this list. */
+  .region-pills, .browse-sorts {
     display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -138,8 +138,7 @@
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
   }
-  .swipe-row::-webkit-scrollbar, .region-pills::-webkit-scrollbar, .browse-sorts::-webkit-scrollbar { display: none; }
-  :is(.swipe-row, .region-pills, .browse-sorts) > * { flex: none; scroll-snap-align: start; }
+  .region-pills::-webkit-scrollbar, .browse-sorts::-webkit-scrollbar { display: none; }
   .browse-sorts { align-items: center; gap: 0.4rem; white-space: nowrap; }
 
   /* Table filter boxes span the column on a phone. */
@@ -231,7 +230,6 @@
     box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.6);
     animation: sheet-rise 180ms ease-out;
   }
-  html[data-theme="light"] .as-sheet.open { background: var(--panel); }
   .as-sheet.open > .sheet-head {
     display: flex; align-items: center; justify-content: space-between;
     position: sticky; top: 0; z-index: 2;

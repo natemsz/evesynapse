@@ -297,14 +297,3 @@ func (f *fitting) applyBuffs(fleet []BuffValue) {
 
 // attrBuffValue is where a buff's synthetic source holds its value.
 const attrBuffValue = 2469
-
-// WithBursts attaches the cached burst data to a snapshot, so the
-// fit's bursts and fleet boosts act on it.
-func WithBursts(ctx context.Context, q *db.Queries, snap *Snapshot) (*BurstData, error) {
-	d, err := Bursts(ctx, q)
-	if err != nil {
-		return nil, err
-	}
-	snap.Bursts = d
-	return d, nil
-}

@@ -1,7 +1,7 @@
 /* The sign-up and character-link chooser (/auth/link). The activity cards,
    the feature rows and the opt-ins take the Trade Ideas accents (.ti-a1 to
    .ti-a6, set in tradeideas.css: ember, gold, coral, orchid, teal, sky, in
-   both themes), so a card reads as one thing: its edge, its title and its
+   every scheme), so a card reads as one thing: its edge, its title and its
    tick share a color. Layout and surfaces are the site's own (.card, .btn,
    the row colors). */
 
@@ -74,7 +74,6 @@
 .lk-sub { margin: 0.6rem 0 0.2rem; }
 
 .lk-top { margin: 0.1rem 0 0.4rem; font-size: var(--fs-xs); }
-.lk-privacy { margin: 0.3rem 0 0; color: var(--muted); }
 
 /* The sign-up theme step: the type cards first, then the schemes
    of the chosen type (the scheme rows themselves are the Settings
@@ -93,7 +92,6 @@
 
 /* The Axon offer on the reveal, shown while the location feature
    the intel channels file reports by is part of the choice. */
-.lk-axon { margin-top: 1rem; border-top: 1px solid rgba(255,255,255,.08); padding-top: 0.8rem; }
 .lk-axon-dl { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 /* Which account a link lands on (/auth/link signed in, /auth/confirm):

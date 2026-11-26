@@ -27,7 +27,6 @@
 .ib-count { flex: none; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 
 /* The main pane's text. */
-.ib-lede { margin: 0 0 var(--space-3); color: var(--muted); max-width: 46rem; }
 .ib-sub { margin: var(--space-4) 0 var(--space-2); }
 .ib-sub:first-of-type { margin-top: 0; }
 .ib-sub a { color: var(--text); }
@@ -92,7 +91,6 @@
 .ib-hubs { width: 100%; }
 .ib-hubs .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ib-uses { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); gap: 0 var(--space-3); }
-
 
 /* A hull's public fits: the shared fit cards, without a picture
    (every card is this hull). */

@@ -6140,7 +6140,7 @@
       renderLegend();
       schedule();
     });
-    mo.observe(root.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-scheme", "data-vision", "class"] });
+    mo.observe(root.documentElement, { attributes: true, attributeFilter: ["data-scheme", "data-vision", "class"] });
 
     // --- Live layers: loading, the picker, refresh ---
     // The page names the payload it rendered with (hashed, cached for

@@ -65,7 +65,7 @@ func TestTrainingHorizonSkipsFinishedSkills(t *testing.T) {
 			{SkillID: 3302, FinishedLevel: 5, FinishDate: rfc(now.Add(2 * time.Hour))},
 		},
 	}}
-	w := app.buildTraining(context.Background(), bundles)
+	w := app.buildTrainingWithin(context.Background(), bundles, now, 0)
 	if len(w.Events) != 2 {
 		t.Fatalf("horizon lists %d events, want the 2 still to finish: %+v", len(w.Events), w.Events)
 	}

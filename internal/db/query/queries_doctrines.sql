@@ -73,6 +73,20 @@ SELECT * FROM doctrine_fits
 WHERE doctrine_id = ANY(sqlc.arg(doctrine_ids)::bigint[])
 ORDER BY doctrine_id, id;
 
+-- name: SetDoctrineFitSearch :exec
+-- A fit's search text and own tags, worked out from its items when it
+-- is saved (schema 186).
+UPDATE doctrine_fits SET search_text = sqlc.arg(search_text), fit_tags = sqlc.arg(fit_tags)
+WHERE id = sqlc.arg(id);
+
+-- name: ListDoctrineFitsWithoutSearch :many
+-- Fits whose search text is not worked out yet (stored before schema
+-- 186, or seeded), oldest first, a bounded batch per worker pass.
+SELECT id, items_json FROM doctrine_fits
+WHERE search_text IS NULL
+ORDER BY id
+LIMIT sqlc.arg(row_limit)::bigint;
+
 -- name: DoctrineHasShip :one
 SELECT EXISTS (SELECT 1 FROM doctrine_fits WHERE doctrine_id = $1 AND ship_type_id = $2);
 

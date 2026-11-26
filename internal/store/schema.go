@@ -1101,6 +1101,16 @@ var pgRegionStatsSweptAtSchema string
 //go:embed schema_pg/185_customize_prompt_seen.sql
 var pgCustomizePromptSeenSchema string
 
+// Step 186: a doctrine fit's search text and tags, built when it is saved.
+//
+//go:embed schema_pg/186_doctrine_fit_search.sql
+var pgDoctrineFitSearchSchema string
+
+// Step 187: a d-scan's own rows, kept beside its reading.
+//
+//go:embed schema_pg/187_scan_dscan_rows.sql
+var pgScanDScanRowsSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1314,6 +1324,8 @@ func schemaSteps() []schemaStep {
 		{183, "doctrine_readiness", pgDoctrineReadinessSchema, ""},
 		{184, "region_stats_swept_at", pgRegionStatsSweptAtSchema, ""},
 		{185, "customize_prompt_seen", pgCustomizePromptSeenSchema, ""},
+		{186, "doctrine_fit_search", pgDoctrineFitSearchSchema, ""},
+		{187, "scan_dscan_rows", pgScanDScanRowsSchema, ""},
 	}
 }
 

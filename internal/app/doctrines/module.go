@@ -61,6 +61,9 @@ var Module = module.Module{
 		auth.Post("/doctrines/{doctrineID}/fits/add", h((*mod).handleDoctrineFitAdd))
 		auth.Post("/doctrines/{doctrineID}/fits/{fitID}/remove", h((*mod).handleDoctrineFitRemove))
 	},
+	CycleJobs: []module.CycleJob{
+		{Name: "doctrine fit search", Describe: "working out doctrine fits' search text", At: module.AfterPublicData, Run: foldFitSearch},
+	},
 	Pages: []module.Page{
 		{Template: "doctrines.html", Section: "fleets"},
 		{Template: "doctrine.html", Section: "fleets"},

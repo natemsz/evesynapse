@@ -514,7 +514,7 @@ func (app *Application) storeRosterScan(ctx context.Context, userID int64, roste
 		return "", err
 	}
 	err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(roster.result.Kind),
-		SystemID: roster.result.SystemID, UserID: userID, Raw: raw, Result: string(body), CreatedAt: time.Now().UTC()})
+		SystemID: roster.result.SystemID, UserID: userID, Raw: raw, Result: string(body), CreatedAt: time.Now().UTC(), DscanRows: dscanRowsOf(raw)})
 	return id, err
 }
 

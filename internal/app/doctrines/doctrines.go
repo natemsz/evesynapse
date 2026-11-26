@@ -688,8 +688,9 @@ func (app *mod) handleDoctrineFitAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	doc.Name = name
 	raw, err := json.Marshal(doc)
+	var fitID int64
 	if err == nil {
-		_, err = app.queries.AddDoctrineFit(ctx, db.AddDoctrineFitParams{
+		fitID, err = app.queries.AddDoctrineFit(ctx, db.AddDoctrineFitParams{
 			DoctrineID: d.ID, Name: name, ShipTypeID: doc.ShipTypeID, ItemsJson: string(raw), FleetRole: role,
 			Note:    humanize.Clip(strings.TrimSpace(r.Form.Get("note")), doctrineNoteMax),
 			AddedBy: app.deps.OwnerActorFor(ctx, userID, doctrineOwnerOf(d)), AddedAt: time.Now().UTC(),
@@ -701,6 +702,7 @@ func (app *mod) handleDoctrineFitAdd(w http.ResponseWriter, r *http.Request) {
 		back("The fit could not be added; check the server log.")
 		return
 	}
+	app.storeFitSearch(ctx, map[int64]fitview.FitDoc{fitID: *doc})
 	message := name + " added to " + d.Name + "."
 	if skipped > 0 {
 		message += " " + humanize.Plural(skipped, "line") + " of the pasted text could not be read and " + map[bool]string{true: "was", false: "were"}[skipped == 1] + " left out."
@@ -861,46 +863,41 @@ func (app *mod) corpFitBrowser(ctx context.Context, owner standing.Owner, chosen
 		if err != nil {
 			logging.Errorf("loadouts: fits of %s: %v", owner.Key(), err)
 		}
-		// The module and charge names behind every card's
-		// search text resolve in one batched lookup, not one
-		// single-type lookup per item per fit.
-		docs := make([]fitview.FitDoc, len(fits))
+		// A card's search text and the fit's own tags are stored with
+		// the fit (fit_search.go). A fit the worker has not reached yet
+		// works them out here, all such fits in one batched name lookup.
+		pending := map[int]fitview.FitDoc{}
 		var typeIDs []int64
 		for i, fit := range fits {
-			_ = json.Unmarshal([]byte(fit.ItemsJson), &docs[i])
-			for _, item := range docs[i].Items {
-				typeIDs = append(typeIDs, item.TypeID)
+			if fit.SearchText.Valid {
+				continue
 			}
-			for chargeID := range docs[i].Charges {
-				typeIDs = append(typeIDs, chargeID)
-			}
+			var doc fitview.FitDoc
+			_ = json.Unmarshal([]byte(fit.ItemsJson), &doc)
+			pending[i] = doc
+			typeIDs = append(typeIDs, fitSearchTypeIDs(doc)...)
 		}
-		namesByID := app.deps.CachedTypeNames(ctx, typeIDs)
+		var namesByID map[int64]string
+		if len(pending) > 0 {
+			namesByID = app.deps.CachedTypeNames(ctx, typeIDs)
+		}
 		for i, fit := range fits {
 			d := byID[fit.DoctrineID]
-			doc := docs[i]
+			search, fitTags := fit.SearchText.String, fit.FitTags.String
+			if doc, ok := pending[i]; ok {
+				search, fitTags = fitSearchFields(doc, namesByID)
+			}
 			tags := doctrineTagList(d.Tags)
-			for _, tag := range doc.Tags {
+			for _, tag := range splitLines(fitTags) {
 				if !hasTag(tags, tag) {
 					tags = append(tags, tag)
-				}
-			}
-			var modNames []string
-			for _, item := range doc.Items {
-				if name := namesByID[item.TypeID]; name != "" {
-					modNames = append(modNames, name)
-				}
-			}
-			for _, chargeID := range doc.LoadedCharges() {
-				if name := namesByID[chargeID]; name != "" {
-					modNames = append(modNames, name)
 				}
 			}
 			cards = append(cards, fitCard{
 				ID: fit.ID, Name: fit.Name, Ship: app.deps.TypeNameOrID(ctx, fit.ShipTypeID), ShipTypeID: fit.ShipTypeID,
 				Role: fit.FleetRole, DoctrineID: d.ID, Doctrine: d.Name, DoctrineURL: module.DoctrineURL(d.ID), Category: d.Category,
 				OpenURL: "/fittings/?doctrine=" + idString(fit.ID) + "#fit-editor", AddField: "copy", Updated: fit.AddedAt, tags: tags,
-				moduleHay: strings.ToLower(strings.Join(modNames, "\n")),
+				moduleHay: search,
 			})
 		}
 		app.hullClasses(ctx, cards)

@@ -4,11 +4,11 @@
 -- ---------------------------------------------------------------------
 
 -- name: InsertScan :exec
-INSERT INTO scans (id, kind, system_id, user_id, group_id, raw, result, created_at)
-VALUES (sqlc.arg(id), sqlc.arg(kind), sqlc.arg(system_id), sqlc.arg(user_id), sqlc.arg(group_id), sqlc.arg(raw), sqlc.arg(result), sqlc.arg(created_at));
+INSERT INTO scans (id, kind, system_id, user_id, group_id, raw, result, created_at, dscan_rows)
+VALUES (sqlc.arg(id), sqlc.arg(kind), sqlc.arg(system_id), sqlc.arg(user_id), sqlc.arg(group_id), sqlc.arg(raw), sqlc.arg(result), sqlc.arg(created_at), sqlc.narg(dscan_rows));
 
 -- name: GetScan :one
-SELECT id, kind, system_id, user_id, group_id, raw, result, created_at FROM scans WHERE id = $1;
+SELECT id, kind, system_id, user_id, group_id, raw, result, created_at, dscan_rows FROM scans WHERE id = $1;
 
 -- A scan group (schema 086): every scan filed under one group
 -- id, oldest first -- the group's timeline on a member's page.

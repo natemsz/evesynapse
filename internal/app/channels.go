@@ -969,7 +969,7 @@ func (app *Application) readingReportOf(ctx context.Context, base db.InsertIntel
 	}
 	id, err := newScanID()
 	if err == nil {
-		err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(res.Kind), SystemID: res.SystemID, UserID: base.AuthorUserID, Raw: raw, Result: string(body), CreatedAt: time.Now().UTC()})
+		err = app.queries.InsertScan(ctx, db.InsertScanParams{ID: id, Kind: string(res.Kind), SystemID: res.SystemID, UserID: base.AuthorUserID, Raw: raw, Result: string(body), CreatedAt: time.Now().UTC(), DscanRows: dscanRowsOf(raw)})
 	}
 	if err != nil {
 		logging.Errorf("channels: store scan from a paste: %v", err)

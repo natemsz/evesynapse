@@ -4,7 +4,68 @@
 
 <div class="legal-stack">
 <section class="card" data-fold="never">
-  <h2>Release history</h2>
+  <h2 id="cl-explorer-title">Version explorer</h2>
+  <search>
+    <form id="cl-explorer" class="cl-explorer" method="get" action="/changelog/" aria-labelledby="cl-explorer-title">
+      <div class="cl-fields">
+        <div class="cl-field">
+          <label for="cl-release">Release</label>
+          <select id="cl-release" name="release">
+            {{range .Changelog.Releases}}
+            <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div class="cl-field">
+          <label for="cl-major">Major</label>
+          <select id="cl-major" name="major">
+            {{range .Changelog.Majors}}
+            <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div class="cl-field">
+          <label for="cl-minor">Minor</label>
+          <select id="cl-minor" name="minor">
+            {{range .Changelog.Minors}}
+            <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div class="cl-field cl-field-rev">
+          <label for="cl-rev">Revision</label>
+          <select id="cl-rev" name="rev">
+            {{range .Changelog.Revisions}}
+            <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div class="cl-actions">
+          <button type="submit" class="btn">Show</button>
+          {{if not .Changelog.IsLatestMinor}}
+          <a class="btn btn-ghost" href="/changelog/">Latest</a>
+          {{end}}
+        </div>
+      </div>
+    </form>
+  </search>
+  {{if gt (len .Changelog.MinorLinks) 1}}
+  <nav class="cl-pills" aria-label="Minor versions in this major series">
+    {{range .Changelog.MinorLinks}}
+    <a class="cl-pill{{if .Active}} is-active{{end}}" href="{{.URL}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
+    {{end}}
+  </nav>
+  {{end}}
+  <script type="application/json" id="cl-index">{{.Changelog.IndexJSON}}</script>
+</section>
+
+<section class="card" data-fold="never">
+  <div class="cl-head">
+    <h2>{{.Changelog.Heading}}</h2>
+    {{if .Changelog.Subheading}}
+    <p class="cl-meta">{{.Changelog.Subheading}}</p>
+    {{end}}
+  </div>
   {{.Changelog.Body}}
 </section>
 </div>

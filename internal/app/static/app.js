@@ -5920,5 +5920,95 @@
   document.addEventListener("visibilitychange", function () { if (!document.hidden) tickAges(); });
   document.addEventListener("evesynapse:content-ready", tickAges);
 
+  // Changelog version explorer: keep child version selects in sync with
+  // the selected release/major/minor without auto-submitting the form.
+  function initChangelogExplorer() {
+    var form = document.getElementById("cl-explorer");
+    var dataEl = document.getElementById("cl-index");
+    if (!form || !dataEl || form.dataset.clBound) return;
+    form.dataset.clBound = "1";
+
+    var tree;
+    try { tree = JSON.parse(dataEl.textContent || "[]"); } catch (e) { return; }
+    if (!Array.isArray(tree) || !tree.length) return;
+
+    var relSel = document.getElementById("cl-release");
+    var majSel = document.getElementById("cl-major");
+    var minSel = document.getElementById("cl-minor");
+    var revSel = document.getElementById("cl-rev");
+    if (!relSel || !majSel || !minSel || !revSel) return;
+
+    function findByV(list, val) {
+      var n = parseInt(val, 10);
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].v === n) return list[i];
+      }
+      return list[0] || null;
+    }
+
+    function setOptions(sel, items, selectedVal) {
+      sel.textContent = "";
+      for (var i = 0; i < items.length; i++) {
+        var opt = document.createElement("option");
+        opt.value = items[i].value;
+        opt.textContent = items[i].label;
+        if (opt.value === selectedVal) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
+
+    function syncRevs(rel, maj, min) {
+      var opts = [{ value: "", label: "All revisions" }];
+      var revs = (min && min.r) || [];
+      for (var i = 0; i < revs.length; i++) {
+        opts.push({
+          value: String(revs[i]),
+          label: "v" + rel.v + "." + maj.v + "." + min.v + "." + revs[i]
+        });
+      }
+      setOptions(revSel, opts, "");
+    }
+
+    function syncMinors(rel, maj) {
+      var minors = (maj && maj.n) || [];
+      var opts = [];
+      for (var i = 0; i < minors.length; i++) {
+        opts.push({ value: String(minors[i].v), label: String(minors[i].v) });
+      }
+      var picked = minors[0] || null;
+      setOptions(minSel, opts, picked ? String(picked.v) : "");
+      syncRevs(rel, maj, picked);
+    }
+
+    function syncMajors(rel) {
+      var majors = (rel && rel.m) || [];
+      var opts = [];
+      for (var i = 0; i < majors.length; i++) {
+        opts.push({ value: String(majors[i].v), label: String(majors[i].v) });
+      }
+      var picked = majors[0] || null;
+      setOptions(majSel, opts, picked ? String(picked.v) : "");
+      syncMinors(rel, picked);
+    }
+
+    relSel.addEventListener("change", function () {
+      var rel = findByV(tree, relSel.value);
+      if (rel) syncMajors(rel);
+    });
+    majSel.addEventListener("change", function () {
+      var rel = findByV(tree, relSel.value);
+      var maj = rel && findByV(rel.m || [], majSel.value);
+      if (rel && maj) syncMinors(rel, maj);
+    });
+    minSel.addEventListener("change", function () {
+      var rel = findByV(tree, relSel.value);
+      var maj = rel && findByV(rel.m || [], majSel.value);
+      var min = maj && findByV(maj.n || [], minSel.value);
+      if (rel && maj && min) syncRevs(rel, maj, min);
+    });
+  }
+  initChangelogExplorer();
+  document.addEventListener("evesynapse:content-ready", initChangelogExplorer);
+
   window.esLive = { mark: mark, settle: settle, drop: drop, reset: reset, flash: flash, pill: pill, stream: stream, seen: seen, retime: retime };
 })();

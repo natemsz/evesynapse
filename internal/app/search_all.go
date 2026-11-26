@@ -214,67 +214,67 @@ func (app *Application) searchRegionTier(ctx context.Context, q string, limRegio
 	return out, ""
 }
 
-// searchCorporationTier is the corporations tier: the warmed
-// public records, so a name the app knows links straight to its
-// record page.
+// searchCorporationTier and searchAllianceTier are the
+// corporations and alliances tiers: the warmed public records, so a
+// name the app knows links straight to its record page.
 func (app *Application) searchCorporationTier(ctx context.Context, q string, limOrgs int) (hits []searchHit, guesses []typingGuess) {
-	if indexed, ok := app.searchIndexCorporations(q, limOrgs); ok {
-		hits = indexed
-	} else if rows, err := app.queries.SearchCorporationRecordsByName(ctx, q); err == nil {
-		for _, row := range rows {
-			payload, ok := decodeCorpPayload(row.Payload)
-			if !ok {
-				continue
+	return app.searchOrgTier(ctx, q, limOrgs, "corporation", "Corporation", pageWantCorporation, app.searchIndexCorporations,
+		func(ctx context.Context, q string) ([]orgSearchRecord, error) {
+			rows, err := app.queries.SearchCorporationRecordsByName(ctx, q)
+			out := make([]orgSearchRecord, 0, len(rows))
+			for _, row := range rows {
+				if payload, ok := decodeCorpPayload(row.Payload); ok {
+					out = append(out, orgSearchRecord{id: row.CorporationID, name: payload.Corp.Name, ticker: payload.Corp.Ticker})
+				}
 			}
-			if _, ok := nameMatchTier(payload.Corp.Name, q); !ok {
-				continue
-			}
-			label := "Corporation"
-			if payload.Corp.Ticker != "" {
-				label = "[" + payload.Corp.Ticker + "]"
-			}
-			hits = append(hits, searchHit{
-				Kind: "corporation", ID: row.CorporationID, Name: payload.Corp.Name, Label: label,
-			})
-		}
-		sortHitsByName(hits, q)
-		hits = capHits(hits, limOrgs)
-	} else {
-		logging.Errorf("search: corporation records for %q: %v", q, err)
-	}
-	for _, h := range hits {
-		guesses = append(guesses, typingGuess{kind: pageWantCorporation, id: h.ID})
-	}
-	return hits, guesses
+			return out, err
+		})
 }
 
 func (app *Application) searchAllianceTier(ctx context.Context, q string, limOrgs int) (hits []searchHit, guesses []typingGuess) {
-	if indexed, ok := app.searchIndexAlliances(q, limOrgs); ok {
-		hits = indexed
-	} else if rows, err := app.queries.SearchAllianceRecordsByName(ctx, q); err == nil {
+	return app.searchOrgTier(ctx, q, limOrgs, "alliance", "Alliance", pageWantAlliance, app.searchIndexAlliances,
+		func(ctx context.Context, q string) ([]orgSearchRecord, error) {
+			rows, err := app.queries.SearchAllianceRecordsByName(ctx, q)
+			out := make([]orgSearchRecord, 0, len(rows))
+			for _, row := range rows {
+				if payload, ok := decodeAlliancePayload(row.Payload); ok {
+					out = append(out, orgSearchRecord{id: row.AllianceID, name: payload.Alliance.Name, ticker: payload.Alliance.Ticker})
+				}
+			}
+			return out, err
+		})
+}
+
+// orgSearchRecord is one decoded corporation or alliance record
+// from the SQL search path.
+type orgSearchRecord struct {
+	id           int64
+	name, ticker string
+}
+
+// searchOrgTier is the shared corporation and alliance tier: the
+// in-memory index when it has landed, otherwise the SQL records,
+// matched, labeled, sorted and capped the same way. Every hit is
+// noted as a typing guess of kind want.
+func (app *Application) searchOrgTier(ctx context.Context, q string, lim int, kind, fallback string, want pageWantKind,
+	indexed func(q string, lim int) ([]searchHit, bool),
+	records func(ctx context.Context, q string) ([]orgSearchRecord, error)) (hits []searchHit, guesses []typingGuess) {
+	if found, ok := indexed(q, lim); ok {
+		hits = found
+	} else if rows, err := records(ctx, q); err == nil {
 		for _, row := range rows {
-			payload, ok := decodeAlliancePayload(row.Payload)
-			if !ok {
+			if _, ok := nameMatchTier(row.name, q); !ok {
 				continue
 			}
-			if _, ok := nameMatchTier(payload.Alliance.Name, q); !ok {
-				continue
-			}
-			label := "Alliance"
-			if payload.Alliance.Ticker != "" {
-				label = "[" + payload.Alliance.Ticker + "]"
-			}
-			hits = append(hits, searchHit{
-				Kind: "alliance", ID: row.AllianceID, Name: payload.Alliance.Name, Label: label,
-			})
+			hits = append(hits, searchHit{Kind: kind, ID: row.id, Name: row.name, Label: orgTickerLabel(row.ticker, fallback)})
 		}
 		sortHitsByName(hits, q)
-		hits = capHits(hits, limOrgs)
+		hits = capHits(hits, lim)
 	} else {
-		logging.Errorf("search: alliance records for %q: %v", q, err)
+		logging.Errorf("search: %s records for %q: %v", kind, q, err)
 	}
 	for _, h := range hits {
-		guesses = append(guesses, typingGuess{kind: pageWantAlliance, id: h.ID})
+		guesses = append(guesses, typingGuess{kind: want, id: h.ID})
 	}
 	return hits, guesses
 }

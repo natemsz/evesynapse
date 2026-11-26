@@ -108,10 +108,10 @@ func (s *spreadBookTransport) RoundTrip(req *http.Request) (*http.Response, erro
 
 // TestMarketItemSpreadPricedFromTypicals: a deep book whose
 // extremes lie about the gap. One bait ask at 87.50 sits a
-// hair over the best bid at 87.40, so the old best-based card
-// read 0.1%; the mass of the book (19 asks at 100.00, 19 bids
-// at 87.00) puts the typicals at 100.00 / 87.00, and the card
-// now quotes their net spread: at Broker Relations V and
+// hair over the best bid at 87.40, so a card priced from the best
+// orders would read 0.1%; the mass of the book (19 asks at 100.00,
+// 19 bids at 87.00) puts the typicals at 100.00 / 87.00, and the
+// card quotes their net spread: at Broker Relations V and
 // Accounting V (no standings) the 14.9% gross gap nets to
 // 7.7%, and the gross gap stays as the card's secondary line.
 func TestMarketItemSpreadPricedFromTypicals(t *testing.T) {

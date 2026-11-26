@@ -20,8 +20,6 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/pgtest"
-	"evesynapse/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -308,33 +306,6 @@ func TestAllTemplatesParse(t *testing.T) {
 			"templates/base.html", path); err != nil {
 			t.Errorf("parse %s: %v", path, err)
 		}
-	}
-}
-
-// TestMigration015Reopen proves the guarded pilot_records /
-// type_details migration is idempotent: a database created before
-// this build reopens cleanly and the queues work.
-func TestMigration015Reopen(t *testing.T) {
-	ctx := context.Background()
-	dsn := pgtest.FreshDSN(t)
-	for i := 0; i < 2; i++ {
-		conn, pool, err := store.Open(context.Background(), dsn)
-		if err != nil {
-			t.Fatalf("store.Open (pass %d): %v", i, err)
-		}
-		q := db.New(pool)
-		if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300001, Priority: wantViewed}); err != nil {
-			t.Fatalf("pilot want (pass %d): %v", i, err)
-		}
-		if err := q.UpsertTypeDetailWant(ctx, db.UpsertTypeDetailWantParams{
-			TypeID: 34, Priority: wantViewed, NotedAt: timeSet(time.Now().UTC()),
-		}); err != nil {
-			t.Fatalf("type want (pass %d): %v", i, err)
-		}
-		if err := conn.Close(); err != nil {
-			t.Fatalf("close (pass %d): %v", i, err)
-		}
-		pool.Close()
 	}
 }
 

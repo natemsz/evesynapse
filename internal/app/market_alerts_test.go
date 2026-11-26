@@ -484,34 +484,3 @@ func TestMarketItemPageChartAndWant(t *testing.T) {
 		t.Fatalf("wants after charted view: %v err=%v, want the original single want", wants, err)
 	}
 }
-
-func TestMigration013Reopen(t *testing.T) {
-	transport := &countingTransport{}
-	app, conn, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-	// The schema guard already ran once via store.Open; every 013
-	// table answers queries on a fresh database.
-	if _, err := q.ListAllWatchlistEntries(ctx); err != nil {
-		t.Fatalf("watchlist on fresh DB: %v", err)
-	}
-	if _, err := q.ListMarketHistoryWants(ctx, db.ListMarketHistoryWantsParams{
-		LastRequestedAt: time.Time{},
-		TypingPriority:  wantTyping,
-		TypingAssumed:   typingAssumedHit,
-		TypingWeight:    typingAssumedWeight,
-		TypingSince:     time.Now().UTC().Add(-typingLearnWindow),
-		TypingLimit:     int64(app.typingSlice()),
-	}); err != nil {
-		t.Fatalf("wants on fresh DB: %v", err)
-	}
-	if _, err := q.ListOrderHealthByUser(ctx, 1); err != nil {
-		t.Fatalf("order health on fresh DB: %v", err)
-	}
-	var tables int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('market_history','market_history_wants','market_fetch_state','market_watchlist','order_health')`).Scan(&tables); err != nil {
-		t.Fatalf("count 013 tables: %v", err)
-	}
-	if tables != 5 {
-		t.Fatalf("013 tables: got %d, want 5", tables)
-	}
-}

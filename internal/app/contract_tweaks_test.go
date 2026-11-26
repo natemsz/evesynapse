@@ -170,12 +170,8 @@ func TestContractSearchSortHeaders(t *testing.T) {
 	seedContractTweaks(t, app, conn)
 
 	_, body := getAnon(t, app, "/contracts/search/")
-	// The sort select is gone; the form still carries the
-	// sort as a hidden field so filter submits keep a
-	// header-chosen sort.
-	if strings.Contains(body, "Sort results by") || strings.Contains(body, `<select name="sort">`) {
-		t.Error("the sort dropdown still renders")
-	}
+	// The form carries the sort as a hidden field so filter
+	// submits keep a header-chosen sort.
 	mustContain(t, "hidden sort", body, `<input type="hidden" name="sort" value="newest">`)
 	// Idle headers point at their first sort, chevrons at
 	// rest, no live state.

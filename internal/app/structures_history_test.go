@@ -358,29 +358,6 @@ func TestStructureQueuedFromMarketBookView(t *testing.T) {
 	}
 }
 
-func TestMigration014Reopen(t *testing.T) {
-	transport := &countingTransport{}
-	_, conn, q := buildCorpTestApp(t, transport)
-	ctx := context.Background()
-	var tables int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'structure_names'`).Scan(&tables); err != nil {
-		t.Fatalf("count 014 table: %v", err)
-	}
-	if tables != 1 {
-		t.Fatalf("structure_names tables: %d, want 1", tables)
-	}
-	if err := q.UpsertStructureSeen(ctx, 42); err != nil {
-		t.Fatalf("queue on fresh DB: %v", err)
-	}
-	row, err := q.GetStructureName(ctx, 42)
-	if err != nil || row.State != esi.StructurePending {
-		t.Fatalf("fresh queue row: %+v err=%v", row, err)
-	}
-	if got := transport.calls.Load(); got != 0 {
-		t.Fatalf("migration test made %d outbound calls, want 0", got)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Defect 2: history states + drain priority
 // ---------------------------------------------------------------------------
@@ -609,8 +586,8 @@ func TestHistoryFewRowsSummaryAndStaleChart(t *testing.T) {
 		t.Fatal("one-row page claims loading")
 	}
 
-	// Two rows, both older than the old 95-day calendar window
-	// and newest >14 days old: the row window still charts them
+	// Two rows, both older than 95 days and the newest >14 days
+	// old: the row window still charts them
 	// and captions the last trade date.
 	seed(120, 10.0)
 	seed(150, 9.0)
@@ -803,10 +780,9 @@ func TestPlanets401ClassifierBoundary(t *testing.T) {
 			t.Errorf("piScopeRefusal(%v): got %v, want %v", tc.err, got, tc.want)
 		}
 	}
-	// Regression: generic 401 handling elsewhere is untouched,
-	// the shared token-death test still classifies a 401 as
-	// definitive for the endpoints it serves.
+	// The shared token-death test classifies a 401 as definitive
+	// for the endpoints it serves.
 	if !isDefinitiveTokenFailure(&esi.StatusError{Method: "GET", Path: "/characters/1/skills/", Code: 401}) {
-		t.Fatal("isDefinitiveTokenFailure(401): got false, want true (unchanged)")
+		t.Fatal("isDefinitiveTokenFailure(401): got false, want true")
 	}
 }

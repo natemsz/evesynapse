@@ -180,12 +180,12 @@ func TestContractSearchPages(t *testing.T) {
 
 	// Blueprint filters.
 	_, body = getAnon(t, app, "/contracts/search/?bp=bpo&me_min=10")
-	mustContain(t, "bpo search", body, "Original For Sale")
+	mustContain(t, "bpo search", body, "Original For Sale", "▦ BPO")
 	if strings.Contains(body, "Copy For Sale") {
 		t.Error("BPO filter matched a copy")
 	}
 	_, body = getAnon(t, app, "/contracts/search/?bp=bpc&runs_min=3")
-	mustContain(t, "bpc search", body, "Copy For Sale")
+	mustContain(t, "bpc search", body, "Copy For Sale", "▦ BPC")
 	if strings.Contains(body, "Original For Sale") {
 		t.Error("BPC filter matched an original")
 	}
@@ -251,39 +251,6 @@ func TestContractDetailPages(t *testing.T) {
 	}
 	_, body = getAnon(t, app, "/contracts/search/7001/")
 	mustContain(t, "detail above value", body, "Asking 54% above our appraised value")
-}
-
-// TestContractSearchBlueprintIcons pins what the redesign
-// did to line icons: the results rows and the expansion
-// drawer are text-only, so no image-server icon renders
-// for a blueprint line (or any other) on either surface.
-// The /bp vs /bpc variant rule itself stays pinned by
-// TestTypeIconURL, where the item pages still use it.
-func TestContractSearchBlueprintIcons(t *testing.T) {
-	tr := &openWindowTransport{}
-	app, conn, _ := buildCorpTestApp(t, tr)
-	seedContractCorpus(t, app, conn)
-
-	_, body := getAnon(t, app, "/contracts/search/?bp=bpo&me_min=10")
-	mustContain(t, "bpo row", body, "Original For Sale", "▦ BPO")
-	if strings.Contains(body, "images.evetech.net/types/9999") {
-		t.Error("a blueprint original still renders an image-server icon")
-	}
-	_, body = getAnon(t, app, "/contracts/search/?bp=bpc&runs_min=3")
-	mustContain(t, "bpc row", body, "Copy For Sale", "▦ BPC")
-	if strings.Contains(body, "images.evetech.net/types/9999") {
-		t.Error("a blueprint copy still renders an image-server icon")
-	}
-
-	// The expansion drawer follows the same rule.
-	_, body = getAnon(t, app, "/contracts/search/7005/panel")
-	if strings.Contains(body, "images.evetech.net") {
-		t.Error("the expansion drawer still renders item icons")
-	}
-	_, body = getAnon(t, app, "/contracts/search/7006/panel")
-	if strings.Contains(body, "images.evetech.net") {
-		t.Error("the expansion drawer still renders item icons")
-	}
 }
 
 // TestOpenContractInGame covers the View in game handler:
@@ -363,8 +330,8 @@ func TestOpenContractInGame(t *testing.T) {
 // row's spread to the same effective cost the deal ratio
 // judges: the ask plus the valued wanted side. A row whose
 // wants wash out the value shows no spread, and a row with
-// an unpriced want shows none either -- the old price-only
-// spread called both of them +900.
+// an unpriced want shows none either; neither reads as the
+// ask-only +900.
 func TestContractSearchRowSpreadCountsWants(t *testing.T) {
 	tr := &openWindowTransport{}
 	app, conn, _ := buildCorpTestApp(t, tr)

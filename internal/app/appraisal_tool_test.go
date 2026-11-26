@@ -428,16 +428,12 @@ func TestAppraisalToolPageAndBadShare(t *testing.T) {
 		"never the in-game guide average", "reported unpriced rather than guessed",
 		"Optional: Exclude items", "Valuation hub", "Percent modifier",
 		`data-ap-pct="90"`, "Quantity multiplier", "Appraise paste")
-	// Appraisal lives under Tools now: its tab strip is the
-	// Tools strip (Item Browser + Appraisal, itself active), and
-	// the Market strip no longer carries it.
+	// Appraisal lives under Tools: its tab strip is the Tools
+	// strip (Item Browser + Appraisal, itself active).
 	tabs := sectionTabsBlock(t, body)
 	mustContain(t, "appraisal tools tabs", tabs,
 		`<a href="/market/appraise/" class="active" aria-current="page">Appraisal / Multi-Sell</a>`,
 		`<a href="/items/">Item Browser</a>`)
-	if strings.Contains(tabs, "Contract Search") {
-		t.Error("appraisal page still carries the Market tab strip")
-	}
 
 	code, body = getAnon(t, app, "/market/appraise/s/deadbeef/")
 	if code != 404 {

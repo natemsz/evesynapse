@@ -1,3 +1,5 @@
+//go:build loadtest
+
 package app
 
 // Load test for the web tier: drives the real chi router over
@@ -9,7 +11,7 @@ package app
 // Skipped unless EVESYNAPSE_LOADTEST=1: the normal suite must
 // never pay for this. Run it directly:
 //
-//	EVESYNAPSE_LOADTEST=1 go test ./internal/app -run TestLoadWebTier -count=1 -v
+//	EVESYNAPSE_LOADTEST=1 go test -tags loadtest ./internal/app -run TestLoadWebTier -count=1 -v
 //
 // The ESI side is a canned in-process stub (no network), so the
 // numbers measure handler + template + Postgres cost. The market
@@ -617,8 +619,7 @@ func seedLoadFixture(t *testing.T, conn *sql.DB, q *db.Queries) {
 			if i >= 40 {
 				// An open order, in the production writer's own
 				// shape (UpsertOrderLifecycle): closed_at NULL,
-				// close_kind ''. The '' this used to interpolate
-				// for closed_at is not a valid timestamptz.
+				// close_kind '' ('' is not a valid timestamptz).
 				closedAt, kind = "NULL", ""
 			} else if i%3 == 0 {
 				kind = "ended"

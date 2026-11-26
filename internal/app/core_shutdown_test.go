@@ -78,6 +78,6 @@ func TestCloseWaitsForWorkerBeforeClosingDB(t *testing.T) {
 		t.Fatal("pool still open after Close")
 	}
 	if strings.Contains(logs.String(), "database is closed") {
-		t.Fatalf("shutdown logged the old failure mode:\n%s", logs.String())
+		t.Fatalf("shutdown logged a closed-database error:\n%s", logs.String())
 	}
 }

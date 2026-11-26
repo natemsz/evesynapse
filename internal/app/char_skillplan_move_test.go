@@ -223,8 +223,7 @@ func TestPlanEditsAreOwnersOnly(t *testing.T) {
 
 // TestAddingAPlannedSkillNeverLowersIt: a plan holds one target per
 // skill. Adding a skill that is already planned to that level or higher
-// says so and leaves the target alone (it used to be overwritten with the
-// lower one).
+// says so and leaves the target alone, never lowering it.
 func TestAddingAPlannedSkillNeverLowersIt(t *testing.T) {
 	f := newPlanFixture(t)
 	const char = "90000001"

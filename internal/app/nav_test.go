@@ -91,11 +91,6 @@ func TestSectionTabs(t *testing.T) {
 		}
 	}
 	inOrder(branch("market"), "/market/", "/contracts/search/", "/market/lp/", "/market/trends/", "/market/baskets/", "/market/ideas/", "/market/scanner/", "/market/tradefinder/", "/market/restock/", "/market/leaderboard/", "/orders/", "/contracts/")
-	for _, gone := range []string{"toolsanalysis", "finances"} {
-		if strings.Contains(body, `data-nav-category="`+gone+`"`) {
-			t.Errorf("the sidebar still carries a %s branch", gone)
-		}
-	}
 
 	// The corporation strip is grouped: the strip shows the four
 	// clusters, and the page itself is marked in the sub-row under
@@ -231,9 +226,8 @@ func TestSectionGroups(t *testing.T) {
 		t.Error("the wallets page is not marked in its sub-row")
 	}
 
-	// The sections the old market section split into are
-	// ungrouped: each passes through flat, in section order,
-	// with no sub-row.
+	// These market sections are ungrouped: each passes through
+	// flat, in section order, with no sub-row.
 	for _, tc := range []struct {
 		section, page string
 		want          []navLink

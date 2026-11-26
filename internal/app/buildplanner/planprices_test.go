@@ -14,9 +14,8 @@ import (
 )
 
 // planFossilAdjusted is the real adjusted price from the Hel's
-// guide row (type 22852): the number the old planner priced
-// the hull at. It may base job fees (CCP defines the fee base
-// on adjusted prices); it must never be a plan price.
+// guide row (type 22852). It may base job fees (CCP defines the
+// fee base on adjusted prices); it must never be a plan price.
 const planFossilAdjusted = 18893271495.42
 
 // planCarrierRecipes is a supercarrier-shaped tree: a hull

@@ -21,8 +21,7 @@ import (
 // seedScannerVolume stores the sweep-precomputed 7-day average
 // daily volume for one (region, type) the way a completed sweep
 // leaves it in market_region_stats (schema 035): the figure the
-// scanner now reads instead of re-averaging market_history per
-// render.
+// scanner reads, never re-averaging market_history per render.
 func seedScannerVolume(t *testing.T, q *db.Queries, regionID, typeID int64, avgDailyVolume float64) {
 	t.Helper()
 	ctx := context.Background()
@@ -212,9 +211,9 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 // The region trades every type below at typicals 104.90 buy /
 // 105.60 sell, 40,000 a day (a Jita-priced book). Against that:
 //   - type 34 at a minor station is ONE fishing bid at 5.25
-//     under ONE hopeful ask at 110.25. The old scanner printed
-//     this as a 2000.0% spread with 4.2M ISK of phantom daily
-//     profit; the depth gate now keeps it out entirely.
+//     under ONE hopeful ask at 110.25, a 2000.0% spread with
+//     4.2M ISK of phantom daily profit; the depth gate keeps it
+//     out entirely.
 //   - type 35 at the hub has depth, but its typical sell is
 //     twenty times the region's typical sell.
 //   - type 36 at the hub has depth, but its typical buy is a

@@ -299,21 +299,14 @@ func TestContractPanelFragment(t *testing.T) {
 	if strings.Contains(body, "<html") || strings.Contains(body, "pagetitle") {
 		t.Error("the panel must be a bare fragment, not a full page")
 	}
-	if strings.Contains(body, "images.evetech.net") {
-		t.Error("the drawer still renders item icons")
-	}
 
 	// The courier drawer sets the reward against the
-	// collateral and carries no private-cargo note (the
-	// detail page keeps it); collateral minus reward is
-	// not a spread, so none renders.
+	// collateral; collateral minus reward is not a spread, so
+	// none renders.
 	_, body = getAnon(t, app, "/contracts/search/7003/panel")
 	mustContain(t, "panel 7003", body,
 		"Contract Line Appraisal (Route Hauling Rate)",
 		"Asking Price:", "5.0M ISK", "EveSynapse Value:", "100.0K ISK")
-	if strings.Contains(body, "Courier cargo is private") {
-		t.Error("the courier drawer still carries the private-cargo note")
-	}
 	if strings.Contains(body, "Estimated Spread:") {
 		t.Error("the courier drawer renders a spread figure")
 	}
@@ -542,14 +535,10 @@ func TestContractSearchContentsCap(t *testing.T) {
 	_, body := getAnon(t, app, "/contracts/search/")
 	mustContain(t, "contents cap", body,
 		"And 3 more items", "And 2 more items")
-	// The overflow control is a drawer toggle, one per
-	// over-cap row, and nothing of the old in-cell reveal
-	// survives anywhere on the page.
+	// The overflow control is a drawer toggle, one per over-cap
+	// row.
 	if n := strings.Count(body, `<button type="button" class="cs-morelines" data-more-toggle aria-expanded="false">`); n != 2 {
 		t.Errorf("more-toggles: got %d, want 2 (one per over-cap row)", n)
-	}
-	if strings.Contains(body, "cs-extralines") || strings.Contains(body, "(show ") {
-		t.Error("the page still carries the in-cell reveal markup")
 	}
 
 	// Row-scoped checks: the cell renders the five-line

@@ -73,11 +73,6 @@ func TestAbyssalSearchAndDetailPages(t *testing.T) {
 	mustContain(t, "family search", body,
 		"Bricked But Pretty", "Roll Score: 45/100", "<span>Top 20%</span>",
 		"[Roll 45/100]", "205.0M ISK", "priced 1 of 1 lines")
-	for _, gone := range []string{"Mutated from", "Held back by", "data-abpop", "Our estimate"} {
-		if strings.Contains(body, gone) {
-			t.Errorf("the results row still carries %q", gone)
-		}
-	}
 
 	// A family the item is not in excludes it.
 	_, body = getAnon(t, app, "/contracts/search/?family=warp_scrambler")

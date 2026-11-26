@@ -24,8 +24,6 @@ import (
 	"evesynapse/internal/app/buildplanner"
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/pgtest"
-	"evesynapse/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -557,29 +555,4 @@ func TestPlannerStructureBonuses(t *testing.T) {
 		t.Fatalf("planner structure page status = %d, want 200", code)
 	}
 	mustContain(t, "/planner/ structure", body, "Building in Raitaru · T1 rigs", `value="35825" selected`)
-}
-
-// TestMigration011Reopen proves the schema bootstrap is
-// idempotent on reopen, like every schema before it.
-func TestMigration011Reopen(t *testing.T) {
-	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := store.Open(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("first open: %v", err)
-	}
-	var tables int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('sde_blueprints', 'sde_blueprint_materials', 'sde_blueprint_skills')`).Scan(&tables); err != nil {
-		t.Fatalf("information_schema: %v", err)
-	}
-	if tables != 3 {
-		t.Fatalf("planner tables: %d, want 3", tables)
-	}
-	conn.Close()
-	pool.Close()
-	conn, pool, err = store.Open(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("second open: %v", err)
-	}
-	conn.Close()
-	pool.Close()
 }

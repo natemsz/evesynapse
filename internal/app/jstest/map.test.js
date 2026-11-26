@@ -118,7 +118,7 @@ test("region names stay visible and zoom entry needs the preference", () => {
 test("system names are rationed by zoom tier", () => {
   // Tier 0: region names are the picture, no system names.
   assert.strictEqual(map.labelTier(1), 0);
-  assert.strictEqual(map.labelTier(6), 0, "the widest tier runs to the old gate");
+  assert.strictEqual(map.labelTier(6), 0, "the widest tier runs to zoom 6");
   // Tier 1: a few regions fill the view, prominent systems only.
   assert.strictEqual(map.labelTier(6.5), 1);
   assert.strictEqual(map.labelTier(24), 1);
@@ -360,7 +360,7 @@ test("3D: straight down is the 2D map, tilting raises height on screen", () => {
 });
 
 test("zoomed-out picking prefers the system with something on it", () => {
-  // A bare system keeps the old 14px reach; a hot one reaches 24px.
+  // A bare system has a 14px reach; a hot one reaches 24px.
   assert.strictEqual(map.pickReach(0), 14);
   assert.strictEqual(map.pickReach(1), 24);
   const dot = 3;
@@ -419,7 +419,7 @@ test("a shared view outside what is showing is ignored", () => {
 test("mousewheel zooms, never pans", () => {
   // Wheel up zooms in, wheel down zooms out, whatever the notch
   // size -- including the small, fractional deltas a smooth-scroll
-  // mouse sends, which used to be misread as a touchpad and panned.
+  // mouse sends, which must not be read as a touchpad and panned.
   assert.ok(map.wheelZoomFactor(-120, false) > 1, "wheel up zooms in");
   assert.ok(map.wheelZoomFactor(-33.3, false) > 1, "small wheel tick zooms in");
   assert.ok(map.wheelZoomFactor(120, false) < 1, "wheel down zooms out");

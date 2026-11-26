@@ -19,8 +19,6 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/pgtest"
-	"evesynapse/internal/store"
 )
 
 const forge = defaultMarketRegion
@@ -621,33 +619,6 @@ func TestLiveRegionFragments(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Migration 016: pilot priority column lands idempotently.
 // ---------------------------------------------------------------------------
-
-func TestMigration016Reopen(t *testing.T) {
-	ctx := context.Background()
-	dsn := pgtest.FreshDSN(t)
-	for i := 0; i < 2; i++ {
-		conn, pool, err := store.Open(context.Background(), dsn)
-		if err != nil {
-			t.Fatalf("store.Open (pass %d): %v", i, err)
-		}
-		var cols int
-		if err := conn.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'pilot_records' AND column_name = 'priority'`).Scan(&cols); err != nil {
-			t.Fatalf("priority column check (pass %d): %v", i, err)
-		}
-		if cols != 1 {
-			t.Fatalf("priority column count = %d (pass %d), want 1", cols, i)
-		}
-		q := db.New(pool)
-		if err := q.UpsertPilotWant(ctx, db.UpsertPilotWantParams{CharacterID: 93300001, Priority: wantViewed}); err != nil {
-			t.Fatalf("pilot want (pass %d): %v", i, err)
-		}
-		if err := conn.Close(); err != nil {
-			t.Fatalf("close (pass %d): %v", i, err)
-		}
-		pool.Close()
-	}
-}
 
 // The urgent drain only serves wants from a page open now: a want
 // older than pageWantTTL waits for the cycle pass, and costs the

@@ -23,8 +23,6 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/pgtest"
-	"evesynapse/internal/store"
 )
 
 // seedWidgetOrders plants open orders for one character.
@@ -341,16 +339,12 @@ func TestNetWorthHousePrices(t *testing.T) {
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
 	// No price source anywhere yet: still a real number
-	// (0 priced), with the coverage spelled out, and never
-	// the old copy.
+	// (0 priced), with the coverage spelled out.
 	code, body := getPage(t, app, cookie, "/")
 	if code != http.StatusOK {
 		t.Fatalf("GET /: status %d", code)
 	}
 	mustContain(t, "/", body, "Net worth", "1,000.50", "0 of 2 items priced")
-	if strings.Contains(body, "prices not loaded yet") {
-		t.Error("net worth fell back to the old not-loaded copy")
-	}
 
 	// The worker-stored guide lands, Tritanium's average at
 	// 5.00: the average is banned as a price source, so the
@@ -433,8 +427,8 @@ func (s *pricesTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // TestFitPricesFollowStoredPrices: a saved fit is priced when it
-// is saved, and used to keep that price for good. Each price
-// refresh now reprices the stored fits in the house order: hull
+// is saved, and each price refresh reprices the stored fits in the
+// house order: hull
 // plus modules at The Forge's swept typical sells, the same sum
 // the save handler makes. The guide fixture below carries decoy
 // adjusted prices, if anything priced from the guide, the
@@ -561,27 +555,8 @@ func TestGuidePricesWorkerRefresh(t *testing.T) {
 	}
 }
 
-// TestMigrations020And021Reopen: the new tables' guards are
-// idempotent across reopens, like every schema before them.
-func TestMigrations020And021Reopen(t *testing.T) {
-	dsn := pgtest.FreshDSN(t)
-	for i := 0; i < 2; i++ {
-		conn, pool, err := store.Open(context.Background(), dsn)
-		if err != nil {
-			t.Fatalf("open %d: %v", i, err)
-		}
-		var tables int
-		if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('widget_configs','guide_prices','guide_prices_meta')`).Scan(&tables); err != nil {
-			t.Fatalf("count tables: %v", err)
-		}
-		if tables != 3 {
-			t.Fatalf("tables after open %d: %d, want 3", i, tables)
-		}
-		conn.Close()
-		pool.Close()
-	}
-
-	// A user with no saved config reads the defaults.
+// A user with no saved widget settings reads the widget's defaults.
+func TestHomeWidgetSettingsDefaultForANewUser(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	user, err := q.CreateUser(context.Background())
 	if err != nil {

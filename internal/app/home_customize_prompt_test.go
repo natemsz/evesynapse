@@ -92,3 +92,44 @@ func TestCustomizePromptShowsOnceAndSticks(t *testing.T) {
 		t.Error("account that opened Customize still gets the hint")
 	}
 }
+
+// The demo account reads the notification prompt's shape without
+// the remembered answer: it drops once per login, and nothing is
+// saved for it, so every visitor sees it once. The notification
+// prompt gate does not hold it back, because demo never answers
+// that prompt.
+func TestCustomizePromptDemoSeesItOncePerLogin(t *testing.T) {
+	app, _, _ := demoTestApp(t)
+	ctx := context.Background()
+
+	userID := app.demoUserID(ctx)
+	if userID == 0 {
+		t.Fatal("demo user id is 0 after ensure")
+	}
+	cookie := sessionCookie(t, app, userID, demoCharacterID, demoCharName)
+
+	// First home view of the login: the hint drops, even though
+	// the notification prompt is unanswered for demo.
+	if code, body := getPage(t, app, cookie, "/"); code != http.StatusOK || !strings.Contains(body, `id="customize-prompt"`) {
+		t.Fatalf("demo first home view: code %d, hint present %v, want 200 with the hint", code, strings.Contains(body, `id="customize-prompt"`))
+	}
+	// Second home view in the same session: already shown, so it
+	// stays down.
+	if _, body := getPage(t, app, cookie, "/"); strings.Contains(body, `id="customize-prompt"`) {
+		t.Error("demo second home view in the same session showed the hint again")
+	}
+	// A fresh login: nothing was saved for demo, so the hint
+	// drops again, once.
+	fresh := sessionCookie(t, app, userID, demoCharacterID, demoCharName)
+	if _, body := getPage(t, app, fresh, "/"); !strings.Contains(body, `id="customize-prompt"`) {
+		t.Error("demo fresh login did not see the hint again")
+	}
+	// And the seen stamp was never written for demo.
+	seen, err := app.queries.GetUserCustomizePromptSeen(ctx, userID)
+	if err != nil {
+		t.Fatalf("read demo seen stamp: %v", err)
+	}
+	if seen.Valid {
+		t.Error("demo seen stamp was written; it must stay unset")
+	}
+}

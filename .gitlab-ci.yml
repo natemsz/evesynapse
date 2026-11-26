@@ -491,7 +491,7 @@ mirror:
 # access token) where they do not.
 android:
   stage: check
-  image: gradle:9.8.2-jdk17
+  image: gradle:9.9.2-jdk17
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:

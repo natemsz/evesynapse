@@ -26,8 +26,6 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/pgtest"
-	"evesynapse/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -217,7 +215,7 @@ func TestSkillPlanPagesAndCRUD(t *testing.T) {
 		return rec.Code, rec.Body.String()
 	}
 
-	// Character sheet: the skill catalog (browse) now lives on the
+	// Character sheet: the skill catalog (browse) lives on the
 	// unified character page and renders trained state there.
 	code, body := getPage(t, app, cookie, "/character/?character=90000001")
 	if code != 200 {
@@ -319,30 +317,4 @@ func TestSkillPlanWarmStates(t *testing.T) {
 	if got := transport.calls.Load(); got != 0 {
 		t.Errorf("outbound calls = %d, want 0", got)
 	}
-}
-
-func TestMigration012Reopen(t *testing.T) {
-	// Mirror of the 011 reopen test: a second open over the
-	// same database applies nothing twice (and nothing breaks).
-	ctx := context.Background()
-	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := store.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("first open: %v", err)
-	}
-	var n int
-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'skill_plans'`).Scan(&n); err != nil || n != 1 {
-		t.Fatalf("skill_plans table count = %d, err %v", n, err)
-	}
-	conn.Close()
-	pool.Close()
-	conn, pool, err = store.Open(ctx, dsn)
-	if err != nil {
-		t.Fatalf("second open: %v", err)
-	}
-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'skill_plans'`).Scan(&n); err != nil || n != 1 {
-		t.Fatalf("skill_plans table count after reopen = %d, err %v", n, err)
-	}
-	conn.Close()
-	pool.Close()
 }

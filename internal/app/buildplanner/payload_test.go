@@ -246,8 +246,8 @@ func TestPlanShoppingExcludesRoot(t *testing.T) {
 	if b.Profit != 0 || !b.ProfKnown {
 		t.Errorf("optimized profit = %v known=%v, want 0/true (buying at market)", b.Profit, b.ProfKnown)
 	}
-	// The verdict says to buy. A zero margin is not a saving, and
-	// "Building saves 0.00 ISK" was what it used to read.
+	// The verdict says to buy: a zero margin is not a saving, so it
+	// must not read "Building saves 0.00 ISK".
 	if !b.RootBought || p.Full.RootBought || p.BuyComp.RootBought {
 		t.Errorf("rootBought optimized/full/buycomp = %v/%v/%v, want true/false/false", b.RootBought, p.Full.RootBought, p.BuyComp.RootBought)
 	}

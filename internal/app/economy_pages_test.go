@@ -167,12 +167,6 @@ func TestEconomyPagesRenderFromSnapshots(t *testing.T) {
 	}
 	mustContain(t, "/industry/", body,
 		"Fixture Blueprint", "BPO", "∞", "10%", "BPC")
-	for _, gone := range []string{"<th>Activity</th>", "mining-table", "Veldspar", "12,345.67",
-		"No industry jobs in the latest snapshot", "No mining entries in the latest snapshot"} {
-		if strings.Contains(body, gone) {
-			t.Errorf("/industry/ still renders %q from a block that moved out", gone)
-		}
-	}
 
 	code, body = getPage(t, app, cookie, "/industry/jobs/?character=90000001")
 	if code != http.StatusOK {

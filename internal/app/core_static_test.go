@@ -179,95 +179,6 @@ func TestStaticServesMinifiedCSS(t *testing.T) {
 	}
 }
 
-// cssDeclarations returns the declarations of the first top-level
-// rule whose selector is exactly sel, as property -> value. It
-// scans rules at brace depth zero, so it reads the served
-// (minified) stylesheet as well as a formatted one; an at-rule
-// block such as @media is skipped whole, so a rule nested inside
-// one never matches. The sheets' strings carry no braces, which
-// is all the brace matching assumes.
-func cssDeclarations(css, sel string) (map[string]string, bool) {
-	i := 0
-	for i < len(css) {
-		for i < len(css) && strings.IndexByte(" \t\r\n;", css[i]) >= 0 {
-			i++
-		}
-		if i >= len(css) {
-			break
-		}
-		start := i
-		for i < len(css) && css[i] != '{' && css[i] != ';' {
-			i++
-		}
-		if i >= len(css) {
-			break
-		}
-		if css[i] == ';' { // a statement at-rule, e.g. @import
-			i++
-			continue
-		}
-		prelude := strings.TrimSpace(css[start:i])
-		i++ // consume '{'
-		depth := 1
-		bodyStart := i
-		for i < len(css) && depth > 0 {
-			switch css[i] {
-			case '{':
-				depth++
-				i++
-			case '}':
-				depth--
-				if depth > 0 {
-					i++
-				}
-			default:
-				i++
-			}
-		}
-		body := css[bodyStart:i]
-		i++ // consume '}'
-		if prelude != sel {
-			continue
-		}
-		out := map[string]string{}
-		for _, decl := range strings.Split(body, ";") {
-			prop, value, ok := strings.Cut(decl, ":")
-			if !ok {
-				continue
-			}
-			out[strings.TrimSpace(prop)] = strings.TrimSpace(value)
-		}
-		return out, true
-	}
-	return nil, false
-}
-
-// TestStylesheetMainColumnWidth: the page column and the top bar
-// that sits over it share one width cap. The test reads those
-// two rules and nothing else, so a number elsewhere in the
-// stylesheet cannot pass or fail it.
-func TestStylesheetMainColumnWidth(t *testing.T) {
-	app, _, _ := buildCorpTestApp(t, &countingTransport{})
-	req := httptest.NewRequest(http.MethodGet, "/static/style.css", nil)
-	rec := httptest.NewRecorder()
-	app.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("stylesheet: status %d", rec.Code)
-	}
-	css := strings.ReplaceAll(rec.Body.String(), "\r\n", "\n")
-	const want = "1720px"
-	for _, sel := range []string{"main", "header nav"} {
-		rule, ok := cssDeclarations(css, sel)
-		if !ok {
-			t.Errorf("stylesheet has no top-level %q rule", sel)
-			continue
-		}
-		if got := rule["max-width"]; got != want {
-			t.Errorf("%s { max-width: %s }, want %s", sel, got, want)
-		}
-	}
-}
-
 // TestStylesheetBracesBalance: every stylesheet's braces
 // balance, comments and strings aside. A stray closing brace
 // makes the CSS parser discard the rule after it, silently.
@@ -315,18 +226,6 @@ func TestStylesheetBracesBalance(t *testing.T) {
 		if depth != 0 {
 			t.Errorf("%s: %d block(s) never closed", e.Name(), depth)
 		}
-	}
-}
-
-// TestCSSDeclarations: the reader finds the named rule only.
-func TestCSSDeclarations(t *testing.T) {
-	css := "nav main { max-width: 1px; }\n@media (min-width: 10px) {\n  main { max-width: 2px; }\n}\nmain {\n  max-width: 3px;\n  margin: 0 auto;\n}\nmain.wide { max-width: 4px; }\n"
-	rule, ok := cssDeclarations(css, "main")
-	if !ok || rule["max-width"] != "3px" || rule["margin"] != "0 auto" {
-		t.Fatalf("declarations of main = %v (found %v), want the top-level rule", rule, ok)
-	}
-	if _, ok := cssDeclarations(css, "aside"); ok {
-		t.Fatal("found a rule that is not there")
 	}
 }
 

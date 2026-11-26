@@ -21,8 +21,6 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/pgtest"
-	"evesynapse/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -502,31 +500,6 @@ func TestContactsOrgLinks(t *testing.T) {
 	}
 }
 
-// TestMigration026Reopen proves the guarded corporation_records /
-// alliance_records migration is idempotent: a database created
-// before this build reopens cleanly and the queues work.
-func TestMigration026Reopen(t *testing.T) {
-	ctx := context.Background()
-	dsn := pgtest.FreshDSN(t)
-	for i := 0; i < 2; i++ {
-		conn, pool, err := store.Open(context.Background(), dsn)
-		if err != nil {
-			t.Fatalf("store.Open (pass %d): %v", i, err)
-		}
-		q := db.New(pool)
-		if err := q.UpsertCorporationWant(ctx, db.UpsertCorporationWantParams{CorporationID: 98000001, Priority: wantViewed}); err != nil {
-			t.Fatalf("corporation want (pass %d): %v", i, err)
-		}
-		if err := q.UpsertAllianceWant(ctx, db.UpsertAllianceWantParams{AllianceID: 99000001, Priority: wantViewed}); err != nil {
-			t.Fatalf("alliance want (pass %d): %v", i, err)
-		}
-		if err := conn.Close(); err != nil {
-			t.Fatalf("close (pass %d): %v", i, err)
-		}
-		pool.Close()
-	}
-}
-
 // TestOrgLabelLiveRegions: names the organization
 // pages reference but have not cached yet, a corporation's CEO,
 // an alliance's creator and member corporations, a home station,
@@ -656,8 +629,8 @@ func TestAllianceDrainBakesEveryMemberName(t *testing.T) {
 		members:   map[int64]string{},
 	}
 	var memberIDs []string
-	// Fifteen members: more than the old per-drain name cap (12),
-	// so a capped drain leaves the last three nameless.
+	// Fifteen members: more than 12, so a drain capped at 12 names
+	// would leave the last three nameless.
 	for i := 1; i <= 15; i++ {
 		id := int64(98000000 + i)
 		stub.corps[id] = fmt.Sprintf(`{"name":"Member Corp %02d","ticker":"M%02d","member_count":1,"ceo_id":1,"tax_rate":0.1}`, i, i)

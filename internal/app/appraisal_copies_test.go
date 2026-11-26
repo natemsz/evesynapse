@@ -325,8 +325,8 @@ func TestAppraisePublicContractsBlueprintCopyEndToEnd(t *testing.T) {
 	if c1.OfferedValue != 1_290_000 || c1.TierMix != "copy_median:1" {
 		t.Errorf("9201 totals = %v mix %q, want 1290000 copy_median:1", c1.OfferedValue, c1.TierMix)
 	}
-	// 2,500,000 asked against 1,290,000 of value is no deal,
-	// however the old BPO-priced math read it.
+	// 2,500,000 asked against 1,290,000 of value is no deal: the
+	// copy is valued as a copy, never at the original's price.
 	wantRatio := 2_500_000.0 / 1_290_000.0
 	if !c1.DealRatio.Valid || math.Abs(c1.DealRatio.Float64-wantRatio) > 1e-9 {
 		t.Errorf("9201 ratio = %v, want %v", c1.DealRatio, wantRatio)

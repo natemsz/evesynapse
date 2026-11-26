@@ -417,9 +417,8 @@ func TestIntelFusedRoster(t *testing.T) {
 
 	// The chat-lines path (Axon and pasted lines): the fused
 	// roster arrives as ONE line naming no system the chat
-	// parser can find, and was dropped at classification --
-	// never stored, so the re-read above never saw it. The
-	// rescue reads it there, on the poster's system, in a
+	// parser can find, so classification drops it unstored and
+	// the re-read above cannot see it. The rescue reads it there, on the poster's system, in a
 	// second channel so its set stands apart from the first.
 	cid2, err := q.CreateIntelChannel(ctx, db.CreateIntelChannelParams{OwnerUserID: u.ID, Name: "Fused Lines", CreatedAt: time.Now()})
 	if err != nil {

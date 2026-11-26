@@ -330,6 +330,34 @@ func TestSwarmAutoExclude(t *testing.T) {
 	}
 }
 
+// TestSwarmTrustFloorExcludes: shape rejects carry no streak, so
+// the trust floor is their only road to exclusion. Nine rejects are
+// under the minimum count and exclude nobody; the tenth puts trust
+// at 9/20 = 0.45, under the 0.5 floor, and excludes the signer.
+func TestSwarmTrustFloorExcludes(t *testing.T) {
+	app := swarmTestApp(t)
+	ctx := context.Background()
+	swarmTestPeer(t, app, "peer-broken")
+	for i := 0; i < swarm.SwarmTrustMinChecks-1; i++ {
+		swarm.StateFor(app).CountSwarmShapeReject(ctx, "peer-broken")
+	}
+	got, err := app.queries.GetSwarmPeer(ctx, "peer-broken")
+	if err != nil {
+		t.Fatalf("read peer: %v", err)
+	}
+	if got.Excluded {
+		t.Fatalf("excluded after %d rejects, under the minimum count", swarm.SwarmTrustMinChecks-1)
+	}
+	swarm.StateFor(app).CountSwarmShapeReject(ctx, "peer-broken")
+	got, err = app.queries.GetSwarmPeer(ctx, "peer-broken")
+	if err != nil {
+		t.Fatalf("read peer: %v", err)
+	}
+	if !got.Excluded || !strings.Contains(got.ExcludeNote, "auto: trust 0.45 over 10 checks below 0.50") {
+		t.Fatalf("after %d rejects: excluded %v, note %q; want the trust floor exclusion", swarm.SwarmTrustMinChecks, got.Excluded, got.ExcludeNote)
+	}
+}
+
 func TestSwarmGoodRecordNeverExcludes(t *testing.T) {
 	app := swarmTestApp(t)
 	ctx := context.Background()

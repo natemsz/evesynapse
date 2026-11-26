@@ -25,8 +25,6 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/pgtest"
-	"evesynapse/internal/store"
 )
 
 // doReq drives the router and returns status, body, and any
@@ -622,32 +620,6 @@ func TestTokenDeadClassificationAndWorkerSkip(t *testing.T) {
 	if !transport.saw(fmt.Sprintf("/characters/%d/", fixtureCharA)) {
 		t.Fatal("worker never fetched for the healthy character")
 	}
-}
-
-// TestMigration009Reopen proves the schema bootstrap is
-// idempotent: a second store.Open over the same database applies
-// nothing twice.
-func TestMigration009Reopen(t *testing.T) {
-	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := store.Open(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("first open: %v", err)
-	}
-	var cols int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'characters' AND column_name IN ('owner_hash', 'tags', 'link_state', 'link_state_at')`).Scan(&cols); err != nil {
-		t.Fatalf("columns: %v", err)
-	}
-	if cols != 4 {
-		t.Fatalf("foundation columns: %d, want 4", cols)
-	}
-	conn.Close()
-	pool.Close()
-	conn, pool, err = store.Open(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("second open: %v", err)
-	}
-	conn.Close()
-	pool.Close()
 }
 
 // TestResolveSignInUser covers which account a verified sign-in

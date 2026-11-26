@@ -45,8 +45,7 @@ func TestSessionCharIDLegacyInt(t *testing.T) {
 	}
 }
 
-// TestSessionCharIDMissing: no acting character reads as zero,
-// like the old GetInt did.
+// TestSessionCharIDMissing: no acting character reads as zero.
 func TestSessionCharIDMissing(t *testing.T) {
 	sm := scs.New()
 	ctx, err := sm.Load(context.Background(), "")

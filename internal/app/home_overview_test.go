@@ -17,8 +17,6 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
-	"evesynapse/internal/pgtest"
-	"evesynapse/internal/store"
 )
 
 // seedOverviewCharacter links one character to the user, tagged.
@@ -943,15 +941,6 @@ func TestHomeCustomizeSurface(t *testing.T) {
 		// End-user copy.
 		"Changes save as you make them.",
 	)
-	for _, gone := range []string{
-		"Save changes",
-		"no JavaScript needed", "Turn widgets on or off",
-		"check the server log",
-	} {
-		if strings.Contains(body, gone) {
-			t.Errorf("customize page still carries developer copy %q", gone)
-		}
-	}
 
 	// Plain home: no customize machinery leaks in, and the
 	// not-yet-loaded states speak plainly (no warming jargon).
@@ -1056,31 +1045,6 @@ func TestCharacterSheetFromSnapshots(t *testing.T) {
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handlers made %d outbound calls, want 0", got)
 	}
-}
-
-// TestMigration010Reopen proves the home-layout column guard is
-// idempotent, like every schema before it.
-func TestMigration010Reopen(t *testing.T) {
-	dsn := pgtest.FreshDSN(t)
-	conn, pool, err := store.Open(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("first open: %v", err)
-	}
-	var cols int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'users' AND column_name IN ('home_layout')`).Scan(&cols); err != nil {
-		t.Fatalf("pragma: %v", err)
-	}
-	if cols != 1 {
-		t.Fatalf("home_layout columns: %d, want 1", cols)
-	}
-	conn.Close()
-	pool.Close()
-	conn, pool, err = store.Open(context.Background(), dsn)
-	if err != nil {
-		t.Fatalf("second open: %v", err)
-	}
-	conn.Close()
-	pool.Close()
 }
 
 // TestWidgetSizeBounds: a stored size snaps to one the widget

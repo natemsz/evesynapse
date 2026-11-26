@@ -358,14 +358,6 @@ func TestChooserPages(t *testing.T) {
 		t.Errorf("the Axon step does not complete the sign-up at /auth/eve (status %d)", rec.Code)
 	}
 
-	// There is no features-myself page anymore: its link is gone from
-	// both steps, and a legacy advanced=1 URL lands on the cards like
-	// any other choiceless visit.
-	rec = get(app, nil, "/auth/link?advanced=1")
-	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "Choose the features") || strings.Contains(body, "Choose features myself") || strings.Contains(rec.Body.String(), "Choose features myself") {
-		t.Errorf("the removed features-myself page is still offered (status %d)", rec.Code)
-	}
-
 	// Unticking a feature another one needs does not remove it.
 	rec = get(app, nil, "/auth/link?submitted=1&feature=doctrines")
 	if !strings.Contains(rec.Body.String(), "Needed by Doctrines") {

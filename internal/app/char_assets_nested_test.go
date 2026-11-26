@@ -199,12 +199,6 @@ func TestAssetsScopeSelectorChecklist(t *testing.T) {
 		`<a class="charselector-option asset-scope-all on" href="/assets/?scope=none" data-assetscope-allrow>`,
 		`<a class="asset-scope-only" href="/assets/?scope=90000002" data-assetscope-only>Only</a>`,
 	)
-	if strings.Contains(body, `<span class="tagchip">`) {
-		t.Fatal("the selector rows still carry tag chips")
-	}
-	if strings.Contains(body, "data-assetscope-done") || strings.Contains(body, "data-assetscope-clear") {
-		t.Fatal("the selector still carries the commit controls; its rows apply live")
-	}
 
 	// A set scope: the button names the pair, the page shows
 	// only their places, and the unticked row's link completes

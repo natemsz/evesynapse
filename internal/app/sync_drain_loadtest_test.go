@@ -1,3 +1,5 @@
+//go:build loadtest
+
 // Sync-drain load harness: the sync-side sibling of the web load
 // test (EVESYNAPSE_LOADTEST). It answers with numbers: as the
 // count of pilots with due sync work grows, where does the
@@ -14,7 +16,7 @@
 //
 // Env-gated, never in the normal test path:
 //
-//	EVESYNAPSE_SYNCDRAIN=1 go test ./internal/app -run TestSyncDrain -count=1 -v
+//	EVESYNAPSE_SYNCDRAIN=1 go test -tags loadtest ./internal/app -run TestSyncDrain -count=1 -v
 //
 // Knobs (all optional):
 //

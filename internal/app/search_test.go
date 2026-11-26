@@ -163,8 +163,8 @@ func TestItemsGlobalSearchAndPublishedOnly(t *testing.T) {
 		t.Error("category with published=1: unpublished-only group should start hidden")
 	}
 
-	// The group page no longer drops rows server-side at all:
-	// every type renders with its published flag, and with the
+	// The group page drops no rows server-side: every type
+	// renders with its published flag, and with the
 	// switch on the unpublished rows merely start hidden, so
 	// the client can restore them without a reload.
 	code, body = getPage(t, app, cookie, "/items/group/910/")
@@ -595,7 +595,7 @@ func TestTopbarSearchRecordNameWindow(t *testing.T) {
 			t.Fatalf("seed noise pilot record: %v", err)
 		}
 	}
-	// The genuine name match, past the old window.
+	// The genuine name match, past the 100-row window.
 	target, err := json.Marshal(pilotPayload{Profile: esi.Character{Name: "Pro Target"}})
 	if err != nil {
 		t.Fatal(err)

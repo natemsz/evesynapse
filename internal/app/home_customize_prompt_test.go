@@ -45,15 +45,11 @@ func TestCustomizePromptShowsOnceAndSticks(t *testing.T) {
 		}
 	}
 
-	// Account A: while the notification prompt is unanswered the
-	// hint waits; after it, the hint drops on the first home view
-	// of a session, not the second, and a "Not now" answer ends
-	// it for good.
+	// Account A: the hint queues with the notification prompt
+	// instead of waiting for it: it drops on the first home view
+	// of a session even while that card is unanswered, not the
+	// second, and a "Not now" answer ends it for good.
 	userA, cookieA := newAccount(710001, "Hint Alpha")
-	if _, body := getPage(t, app, cookieA, "/"); strings.Contains(body, `id="customize-prompt"`) {
-		t.Fatal("hint dropped beside the unanswered notification prompt")
-	}
-	answerNotify(cookieA)
 	if code, body := getPage(t, app, cookieA, "/"); code != http.StatusOK || !strings.Contains(body, `id="customize-prompt"`) {
 		t.Fatalf("first home view: code %d, hint present %v, want 200 with the hint", code, strings.Contains(body, `id="customize-prompt"`))
 	}

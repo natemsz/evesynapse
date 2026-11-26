@@ -2278,27 +2278,18 @@ func attrUnitSymbol(attrID, unitID int64, sdeName string) string {
 	case 796:
 		return "kg"
 	}
+	// The SDE's unit ids (itemsheet names them): an id whose value
+	// reads as no plain unit (resonance, group, type, size class,
+	// relative or real percent) gets none rather than a wrong one.
 	switch unitID {
 	case 105:
 		return "%"
 	case 104:
 		return "x"
-	case 108:
-		return "m"
 	case 114:
 		return "GJ"
-	case 115:
-		return "s"
-	case 116:
-		return "m/s"
-	case 117:
-		return "m³"
 	case 120:
 		return "pts"
-	case 121:
-		return "rad/s"
-	case 124:
-		return "HP"
 	case 30:
 		return "MW"
 	case 50:

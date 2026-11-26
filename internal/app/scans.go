@@ -2048,10 +2048,10 @@ func localMoves(a, b *localReading) (arrived, left int) {
 func countMoves(arrived, left int) []string {
 	var out []string
 	if arrived > 0 {
-		out = append(out, plural(arrived, "arrived"))
+		out = append(out, fmt.Sprintf("%d arrived", arrived))
 	}
 	if left > 0 {
-		out = append(out, plural(left, "left"))
+		out = append(out, fmt.Sprintf("%d left", left))
 	}
 	return out
 }

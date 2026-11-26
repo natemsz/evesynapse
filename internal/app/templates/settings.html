@@ -124,7 +124,7 @@
   <p><small>Off. Add a key to ask for it after EVE SSO at every sign-in.</small></p>
   <p class="prose">A security key is a small device you plug in or tap, and a passkey lives on your phone or computer. This is separate from your EVE account's own two-factor sign-in: use a different key than the one guarding your EVE account. Keys are per hostname: a key enrolled here ({{.Host}}) does not work on any other EveSynapse address.</p>
   {{end}}
-  <div id="security-register" data-begin="/settings/security/keys/begin" data-finish="/settings/security/keys/finish" data-fresh="{{.Fresh}}" data-enabled="{{.Enabled}}">
+  <div id="security-register" data-begin="/settings/security/keys/begin" data-finish-url="/settings/security/keys/finish" data-fresh="{{.Fresh}}" data-enabled="{{.Enabled}}">
     <p class="err" id="security-status" role="alert" hidden></p>
     <div id="security-form">
       <p><label><small>Key name</small> <input type="text" id="security-name" value="Security key" maxlength="64" autocomplete="off"></label>

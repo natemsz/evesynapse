@@ -366,6 +366,7 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 	for _, wn := range wants {
 		add(wn.RegionID, wn.TypeID)
 	}
+	app.refreshWantedAvgVolumes(ctx, wants)
 
 	entries, err := app.queries.ListAllWatchlistEntries(ctx)
 	if err != nil {
@@ -421,6 +422,29 @@ func (app *Application) historyCandidates(ctx context.Context) ([]marketKey, err
 		add(defaultMarketRegion, typeID)
 	}
 	return out, nil
+}
+
+// refreshWantedAvgVolumes brings the sold-per-day figure of every
+// wanted pair up to its stored history, one bounded statement per
+// region that touches only rows whose figure changed. A wanted pair
+// whose history is already stored and fresh is not fetched again, so
+// without this a route waiting on that figure (the tradefinder's
+// pending list queues these wants) would wait for the next history
+// fetch; history ingest itself refreshes the pairs it fetches.
+func (app *Application) refreshWantedAvgVolumes(ctx context.Context, wants []db.ListMarketHistoryWantsRow) {
+	byRegion := map[int64][]int64{}
+	for _, wn := range wants {
+		if wn.RegionID > 0 && wn.TypeID > 0 {
+			byRegion[wn.RegionID] = append(byRegion[wn.RegionID], wn.TypeID)
+		}
+	}
+	for regionID, typeIDs := range byRegion {
+		if _, err := app.queries.RefreshMarketRegionStatAvgVolumes(ctx, db.RefreshMarketRegionStatAvgVolumesParams{
+			RegionID: regionID, TypeIds: typeIDs,
+		}); err != nil {
+			logging.Errorf("worker: market history: refresh sold-per-day for wanted types in region %d: %v", regionID, err)
+		}
+	}
 }
 
 // liquidCoreTypeIDs ranks The Forge's most liquid types from our

@@ -135,67 +135,16 @@ func (app *Application) killboardSearch(ctx context.Context, q string, userID in
 		}
 	}
 
-	charHit := false
-	if rows, err := app.queries.SearchPilotRecordsByName(ctx, q); err == nil {
-		var items []kbSearchItem
-		for _, row := range rows {
-			if row.Payload == "" {
-				continue
-			}
-			var payload pilotPayload
-			if jerr := json.Unmarshal([]byte(row.Payload), &payload); jerr != nil || payload.Profile.Name == "" {
-				continue
-			}
-			if _, ok := nameMatchTier(payload.Profile.Name, q); !ok {
-				continue
-			}
-			items = append(items, kbSearchItem{Kind: "character", ID: row.CharacterID, Name: payload.Profile.Name, Sub: payload.Corp.Name})
-		}
-		charHit = len(items) > 0
-		add(items)
-	} else {
-		logging.Errorf("killboard search: pilot records for %q: %v", q, err)
-	}
-	if rows, err := app.queries.SearchCorporationRecordsByName(ctx, q); err == nil {
-		var items []kbSearchItem
-		for _, row := range rows {
-			payload, ok := decodeCorpPayload(row.Payload)
-			if !ok {
-				continue
-			}
-			if _, ok := nameMatchTier(payload.Corp.Name, q); !ok {
-				continue
-			}
-			sub := ""
-			if payload.Corp.Ticker != "" {
-				sub = "[" + payload.Corp.Ticker + "]"
-			}
-			items = append(items, kbSearchItem{Kind: "corporation", ID: row.CorporationID, Name: payload.Corp.Name, Sub: sub})
-		}
-		add(items)
-	} else {
-		logging.Errorf("killboard search: corporation records for %q: %v", q, err)
-	}
-	if rows, err := app.queries.SearchAllianceRecordsByName(ctx, q); err == nil {
-		var items []kbSearchItem
-		for _, row := range rows {
-			payload, ok := decodeAlliancePayload(row.Payload)
-			if !ok {
-				continue
-			}
-			if _, ok := nameMatchTier(payload.Alliance.Name, q); !ok {
-				continue
-			}
-			sub := ""
-			if payload.Alliance.Ticker != "" {
-				sub = "[" + payload.Alliance.Ticker + "]"
-			}
-			items = append(items, kbSearchItem{Kind: "alliance", ID: row.AllianceID, Name: payload.Alliance.Name, Sub: sub})
-		}
-		add(items)
-	} else {
-		logging.Errorf("killboard search: alliance records for %q: %v", q, err)
-	}
+	// People and organisations ride the banner search's tiers: the
+	// in-memory index where it is built, the warmed records otherwise,
+	// each already ranked and capped.
+	pilots, _ := app.searchPilotTier(ctx, q, nil, kbSearchLimit)
+	charHit := len(pilots) > 0
+	add(kbItemsFromHits("character", pilots, "Pilot"))
+	corps, _ := app.searchCorporationTier(ctx, q, kbSearchLimit)
+	add(kbItemsFromHits("corporation", corps, "Corporation"))
+	alliances, _ := app.searchAllianceTier(ctx, q, kbSearchLimit)
+	add(kbItemsFromHits("alliance", alliances, "Alliance"))
 
 	// No warmed pilot matched: a signed-in search for a full pilot
 	// name notes the resolution want, exactly as the banner search
@@ -249,4 +198,20 @@ func (app *Application) handleKillboardSuggest(w http.ResponseWriter, r *http.Re
 		w.Header().Set("Cache-Control", "private, max-age=30")
 	}
 	_ = json.NewEncoder(w).Encode(items)
+}
+
+// kbItemsFromHits turns one search tier's hits into killboard
+// suggestions of kind: the hit's label (a pilot's corporation, an
+// organisation's ticker) is the sub line, and the tier's plain
+// fallback label (fallback) is no sub line at all.
+func kbItemsFromHits(kind string, hits []searchHit, fallback string) []kbSearchItem {
+	items := make([]kbSearchItem, 0, len(hits))
+	for _, h := range hits {
+		sub := h.Label
+		if sub == fallback {
+			sub = ""
+		}
+		items = append(items, kbSearchItem{Kind: kind, ID: h.ID, Name: h.Name, Sub: sub})
+	}
+	return items
 }

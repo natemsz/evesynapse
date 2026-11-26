@@ -47,9 +47,9 @@
         {{if .ScoredNote}}<p class="muted">{{.ScoredNote}}.</p>{{end}}
       </div>
       {{end}}{{end}}
-      {{if .ItemID}}<div class="cs-tel-id"><span>Item ID <code>{{.ItemID}}</code></span><button type="button" class="btn small cs-copy" data-copy="{{.ItemID}}" aria-label="Copy item ID {{.ItemID}}">⧉ Copy ID</button></div>{{end}}
+      {{if .ItemID}}<div class="cs-tel-id"><span>Item ID <code>{{.ItemID}}</code></span><button type="button" class="btn small cs-copy" data-copied-label="Copied" data-copy data-copy-text="{{.ItemID}}" aria-label="Copy item ID {{.ItemID}}">⧉ Copy ID</button></div>{{end}}
       {{if not $p.Full}}<div class="cs-dfoot"><div class="cs-dfoot-in"><a class="cs-dfoot-full" href="/contracts/search/{{$p.ContractID}}/">Full contract page →</a>
-        <button type="button" class="btn small cs-copy" data-copy="{{$p.CopyText}}">⧉ Copy Contract Link</button></div></div>{{end}}
+        <button type="button" class="btn small cs-copy" data-copied-label="Copied Link!" data-copy data-copy-text="{{$p.CopyText}}">⧉ Copy Contract Link</button></div></div>{{end}}
     </div>
     {{end}}
     {{else if not .Full}}
@@ -59,7 +59,7 @@
       {{if .SumValue}}<div class="cs-srow"><span class="cs-sk">EveSynapse Value:</span><span class="cs-sv">{{.SumValue}}</span></div>{{end}}
       {{if .SumSpread}}<div class="cs-srow sp{{if .SumSpreadNeg}} neg{{end}}"><span class="cs-sk">Estimated Spread:</span><span class="cs-sv">{{.SumSpread}}</span></div>{{end}}
       <div class="cs-dfoot"><div class="cs-dfoot-in"><a class="cs-dfoot-full" href="/contracts/search/{{.ContractID}}/">Full contract page →</a>
-        <button type="button" class="btn small cs-copy" data-copy="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
+        <button type="button" class="btn small cs-copy" data-copied-label="Copied Link!" data-copy data-copy-text="{{.CopyText}}">⧉ Copy Contract Link</button></div></div>
     </div>
     {{end}}
 {{end}}

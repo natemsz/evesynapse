@@ -394,7 +394,7 @@
           return;
         }
         factorGo.disabled = true;
-        runAssertion(root.getAttribute('data-begin'), root.getAttribute('data-finish')).then(function (redirect) {
+        runAssertion(root.getAttribute('data-begin'), root.getAttribute('data-finish-url')).then(function (redirect) {
           window.location.assign(redirect);
         }, function (err) {
           factorGo.disabled = false;
@@ -416,7 +416,7 @@
         }
         enrollGo.disabled = true;
         var name = document.getElementById('enroll-name').value || 'Security key';
-        runRegistration(root.getAttribute('data-begin'), root.getAttribute('data-finish'), name).then(function (data) {
+        runRegistration(root.getAttribute('data-begin'), root.getAttribute('data-finish-url'), name).then(function (data) {
           if (data.redirect) {
             window.location.assign(data.redirect);
             return;
@@ -435,7 +435,7 @@
       enrollConfirm.addEventListener('click', function () {
         var root = document.getElementById('enroll-root');
         enrollConfirm.disabled = true;
-        postJSON(root.getAttribute('data-confirm')).then(function (data) {
+        postJSON(root.getAttribute('data-confirm-url')).then(function (data) {
           window.location.assign(data.redirect || '/');
         }, function () {
           enrollConfirm.disabled = false;
@@ -466,7 +466,7 @@
           });
         }
         ready.then(function () {
-          return runRegistration(root.getAttribute('data-begin'), root.getAttribute('data-finish'), name);
+          return runRegistration(root.getAttribute('data-begin'), root.getAttribute('data-finish-url'), name);
         }).then(function (data) {
           if (data.redirect) {
             window.location.assign(data.redirect);

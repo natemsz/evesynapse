@@ -504,12 +504,12 @@ func TestTradefinderPendingRoutesQueueHistory(t *testing.T) {
 	}
 }
 
-// TestTradefinderHealsPendingWithStoredHistory: a pending route whose
-// destination history is already stored -- it arrived by a path that
-// did not update the sold-per-day figure (a swarm peer, or before the
-// figure was kept current) -- ranks into the table on the next view,
-// from stored rows alone.
-func TestTradefinderHealsPendingWithStoredHistory(t *testing.T) {
+// TestTradefinderPendingRouteRanksOnceItsStoredHistoryIsWanted: a
+// pending route whose destination history is stored but whose
+// sold-per-day figure is behind ranks into the table once the history
+// worker reads the route's want, from stored rows alone, with no
+// write on the page view.
+func TestTradefinderPendingRouteRanksOnceItsStoredHistoryIsWanted(t *testing.T) {
 	transport := &countingTransport{}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
@@ -536,8 +536,14 @@ func TestTradefinderHealsPendingWithStoredHistory(t *testing.T) {
 		}
 	}
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
+	// The view lists the route as pending and wants its history; the
+	// history worker's pass brings the figure up from stored rows.
+	getPage(t, app, cookie, "/market/tradefinder/")
+	if _, err := app.historyCandidates(ctx); err != nil {
+		t.Fatalf("history candidates: %v", err)
+	}
 	_, body := getPage(t, app, cookie, "/market/tradefinder/")
-	mustContain(t, "/market/tradefinder/ (healed)", body, "Mexallon", "Estimated profit per day")
+	mustContain(t, "/market/tradefinder/ (caught up)", body, "Mexallon", "Estimated profit per day")
 	if strings.Contains(body, "Waiting on sales figures") {
 		t.Error("a route with stored history still lists as pending")
 	}

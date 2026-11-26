@@ -1308,6 +1308,77 @@
   }
   onContentReady(initCustomizePrompt);
   initCustomizePrompt(document);
+  // A hint queued behind the notification prompt (rendered hidden,
+  // data-customize-prompt-queued) drops when the reader closes that
+  // prompt without answering it.
+  document.addEventListener("evesynapse:notify-prompt-closed", function () {
+    var card = customizePromptCard();
+    if (!card || !card.hasAttribute("data-customize-prompt-queued")) return;
+    card.removeAttribute("data-customize-prompt-queued");
+    // After the closing click has finished travelling: the card's
+    // own outside-click close must not catch it.
+    window.setTimeout(function () {
+      card.hidden = false;
+      window.requestAnimationFrame(function () { card.classList.add("is-open"); });
+    }, 0);
+    // Shown is seen: record it, so it drops once per account.
+    var body = new URLSearchParams();
+    body.set("action", "seen");
+    fetch("/home/customize-prompt", {
+      method: "POST",
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+      credentials: "same-origin",
+      body: body
+    }).catch(function () { /* the next home view shows it again */ });
+  });
+
+  // The way out of Customize: on entering it, a card under the bar
+  // says how to leave (\ or Exit customization). When the Add a
+  // widget dialog opened first (the hint's "See the new modules"),
+  // the card waits until that dialog closes. Any click, Escape or a
+  // swap closes it; it shows once per Customize view.
+  function initCustomizeExitHint(root) {
+    var card = (root.querySelector && root.querySelector("#customize-exit-hint")) ||
+      document.getElementById("customize-exit-hint");
+    if (!card || !once(card, "exithint")) return;
+    var still = window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var html = document.documentElement;
+    function close() {
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("evesynapse:content-will-swap", close);
+      if (card.hidden) return;
+      card.classList.remove("is-open");
+      if (still) { card.hidden = true; return; }
+      window.setTimeout(function () { card.hidden = true; }, 180);
+    }
+    function onClick() { close(); }
+    function onKey(ev) { if (ev.key === "Escape") close(); }
+    function show() {
+      if (!document.contains(card)) return;
+      card.hidden = false;
+      window.requestAnimationFrame(function () { card.classList.add("is-open"); });
+      // Bound after the opening click has finished travelling.
+      window.setTimeout(function () {
+        document.addEventListener("click", onClick, true);
+        document.addEventListener("keydown", onKey);
+      }, 0);
+      document.addEventListener("evesynapse:content-will-swap", close);
+    }
+    if (!html.classList.contains("modal-open")) {
+      show();
+      return;
+    }
+    var watch = new MutationObserver(function () {
+      if (html.classList.contains("modal-open")) return;
+      watch.disconnect();
+      show();
+    });
+    watch.observe(html, { attributes: true, attributeFilter: ["class"] });
+  }
+  onContentReady(initCustomizeExitHint);
+  initCustomizeExitHint(document);
 
   // HOME_MAX_COPIES mirrors homeMaxCopies (home_widget_kit.go): the
   // most cards one widget may have on a home.

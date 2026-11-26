@@ -164,13 +164,8 @@ func (app *page) handleMarketTradefinder(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)} // public: stored market data only
 	view := app.buildTradefinderView(ctx, r.URL.Query())
-	// A pending route whose history is already stored (it arrived by a
-	// path that did not update the figure, or before the figure was
-	// kept current) catches up here from stored rows, and the view is
-	// built again so it ranks into the table at once.
-	if app.healPendingVolumes(ctx, view) {
-		view = app.buildTradefinderView(ctx, r.URL.Query())
-	}
+	// Pending routes are wanted, and the history worker brings their
+	// sold-per-day figure up to date (refreshWantedAvgVolumes).
 	if app.deps.UserID(ctx) > 0 { // anonymous views warm nothing
 		app.queueTradefinderPending(ctx, view)
 	}
@@ -460,24 +455,6 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 // healPendingVolumes recomputes the destination sold-per-day figure
 // for the view's pending routes from their stored history, reporting
 // whether any changed. No ESI: only rows already held.
-func (app *page) healPendingVolumes(ctx context.Context, view *tradefinderView) bool {
-	if len(view.Pending) == 0 {
-		return false
-	}
-	ids := make([]int64, 0, len(view.Pending))
-	for _, r := range view.Pending {
-		ids = append(ids, r.TypeID)
-	}
-	n, err := app.queries.RefreshMarketRegionStatAvgVolumes(ctx, db.RefreshMarketRegionStatAvgVolumesParams{
-		RegionID: view.DestID, TypeIds: ids,
-	})
-	if err != nil {
-		logging.Errorf("tradefinder: refresh sold-per-day for pending routes in region %d: %v", view.DestID, err)
-		return false
-	}
-	return n > 0
-}
-
 // queueTradefinderPending asks the worker for the destination history
 // of the view's pending routes, so they can rank in. Queue writes
 // only: nothing is fetched here.

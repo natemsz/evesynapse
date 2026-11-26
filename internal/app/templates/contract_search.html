@@ -302,7 +302,7 @@
         {{if .Spread}}<div class="cs-spread{{if .SpreadNeg}} neg{{end}}">{{.Spread}} spread</div>{{end}}
       </td>
       <td class="cs-c5">
-        <button type="button" class="cs-copy cs-rowcopy" data-copy="{{.CopyText}}" aria-label="Copy contract link" title="Copy contract link">⧉</button>
+        <button type="button" class="cs-copy cs-rowcopy" data-copied-label="✓" data-copy data-copy-text="{{.CopyText}}" aria-label="Copy contract link" title="Copy contract link">⧉</button>
         {{if .SecKnown}}<span class="sec-pill sec-{{.SecTier}}">{{.SecText}}</span> {{end}}<span class="cs-place">{{placeLink .Location}}</span>
         <div class="cs-expires">{{.ExpiresText}}</div>
       </td>

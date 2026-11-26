@@ -20,7 +20,9 @@ import (
 // the account (users.customize_prompt_seen_at, schema 185) so it
 // follows the person and not the browser, and opening Customize
 // counts as answering, since the reader has found the thing the
-// card points at. The demo account reads the same shape without
+// card points at. It does not wait for the notification prompt:
+// when both cards are due they queue up and drop together, one
+// after the next. The demo account reads the same shape without
 // the remembered answer: it drops once per login (the session
 // mark), and nothing is saved for it, so every visitor sees it
 // once.
@@ -43,7 +45,10 @@ type customizePromptView struct {
 
 // customizePromptFor builds the card for an account, or nil when
 // it must not drop: already answered, or already shown this
-// session.
+// session. It does not wait for the notification prompt: the two
+// cards queue up, so when both are due they drop together, one
+// after the next, and a shown notification prompt never holds
+// this one back.
 func (app *Application) customizePromptFor(ctx context.Context, userID int64) *customizePromptView {
 	seen, err := app.queries.GetUserCustomizePromptSeen(ctx, userID)
 	if err != nil {
@@ -51,18 +56,6 @@ func (app *Application) customizePromptFor(ctx context.Context, userID int64) *c
 		return nil
 	}
 	if seen.Valid {
-		return nil
-	}
-	// After the notification prompt, never with it: while that
-	// card is unanswered it owns the first-run moment, and this
-	// one drops on a home view after it instead. The gate sits
-	// before the session mark, so waiting does not spend this
-	// hint's once-per-session drop. The demo account never
-	// answers that prompt (its writes are turned away), so the
-	// gate would hold this hint back forever; demo reads the
-	// session drop instead, once per login, and nothing is
-	// saved for it.
-	if !app.isDemoUser(ctx, userID) && !app.notifyPrefsFor(ctx, userID).PromptAnswered {
 		return nil
 	}
 	if app.sessions.GetBool(ctx, sessionCustomizePromptShown) {

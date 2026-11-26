@@ -26,7 +26,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: gradle:8.11.1-jdk17
+    container: gradle:9.9.2-jdk17
     # The SDK step installs the platform here; the location
     # is job-level state because a step's own exports do not
     # reach the steps after it, and the build step's Gradle

@@ -82,7 +82,7 @@ func TestRenderProfileThemes(t *testing.T) {
 	}
 	_ = defBytes
 	defProfile := RenderProfile(base)
-	for _, theme := range []string{"jove", "caldari", "gallente", "amarr", "triglavian", "edencom", "soe", "minmatar", "light"} {
+	for _, theme := range []string{"jove", "caldari", "gallente", "amarr", "triglavian", "edencom", "soe", "minmatar"} {
 		if !KnownTheme(theme) {
 			t.Fatalf("KnownTheme(%q) = false", theme)
 		}

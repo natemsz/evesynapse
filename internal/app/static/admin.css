@@ -66,9 +66,7 @@
 .an-s5 { fill: var(--danger); opacity: .85; }
 .an-grid { stroke: var(--box-edge); }
 .an-line-a { stroke: var(--accent); stroke-width: 1.6; }
-.an-line-a-fill { fill: var(--accent); opacity: .15; }
 .an-line-b { stroke: var(--gold); stroke-width: 1.6; }
-.an-line-b-fill { fill: var(--gold); opacity: .15; }
 .an-ref { stroke: var(--gold); stroke-width: 1; stroke-dasharray: 5 4; }
 .an-svg-note { fill: var(--muted); font-size: var(--fs-2xs); }
 .an-ref-t { fill: var(--gold); }

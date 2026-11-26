@@ -30,11 +30,6 @@
 {{end}}
 {{end}}
 
-{{define "wallet-flow-detail"}}
-{{template "wallet-flow-chart" .}}
-{{template "wallet-flow-refs" .}}
-{{end}}
-
 {{define "wallet-flow-chart"}}
 {{if .HasChart}}
 {{template "balance-chart" .Chart}}
@@ -42,25 +37,3 @@
 {{end}}
 {{end}}
 
-{{define "wallet-flow-refs"}}
-{{if .Sources}}
-<div class="tw">
-<table>
-  <thead><tr><th>Top sources</th><th>30 days</th></tr></thead>
-  <tbody>
-  {{range .Sources}}<tr><td>{{.Ref}}</td><td>{{.Total}} ISK</td></tr>{{end}}
-  </tbody>
-</table>
-</div>
-{{end}}
-{{if .Sinks}}
-<div class="tw">
-<table>
-  <thead><tr><th>Top sinks</th><th>30 days</th></tr></thead>
-  <tbody>
-  {{range .Sinks}}<tr><td>{{.Ref}}</td><td>{{.Total}} ISK</td></tr>{{end}}
-  </tbody>
-</table>
-</div>
-{{end}}
-{{end}}

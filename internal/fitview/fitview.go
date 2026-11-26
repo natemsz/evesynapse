@@ -823,15 +823,10 @@ func FitTipClass(eff, base float64, higherBetter bool) string {
 	return "bad"
 }
 
-// FitEffAttrs resolves a fitted type's effective attributes
-// for a state: the engine's per-state fold when the module
-// is in a non-default state, else its resting fold, else the
-// raw SDE row when the engine has nothing (snap may be nil).
-func FitEffAttrs(res *fit.Result, snap *fit.Snapshot, typeID int64, state string) map[int64]float64 {
-	return FitEffAttrsCharge(res, snap, typeID, state, 0)
-}
-
-// FitEffAttrsCharge is FitEffAttrs for the modules of a type and
+// FitEffAttrsCharge resolves a fitted type's effective attributes
+// for a state: the engine's per-state fold when the module is in a
+// non-default state, else its resting fold, else the raw SDE row when
+// the engine has nothing (snap may be nil). For the modules of a type and
 // state loading one charge (0: whichever the type's state key holds).
 func FitEffAttrsCharge(res *fit.Result, snap *fit.Snapshot, typeID int64, state string, charge int64) map[int64]float64 {
 	eff := res.ItemAttrs[typeID]

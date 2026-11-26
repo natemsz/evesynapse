@@ -70,7 +70,6 @@
 }
 
 .ch-face { border-radius: var(--r-xs); vertical-align: middle; }
-.ch-row-end { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem; }
 
 /* --- Reporting --- */
 .ch-paste { margin: 0 0 1rem; }

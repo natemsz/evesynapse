@@ -4921,7 +4921,7 @@
   function activeCardTheme() {
     var root = typeof document !== "undefined" ? document.documentElement : null;
     if (!root || typeof root.getAttribute !== "function") return { theme: "", vision: "" };
-    var scheme = root.getAttribute("data-theme") === "light" ? "light" : (root.getAttribute("data-scheme") || "");
+    var scheme = root.getAttribute("data-scheme") || "";
     if (scheme === "minmatar-v3") scheme = "";
     var vision = root.getAttribute("data-vision") || "";
     if (vision !== "redgreen" && vision !== "blueyellow") vision = "";

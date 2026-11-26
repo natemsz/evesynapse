@@ -417,7 +417,7 @@ type Snapshot struct {
 	Effects      map[int64]*Effect // every effect; Modifiers may be empty
 	TypeEffects  map[int64][]int64 // type -> effect IDs (sorted)
 	Requirements map[int64][]SkillReq
-	// Bursts is the command burst data (WithBursts); nil leaves
+	// Bursts is the command burst data (from Bursts); nil leaves
 	// bursts without effect.
 	Bursts *BurstData
 }

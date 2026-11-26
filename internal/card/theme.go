@@ -28,7 +28,6 @@ type Palette struct {
 	MarkDn1    color.NRGBA
 	MarkGlow   color.NRGBA
 	MarkSpark  color.NRGBA
-	Light      bool
 }
 
 var defaultPalette = Palette{
@@ -268,33 +267,6 @@ var namedPalettes = map[string]Palette{
 		MarkGlow:  hex(0xffd27a),
 		MarkSpark: hex(0xfff6e6),
 	},
-	"light": {
-		GroundTop:  hex(0xf9f6ef),
-		GroundBot:  hex(0xefe9dc),
-		Glow1:      color.NRGBA{217, 119, 6, 42},
-		Glow2:      color.NRGBA{176, 73, 10, 18},
-		Panel:      hex(0xfdfbf6),
-		Text:       hex(0x2a241d),
-		TextBright: hex(0x20180e),
-		Muted:      hex(0x6e5a42),
-		Muted2:     hex(0x5f4c36),
-		Hi:         hex(0xb0490a),
-		Accent:     hex(0xb0490a),
-		Rule0:      hex(0xd97706),
-		Rule1:      hex(0xb0490a),
-		EveWord:    hex(0x20180e),
-		SynWords: [7]color.NRGBA{
-			hex(0x90590e), hex(0x9d5203), hex(0xa64904), hex(0xb04108), hex(0xb93404), hex(0xbd2e17), hex(0xb91c1c),
-		},
-		MarkUp0:   hex(0xf59e0b),
-		MarkUp1:   hex(0xd9640f),
-		MarkSheen: hex(0xfff3d6),
-		MarkDn0:   hex(0xd9640f),
-		MarkDn1:   hex(0x8f2d0c),
-		MarkGlow:  hex(0xfbbf24),
-		MarkSpark: hex(0xfffbeb),
-		Light:     true,
-	},
 }
 
 // PaletteFor returns the Palette matching a theme or scheme name,
@@ -310,11 +282,6 @@ func PaletteFor(theme string) Palette {
 func KnownTheme(theme string) bool {
 	_, ok := namedPalettes[theme]
 	return ok
-}
-
-var lightSecColors = [11]color.NRGBA{
-	hex(0x9d174d), hex(0xb91c1c), hex(0xb91c1c), hex(0xc2410c), hex(0xb45309),
-	hex(0x854d0e), hex(0x15803d), hex(0x047857), hex(0x0369a1), hex(0x1d4ed8), hex(0x1e40af),
 }
 
 var redgreenSecColors = [11]color.NRGBA{
@@ -338,9 +305,6 @@ func SecColorFor(tier int, theme, vision string) color.NRGBA {
 		return redgreenSecColors[tier]
 	case "blueyellow":
 		return blueyellowSecColors[tier]
-	}
-	if theme == "light" {
-		return lightSecColors[tier]
 	}
 	return secColors[tier]
 }

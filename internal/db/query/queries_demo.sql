@@ -47,9 +47,6 @@ DELETE FROM user_appraisals WHERE user_id = $1;
 -- name: DeleteDemoWalletHistory :exec
 DELETE FROM wallet_history WHERE character_id = $1;
 
--- name: DeleteDemoOrderHealth :exec
-DELETE FROM order_health WHERE character_id = $1;
-
 -- name: DeleteDemoOrderLifecycle :exec
 DELETE FROM order_lifecycle WHERE character_id = $1;
 
@@ -109,17 +106,8 @@ DELETE FROM battle_fights WHERE user_id = $1;
 -- name: DeleteDemoBattleKills :exec
 DELETE FROM kills WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 
--- name: DeleteDemoBattleKillAttackers :exec
-DELETE FROM kill_attackers WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
-
 -- name: DeleteDemoBattleKillInvolvement :exec
 DELETE FROM kill_involvement WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
-
--- name: DeleteDemoBattleKillDetails :exec
-DELETE FROM kill_details WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
-
--- name: DeleteDemoBattleKillPrices :exec
-DELETE FROM kill_line_prices WHERE killmail_id = ANY(sqlc.arg(killmail_ids)::bigint[]);
 
 -- The demo cast's pilot activity profiles, folded by the seed
 -- from its planted fights. The fold's applied markers would

@@ -207,7 +207,6 @@
 }
 .kb-tag.warn { color: var(--danger); }
 .kb-tag.dim { color: var(--muted); }
-.kb-empty { padding: 1.5rem 1rem; color: var(--muted-2); text-align: center; }
 .kb-more { margin: 0; text-align: center; }
 
 /* --- Leaderboards --- */

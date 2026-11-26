@@ -468,17 +468,6 @@ func (q *Queries) GetSRPRequest(ctx context.Context, id int64) (SrpRequest, erro
 	return i, err
 }
 
-const getSRPSettings = `-- name: GetSRPSettings :one
-SELECT corporation_id, policy, updated_at FROM srp_settings WHERE corporation_id = $1
-`
-
-func (q *Queries) GetSRPSettings(ctx context.Context, corporationID int64) (SrpSetting, error) {
-	row := q.db.QueryRow(ctx, getSRPSettings, corporationID)
-	var i SrpSetting
-	err := row.Scan(&i.CorporationID, &i.Policy, &i.UpdatedAt)
-	return i, err
-}
-
 const insertSRPPolicyHull = `-- name: InsertSRPPolicyHull :exec
 INSERT INTO srp_policy_hulls (policy_id, ship_type_id, payout) VALUES ($1, $2, $3)
 ON CONFLICT (policy_id, ship_type_id) DO UPDATE SET payout = excluded.payout
@@ -1675,25 +1664,6 @@ func (q *Queries) SetOwnerPermission(ctx context.Context, arg SetOwnerPermission
 		arg.UpdatedBy,
 		arg.UpdatedAt,
 	)
-	return err
-}
-
-const setSRPSettings = `-- name: SetSRPSettings :exec
-INSERT INTO srp_settings (corporation_id, policy, updated_at)
-VALUES ($1, $2, $3)
-ON CONFLICT (corporation_id) DO UPDATE SET
-    policy     = excluded.policy,
-    updated_at = excluded.updated_at
-`
-
-type SetSRPSettingsParams struct {
-	CorporationID int64     `json:"corporation_id"`
-	Policy        string    `json:"policy"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
-
-func (q *Queries) SetSRPSettings(ctx context.Context, arg SetSRPSettingsParams) error {
-	_, err := q.db.Exec(ctx, setSRPSettings, arg.CorporationID, arg.Policy, arg.UpdatedAt)
 	return err
 }
 

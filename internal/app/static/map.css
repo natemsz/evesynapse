@@ -7,7 +7,7 @@
  * the bar and the overlays answer to the map's own room, never the
  * window: it sits in a page whose sidebar opens and closes, and in
  * the intel workbench's narrow column. The canvas reads its colors
- * from here (the --map-* tokens below, both themes) and from the
+ * from here (the --map-* tokens below, every scheme) and from the
  * legend's .sec-N swatches, so nothing about the map's palette lives
  * in script. The system card docks top right on a wide screen and
  * rises from the bottom on a phone. */
@@ -100,44 +100,6 @@
   border-radius: var(--r-lg);
   background: var(--surface-pane);
   overflow: hidden;
-}
-html[data-theme="light"] .map {
-  --map-gate: rgba(120, 70, 30, 0.22);
-  --map-gate-inter: rgba(190, 80, 20, 0.45);
-  --map-gate-hot: #d4520c;
-  --map-label: #2a1a0e;
-  --map-label-dim: #6e5440;
-  --map-region: rgba(150, 80, 20, 0.8);
-  --map-cons: rgba(140, 95, 50, 0.22);
-  --map-halo: rgba(255, 250, 242, 0.9);
-  --map-dim: rgba(110, 84, 64, 0.22);
-  --map-heat-lo: #f0b080;
-  --map-heat-hi: #d4520c;
-  --map-heat-core: #7a1d04;
-  --map-heat-blend: source-over;
-  --map-sov-l: 45%;
-  --map-npc: #8a7d72;
-  --map-unheld: rgba(110, 84, 64, 0.28);
-  --map-route: #a86a10;
-  --map-route-halo: rgba(168, 106, 16, 0.22);
-  --map-intel: #0a7fa8;
-  --map-inc: #a12fb3;
-  --map-inc-staging: #d01ba8;
-  --map-space: radial-gradient(120% 90% at 30% 20%, var(--map-glow-1), transparent 55%), #fbf6ee;
-}
-html[data-theme="light"]:not([data-vision]) .map {
-  --map-threat-lo: #f0c060;
-  --map-threat-hi: #c8281a;
-  --map-threat-core: #5a0a04;
-  --map-camp: #c41818;
-  --map-intel-clear: #2f8f46;
-  --map-d-pilots: #1f9d55;
-  --map-d-fleet: #2563c9;
-  --map-d-clones: #7b4fc9;
-  --map-d-market: #a87a00;
-  --map-d-industry: #b4560f;
-  --map-d-structures: #0f8a8a;
-  --map-d-posted: #6b5a48;
 }
 
 /* --- The bar --- */

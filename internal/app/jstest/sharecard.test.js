@@ -568,15 +568,6 @@ test("open syncs html theme and vision onto /pilot/share.png URLs and redraws wh
   assert.equal(img.src, "/pilot/share.png?character=42&theme=caldari&vision=redgreen");
   assert.equal(dlLink.getAttribute("href"), "/pilot/share.png?character=42&download=1&theme=caldari&vision=redgreen");
   env.api.closeDialog(dlg);
-
-  // Switching to light mode overrides dark schemes and triggers a fresh image load.
-  img.complete = true;
-  img.naturalWidth = 1200;
-  document.documentElement.setAttribute("data-theme", "light");
-  document.documentElement.removeAttribute("data-vision");
-  env.api.open(dlg);
-  assert.equal(img.src, "/pilot/share.png?character=42&theme=light");
-  assert.equal(dlLink.getAttribute("href"), "/pilot/share.png?character=42&download=1&theme=light");
 });
 
 test("canCopyImage hides Copy image on SamsungBrowser where PNG clipboard is unsupported", () => {

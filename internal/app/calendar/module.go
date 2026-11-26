@@ -6,7 +6,6 @@ import (
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/esi"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -66,11 +65,6 @@ type mod struct {
 
 func newMod(deps module.Deps) *mod { return &mod{deps: deps, queries: deps.DB()} }
 
-// MonthLayout, ParseMonth and GridRange are the month grid's address and
-// range rules, exported so the ops tests pin how the grid and the ops
-// sign-up links agree.
+// MonthLayout is the month grid's address format, exported so the ops
+// tests build the same calendar links.
 const MonthLayout = calMonthLayout
-
-func ParseMonth(raw string, now time.Time) time.Time { return parseCalMonth(raw, now) }
-
-func GridRange(month time.Time) (from, to time.Time) { return calGridRange(month) }

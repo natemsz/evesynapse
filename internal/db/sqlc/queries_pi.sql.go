@@ -8,7 +8,6 @@ package db
 import (
 	"context"
 	"encoding/json"
-	"time"
 )
 
 const deleteStalePIPlans = `-- name: DeleteStalePIPlans :exec
@@ -64,38 +63,4 @@ func (q *Queries) InsertPIPlan(ctx context.Context, arg InsertPIPlanParams) erro
 		arg.Solution,
 	)
 	return err
-}
-
-const listPIPlansByUser = `-- name: ListPIPlansByUser :many
-SELECT token, created_at, request FROM pi_plans
-WHERE user_id = $1
-ORDER BY created_at DESC
-LIMIT 10
-`
-
-type ListPIPlansByUserRow struct {
-	Token     string          `json:"token"`
-	CreatedAt time.Time       `json:"created_at"`
-	Request   json.RawMessage `json:"request"`
-}
-
-// An account's recent plans, newest first, for the planner's list.
-func (q *Queries) ListPIPlansByUser(ctx context.Context, userID int64) ([]ListPIPlansByUserRow, error) {
-	rows, err := q.db.Query(ctx, listPIPlansByUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListPIPlansByUserRow
-	for rows.Next() {
-		var i ListPIPlansByUserRow
-		if err := rows.Scan(&i.Token, &i.CreatedAt, &i.Request); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

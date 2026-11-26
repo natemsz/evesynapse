@@ -257,9 +257,6 @@ func (app *Application) saveCorpSettings(ctx context.Context, owner orgOwner, ch
 			return err
 		}
 	}
-	if err := q.SetSRPSettings(ctx, db.SetSRPSettingsParams{CorporationID: owner.ID, Policy: policy, UpdatedAt: now}); err != nil {
-		return err
-	}
 	policies, err := q.ListSRPPolicies(ctx, db.ListSRPPoliciesParams{OwnerKind: owner.Kind, OwnerID: owner.ID})
 	if err != nil {
 		return err

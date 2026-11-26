@@ -1065,7 +1065,7 @@
 .lp-pilots > li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
 .lp-list > li:last-child, .lp-pilots > li:last-child, .mv-list > li:last-child, .sv-list > li:last-child { border-bottom: 0; }
 .lp-corp, .mv-name, .sv-system { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lp-points, .mv-price { color: var(--text-bright); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.lp-points { color: var(--text-bright); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .lp-points small { color: var(--muted); }
 .lp-rate, .lp-value, .mv-sub, .sv-sub, .sv-when { color: var(--muted); font-size: var(--fs-xs); }
 .lp-value, .sv-when { text-align: right; white-space: nowrap; }

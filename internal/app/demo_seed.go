@@ -329,7 +329,7 @@ func (s *demoSeed) wipe(ctx context.Context) error {
 			func() error { return q.DeleteDemoSnapshots(ctx, charID) },
 			func() error { return q.DeleteDemoCharacterCorporation(ctx, charID) },
 			func() error { return q.DeleteDemoWalletHistory(ctx, charID) },
-			func() error { return q.DeleteDemoOrderHealth(ctx, charID) },
+			func() error { return q.DeleteOrderHealthForCharacter(ctx, charID) },
 			func() error { return q.DeleteDemoOrderLifecycle(ctx, charID) },
 			func() error { return q.DeleteDemoContractDetails(ctx, charID) },
 			func() error { return q.DeleteDemoKillmailDetails(ctx, charID) },
@@ -366,10 +366,10 @@ func (s *demoSeed) wipe(ctx context.Context) error {
 		// the fresh ones.
 		func() error { return q.DeleteDemoBattleFights(ctx, s.userID) },
 		func() error { return q.DeleteDemoBattleKills(ctx, demoBattleMailIDs) },
-		func() error { return q.DeleteDemoBattleKillAttackers(ctx, demoBattleMailIDs) },
+		func() error { _, err := q.PruneKillAttackers(ctx, demoBattleMailIDs); return err },
 		func() error { return q.DeleteDemoBattleKillInvolvement(ctx, demoBattleMailIDs) },
-		func() error { return q.DeleteDemoBattleKillDetails(ctx, demoBattleMailIDs) },
-		func() error { return q.DeleteDemoBattleKillPrices(ctx, demoBattleMailIDs) },
+		func() error { _, err := q.PruneKillDetails(ctx, demoBattleMailIDs); return err },
+		func() error { _, err := q.PruneKillLinePrices(ctx, demoBattleMailIDs); return err },
 		// The demo's fleet group (demo_fleets.go). Its fleets take
 		// their reports, attendance and claims with them.
 		func() error { return q.DeleteDemoCommunityOps(ctx, demoCommunityID) },
@@ -2653,10 +2653,12 @@ func (s *demoSeed) writeOrgRows(ctx context.Context) error {
 		opIDs[o.title] = opID
 	}
 
-	if err := q.SetSRPSettings(ctx, db.SetSRPSettingsParams{
-		CorporationID: demoCorpID,
-		Policy:        "T1 frigates and destroyers flown in the Tama Frigates doctrine on a corp op are covered at hull plus fit. Claim within seven days with the killmail; a director pays out on Sundays.",
-		UpdatedAt:     now.Add(-40 * day),
+	// The corporation's written policy is its default SRP policy's
+	// text, as its settings page stores it.
+	if err := q.SetDefaultSRPPolicyText(ctx, db.SetDefaultSRPPolicyTextParams{
+		OwnerKind: ownerCorporation, OwnerID: demoCorpID, NewName: "Standard",
+		PolicyText: "T1 frigates and destroyers flown in the Tama Frigates doctrine on a corp op are covered at hull plus fit. Claim within seven days with the killmail; a director pays out on Sundays.",
+		UpdatedBy:  demoCharacterID, UpdatedAt: now.Add(-40 * day),
 	}); err != nil {
 		return err
 	}

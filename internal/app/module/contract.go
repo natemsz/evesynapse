@@ -1297,8 +1297,6 @@ type Deps interface {
 
 	// --- market data the market pages share ---------------------------------
 
-	// MarketPrices is the cached market guide (average and adjusted prices).
-	MarketPrices(ctx context.Context) (map[int64]esi.MarketPrice, error)
 	// MarketRegions is the regions the market pages offer, in menu order;
 	// DefaultMarketRegion is the one a page starts on, MarketRegionName
 	// names any region the market knows.
@@ -1413,16 +1411,13 @@ type Deps interface {
 	AssetLocations(ctx context.Context, items []esi.Asset, extraTitles, nameOverrides map[int64]string) any
 	// OrderHealthText says how an order’s price stands against the market.
 	OrderHealthText(myPrice float64, status string, stationBest, regionBest float64) (string, bool)
-	// CorpDisplayName, PlayerCorps, PickCorporation and OwnerPermits are
-	// the access model the corporation modules ask.
+	// CorpDisplayName and OwnerPermits are the access model the
+	// corporation modules ask.
 	CorpDisplayName(ctx context.Context, corpID int64) string
 	OwnerPermits(ctx context.Context, st standing.Standing, owner standing.Owner, permission string) bool
-	PlayerCorps(ctx context.Context, userID int64) []int64
-	PickCorporation(ctx context.Context, r *http.Request, offered []int64) (int64, []OwnerOption)
 	// OwnerCorporations lists the corporations an owner covers.
 	OwnerCorporations(ctx context.Context, o standing.Owner) []int64
-	// ResolvedAllianceName, LocationTitle: cache-only names.
-	ResolvedAllianceName(ctx context.Context, allianceID int64) (string, bool)
+	// LocationTitle: a cache-only name.
 	LocationTitle(ctx context.Context, id int64, locType string) string
 
 	// DoctrineFitViews reads the fits of some doctrines, by doctrine id.
@@ -1474,12 +1469,11 @@ type Deps interface {
 	PostESIPublic(ctx context.Context, path string, body, out any) error
 	// --- the fetch seam: what a module that shares fetched data (the swarm) may ask ---
 
-	// MarketFetchDue, HistoryFetchDue, RecordMarketFetchAt, HistoryCandidates and
+	// HistoryFetchDue, RecordMarketFetchAt, HistoryCandidates and
 	// FetchMarketHistory are the market history bookkeeping; NoteStructureIDs,
 	// WantCorporation and WantAlliance queue what pages want resolved.
-	MarketFetchDue(ctx context.Context, kind string, gate time.Duration) bool
-	// HistoryFetchDue is MarketFetchDue for one history pair, under
-	// HistoryCurrent instead of an age gate.
+	// HistoryFetchDue says whether one history pair is due, under
+	// HistoryCurrent.
 	HistoryFetchDue(ctx context.Context, key MarketKey) bool
 	RecordMarketFetchAt(ctx context.Context, kind, state, detail string, at time.Time)
 	HistoryCandidates(ctx context.Context) ([]MarketKey, error)

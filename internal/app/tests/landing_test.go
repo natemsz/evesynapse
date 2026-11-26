@@ -137,16 +137,6 @@ func TestLandingAnonymous(t *testing.T) {
 	if strings.Contains(body, "href=\"/industry/\"") {
 		t.Error("landing nav links to the members-only industry page")
 	}
-	// The landing renders no alert cards: the old canned
-	// example alerts never come back.
-	if strings.Contains(body, "ld-brief") {
-		t.Error("alert cards rendered on the landing")
-	}
-	for _, canned := range []string{"Skill queues empty", "Planetary extractors halted"} {
-		if strings.Contains(body, canned) {
-			t.Errorf("landing still shows the canned example alert %q", canned)
-		}
-	}
 	// The signed-in chrome never leaks onto the landing.
 	if strings.Contains(body, "sidebar") {
 		t.Error("landing rendered the signed-in sidebar chrome")

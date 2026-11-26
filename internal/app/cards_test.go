@@ -313,15 +313,11 @@ func TestPilotShareCardThemes(t *testing.T) {
 
 	def := getCard("")
 	cal := getCard("&theme=caldari")
-	lgt := getCard("&theme=light")
 	rg := getCard("&theme=caldari&vision=redgreen")
 	bogus := getCard("&theme=not-a-theme&vision=not-a-vision")
 
 	if bytes.Equal(def, cal) {
 		t.Error("caldari card bytes matched default card")
-	}
-	if bytes.Equal(def, lgt) || bytes.Equal(cal, lgt) {
-		t.Error("light card bytes matched a dark scheme")
 	}
 	if bytes.Equal(cal, rg) {
 		t.Error("redgreen colour-blind card bytes matched standard caldari card")

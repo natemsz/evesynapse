@@ -55,15 +55,10 @@ const trainingHorizonCap = 20
 // exact when names are cut.
 const idleNamesCap = 6
 
-// buildTraining assembles the horizon from every queue entry
-// still to finish, soonest first. Characters with no active
-// queue land in Idle by name.
-func (app *Application) buildTraining(ctx context.Context, bundles []*charSnaps) *trainingWidget {
-	return app.buildTrainingWithin(ctx, bundles, time.Now(), 0)
-}
-
-// buildTrainingWithin is the horizon over the finishes due within the
-// given span of now (0 for everything queued).
+// buildTrainingWithin assembles the horizon from the queue entries
+// still to finish within the given span of now (0 for everything
+// queued), soonest first. Characters with no active queue land in Idle
+// by name.
 func (app *Application) buildTrainingWithin(ctx context.Context, bundles []*charSnaps, now time.Time, within time.Duration) *trainingWidget {
 	w := &trainingWidget{}
 	var pending []trainingEvent

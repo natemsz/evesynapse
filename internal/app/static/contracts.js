@@ -19,11 +19,6 @@
     return rollCatalogFetches[src];
   }
 
-  function applyMeters(root) {
-    root.querySelectorAll(".meter > span[data-w], .cs-telbar > span[data-w]").forEach(function (el) {
-      el.style.width = el.getAttribute("data-w") + "%";
-    });
-  }
 
   // ---- page wiring ---------------------------------------------------
   // Everything below binds to the search page's DOM. An
@@ -759,7 +754,6 @@
     }).then(function (html) {
       slot.innerHTML = html;
       slot.dataset.loaded = "1";
-      applyMeters(slot);
       initAbPick(slot);
     }).catch(function () {
       slot.innerHTML = '<p class="muted cs-panel-loading">Could not load the appraisal. The contract page carries the same detail.</p>';

@@ -5,7 +5,6 @@
 package contracts
 
 import (
-	"context"
 	"evesynapse/internal/app/module"
 	"evesynapse/internal/esi"
 	"net/http"
@@ -107,9 +106,3 @@ type mod struct {
 }
 
 func newMod(deps module.Deps) *mod { return &mod{deps: deps, queries: deps.DB()} }
-
-// LoadItems reads one contract's stored item list; ok is false until its
-// detail was fetched. Exported for the economy tests.
-func LoadItems(ctx context.Context, deps module.Deps, contractID int64) (esi.ContractItems, bool, error) {
-	return newMod(deps).loadContractItems(ctx, contractID)
-}

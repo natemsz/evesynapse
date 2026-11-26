@@ -5,10 +5,7 @@
 package corpdata
 
 import (
-	"evesynapse/internal/balancechart"
-	"evesynapse/internal/esi"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -85,9 +82,3 @@ type mod struct {
 }
 
 func newMod(deps module.Deps) *mod { return &mod{deps: deps, queries: deps.DB()} }
-
-// WalletGraph builds a division's balance chart from its journal and
-// current balance, exported so the contract tests pin what the page draws.
-func WalletGraph(journal esi.CorpJournal, balance float64, balanceKnown bool, balanceAt time.Time) (*balancechart.BalanceChart, string) {
-	return corpWalletGraph(journal, balance, balanceKnown, balanceAt)
-}

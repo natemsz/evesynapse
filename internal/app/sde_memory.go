@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/logging"
 )
 
 // sdeTopologyMaxAge is the backstop rebuild age for the SDE universe
@@ -27,7 +25,6 @@ type sdeSystemEntry struct {
 }
 
 type sdeTopologySnapshot struct {
-	builtAt   time.Time
 	systems   map[int64]sdeSystemEntry
 	bySysName map[string]sdeSystemEntry
 	regions   map[int64]string
@@ -35,60 +32,27 @@ type sdeTopologySnapshot struct {
 	typeNames map[int64]string
 }
 
-type sdeTopologyState struct {
-	mu       sync.RWMutex
-	snap     *sdeTopologySnapshot
-	building bool
-	stale    bool
-}
+type sdeTopologyState = memSnapshot[sdeTopologySnapshot]
 
 func (app *Application) sdeTopologySnapshot() *sdeTopologySnapshot {
 	if app.cfg.lowRAMMode {
 		return nil
 	}
-	s := &app.sdeTopology
-	s.mu.RLock()
-	snap := s.snap
-	stale := snap == nil || s.stale || time.Since(snap.builtAt) > sdeTopologyMaxAge
-	s.mu.RUnlock()
-	if stale {
+	snap, due := app.sdeTopology.current(sdeTopologyMaxAge)
+	if due {
 		app.kickSDETopologyBuild()
 	}
 	return snap
 }
 
 func (app *Application) kickSDETopologyBuild() {
-	if app.cfg.lowRAMMode {
-		return
+	if ctx, ok := app.snapshotBuildContext(); ok {
+		app.sdeTopology.kick(ctx, "sde topology", app.buildSDETopology)
 	}
-	if app.workerCtx == nil {
-		return
-	}
-	s := &app.sdeTopology
-	s.mu.Lock()
-	if s.building {
-		s.mu.Unlock()
-		return
-	}
-	s.building = true
-	s.mu.Unlock()
-	go func() {
-		defer func() {
-			s.mu.Lock()
-			s.building = false
-			s.mu.Unlock()
-		}()
-		if err := app.buildSDETopology(app.workerCtx); err != nil {
-			logging.Warnf("sde topology: build: %v", err)
-		}
-	}()
 }
 
 func (app *Application) invalidateSDETopology() {
-	s := &app.sdeTopology
-	s.mu.Lock()
-	s.stale = true
-	s.mu.Unlock()
+	app.sdeTopology.markStale()
 	app.kickSDETopologyBuild()
 }
 
@@ -107,7 +71,6 @@ func (app *Application) buildSDETopology(ctx context.Context) error {
 	}
 
 	snap := &sdeTopologySnapshot{
-		builtAt:   time.Now(),
 		systems:   make(map[int64]sdeSystemEntry, len(sysRows)),
 		bySysName: make(map[string]sdeSystemEntry, len(sysRows)),
 		regions:   make(map[int64]string, len(regRows)),

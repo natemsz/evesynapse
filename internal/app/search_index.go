@@ -5,11 +5,9 @@ import (
 	json "github.com/goccy/go-json"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
-	"evesynapse/internal/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -111,7 +109,6 @@ type searchIndexPilot struct {
 // after the swap; the record maps are kept current by the store
 // hooks under the index lock, so record reads hold it.
 type searchSnapshot struct {
-	builtAt   time.Time
 	types     []searchIndexType
 	systems   []searchIndexSystem
 	regions   []searchIndexRegion
@@ -173,11 +170,8 @@ func (d searchRecordDelta) applyTo(snap *searchSnapshot, key searchRecordKey) {
 // the build in flight, and the record deltas a build must not
 // lose. The zero value is ready to use.
 type searchIndexState struct {
-	mu       sync.RWMutex
-	snap     *searchSnapshot
-	building bool
-	sdeStale bool
-	pending  map[searchRecordKey]searchRecordDelta
+	memSnapshot[searchSnapshot]
+	pending map[searchRecordKey]searchRecordDelta
 }
 
 // searchSnapshot returns the live snapshot, starting a background
@@ -189,12 +183,8 @@ func (app *Application) searchSnapshot() *searchSnapshot {
 	if app.cfg.lowRAMMode {
 		return nil
 	}
-	idx := &app.searchIdx
-	idx.mu.RLock()
-	snap := idx.snap
-	stale := snap == nil || idx.sdeStale || time.Since(snap.builtAt) > searchIndexMaxAge
-	idx.mu.RUnlock()
-	if stale {
+	snap, due := app.searchIdx.current(searchIndexMaxAge)
+	if due {
 		app.kickSearchIndexBuild()
 	}
 	return snap
@@ -205,30 +195,9 @@ func (app *Application) searchSnapshot() *searchSnapshot {
 // background lifecycle and the SQL path serves. In low-RAM mode
 // (LOW_RAM_MODE=1) it never starts a build.
 func (app *Application) kickSearchIndexBuild() {
-	if app.cfg.lowRAMMode {
-		return
+	if ctx, ok := app.snapshotBuildContext(); ok {
+		app.searchIdx.kick(ctx, "search index", app.buildSearchIndex)
 	}
-	if app.workerCtx == nil {
-		return
-	}
-	idx := &app.searchIdx
-	idx.mu.Lock()
-	if idx.building {
-		idx.mu.Unlock()
-		return
-	}
-	idx.building = true
-	idx.mu.Unlock()
-	go func() {
-		defer func() {
-			idx.mu.Lock()
-			idx.building = false
-			idx.mu.Unlock()
-		}()
-		if err := app.buildSearchIndex(app.workerCtx); err != nil {
-			logging.Warnf("search index: build: %v", err)
-		}
-	}()
 }
 
 // buildSearchIndex reads the whole search surface once and swaps
@@ -261,7 +230,6 @@ func (app *Application) buildSearchIndex(ctx context.Context) error {
 	}
 
 	snap := &searchSnapshot{
-		builtAt:   time.Now(),
 		corps:     make(map[int64]searchIndexOrg, len(corpRows)),
 		alliances: make(map[int64]searchIndexOrg, len(allianceRows)),
 		pilots:    make(map[int64]searchIndexPilot, len(pilotRows)),
@@ -305,8 +273,7 @@ func (app *Application) buildSearchIndex(ctx context.Context) error {
 		delta.applyTo(snap, key)
 	}
 	idx.pending = make(map[searchRecordKey]searchRecordDelta)
-	idx.snap = snap
-	idx.sdeStale = false
+	idx.swapLocked(snap)
 	idx.mu.Unlock()
 	return nil
 }
@@ -319,10 +286,7 @@ func (app *Application) invalidateSearchIndexSDE() {
 	if app.cfg.lowRAMMode {
 		return
 	}
-	idx := &app.searchIdx
-	idx.mu.Lock()
-	idx.sdeStale = true
-	idx.mu.Unlock()
+	app.searchIdx.markStale()
 	app.kickSearchIndexBuild()
 }
 

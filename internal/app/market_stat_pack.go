@@ -20,7 +20,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -51,7 +50,6 @@ type beatRecord struct {
 // pack: swept region stats, station stats, and beats held in RAM
 // and served without touching Postgres on render.
 type statPackSnapshot struct {
-	builtAt      time.Time
 	regionStats  map[statPackKey]db.MarketRegionStat
 	byType       map[int64][]db.MarketRegionStat
 	stationStats map[stationKey]db.MarketStationStat
@@ -62,12 +60,7 @@ type statPackSnapshot struct {
 
 // statPackIndexState holds the Application's resident snapshot and
 // build lifecycle.
-type statPackIndexState struct {
-	mu       sync.RWMutex
-	snap     *statPackSnapshot
-	building bool
-	stale    bool
-}
+type statPackIndexState = memSnapshot[statPackSnapshot]
 
 // statPackSnapshot returns the live snapshot, kicking a background
 // rebuild when there is none or it has gone stale. It returns nil
@@ -80,12 +73,8 @@ func (app *Application) statPackSnapshot() *statPackSnapshot {
 	if app.cfg.lowRAMMode {
 		return nil
 	}
-	idx := &app.statPackIdx
-	idx.mu.RLock()
-	snap := idx.snap
-	stale := snap == nil || idx.stale || time.Since(snap.builtAt) > statPackMaxAge
-	idx.mu.RUnlock()
-	if stale {
+	snap, due := app.statPackIdx.current(statPackMaxAge)
+	if due {
 		app.kickStatPackBuild()
 	}
 	return snap
@@ -96,30 +85,9 @@ func (app *Application) statPackSnapshot() *statPackSnapshot {
 // background lifecycle and the SQL path serves. In low-RAM mode
 // (LOW_RAM_MODE=1) it never starts a build.
 func (app *Application) kickStatPackBuild() {
-	if app.cfg.lowRAMMode {
-		return
+	if ctx, ok := app.snapshotBuildContext(); ok {
+		app.statPackIdx.kick(ctx, "stat pack", app.buildStatPack)
 	}
-	if app.workerCtx == nil {
-		return
-	}
-	idx := &app.statPackIdx
-	idx.mu.Lock()
-	if idx.building {
-		idx.mu.Unlock()
-		return
-	}
-	idx.building = true
-	idx.mu.Unlock()
-	go func() {
-		defer func() {
-			idx.mu.Lock()
-			idx.building = false
-			idx.mu.Unlock()
-		}()
-		if err := app.buildStatPack(app.workerCtx); err != nil {
-			logging.Warnf("stat pack: build: %v", err)
-		}
-	}()
 }
 
 // buildStatPack reads the market derived tables and swaps the
@@ -147,7 +115,6 @@ func (app *Application) buildStatPack(ctx context.Context) error {
 	}
 
 	snap := &statPackSnapshot{
-		builtAt:      time.Now(),
 		regionStats:  make(map[statPackKey]db.MarketRegionStat, len(regionRows)),
 		byType:       make(map[int64][]db.MarketRegionStat),
 		stationStats: make(map[stationKey]db.MarketStationStat, len(stationRows)),
@@ -179,11 +146,7 @@ func (app *Application) buildStatPack(ctx context.Context) error {
 		snap.fallbacks[statPackKey{regionID: fb.RegionID, typeID: fb.TypeID}] = fb
 	}
 
-	idx := &app.statPackIdx
-	idx.mu.Lock()
-	idx.snap = snap
-	idx.stale = false
-	idx.mu.Unlock()
+	app.statPackIdx.swap(snap)
 	return nil
 }
 
@@ -311,9 +274,7 @@ func (app *Application) refreshStatPackTypes(ctx context.Context, regionID int64
 		rows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{RegionID: regionID, Column2: changed})
 		if err != nil {
 			logging.Warnf("stat pack: refresh region %d types: %v", regionID, err)
-			app.statPackIdx.mu.Lock()
-			app.statPackIdx.stale = true
-			app.statPackIdx.mu.Unlock()
+			app.statPackIdx.markStale()
 			return
 		}
 		rRows = make([]db.MarketRegionStat, 0, len(rows))

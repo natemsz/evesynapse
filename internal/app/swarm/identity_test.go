@@ -6,6 +6,7 @@ package swarm
 // payload, key, signer, signature, fails closed.
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
@@ -118,5 +119,20 @@ func TestSwarmSignPayloadCap(t *testing.T) {
 	huge := SwarmSignedEntry{Kind: "market_history", Key: "k", Payload: big, Signer: "i", Signature: "e30="}
 	if VerifySwarmEntry(huge, id.PublicString()) {
 		t.Fatalf("oversize payload verifies")
+	}
+}
+
+// TestSwarmSealKeyVector pins the seed-sealing key derivation to a
+// known answer (HKDF-SHA-256 per RFC 5869, computed independently).
+// A drift here would leave every stored seed unopenable and mint a
+// new identity without an error.
+func TestSwarmSealKeyVector(t *testing.T) {
+	key, err := SwarmSealKey("swarm vector secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = "2b6030c5b0a39af68234057536ffb464642c49e0663cebc025f353347cba0c86"
+	if got := hex.EncodeToString(key); got != want {
+		t.Fatalf("SwarmSealKey = %s, want %s", got, want)
 	}
 }

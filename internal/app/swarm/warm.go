@@ -93,7 +93,8 @@ func (app *Mod) SwarmSelfWarms(kind string) bool {
 }
 
 // HandleSwarmWarms serves GET /swarm/warms: the kinds this instance
-// warms for the swarm. Bearer-gated like every swarm endpoint.
+// warms for the swarm. Bearer-gated, like every swarm endpoint but
+// the pull.
 func (app *Mod) HandleSwarmWarms(w http.ResponseWriter, r *http.Request) {
 	if !app.Cfg.Enabled() || app.SwarmID == nil {
 		http.NotFound(w, r)

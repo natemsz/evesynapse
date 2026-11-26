@@ -31,7 +31,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -175,46 +174,15 @@ func SealSwarmSeed(seed []byte, secret string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	aead, err := gcmForKey(key)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, aead.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return "", fmt.Errorf("swarm: seal seed: %w", err)
-	}
-	sealed := aead.Seal(nonce, nonce, seed, nil)
-	return SwarmSeedPrefix + base64.StdEncoding.EncodeToString(sealed), nil
+	return sealUnder(key, seed, SwarmSeedPrefix, "seal seed")
 }
 
 // UnsealSwarmSeed opens a sealed seed. Any failure is one error:
 // callers must not learn whether the prefix, the encoding, the
 // secret, or the key was wrong.
 func UnsealSwarmSeed(sealed, secret string) ([]byte, error) {
-	rest, ok := strings.CutPrefix(sealed, SwarmSeedPrefix)
-	if !ok {
-		return nil, errors.New("swarm: sealed seed does not open")
-	}
-	raw, err := base64.StdEncoding.DecodeString(rest)
-	if err != nil {
-		return nil, errors.New("swarm: sealed seed does not open")
-	}
-	key, err := SwarmSealKey(secret)
-	if err != nil {
-		return nil, errors.New("swarm: sealed seed does not open")
-	}
-	aead, err := gcmForKey(key)
-	if err != nil {
-		return nil, errors.New("swarm: sealed seed does not open")
-	}
-	if len(raw) < aead.NonceSize() {
-		return nil, errors.New("swarm: sealed seed does not open")
-	}
-	seed, err := aead.Open(nil, raw[:aead.NonceSize()], raw[aead.NonceSize():], nil)
-	if err != nil {
-		return nil, errors.New("swarm: sealed seed does not open")
-	}
-	return seed, nil
+	return openUnder(sealed, SwarmSeedPrefix, func() ([]byte, error) { return SwarmSealKey(secret) },
+		"swarm: sealed seed does not open")
 }
 
 // SwarmEnvelope is the canonical signed document: struct field

@@ -1,13 +1,16 @@
 package swarm
 
 // ---------------------------------------------------------------------------
-// The swarm's HTTP API: how instances talk to each other. Three
-// endpoints, all bearer-gated by the shared secret, all dark
-// (404) while the shared cache is off so a disabled instance
-// offers no surface to probe.
+// The swarm's HTTP API: how instances talk to each other. Every
+// endpoint is dark (404) while the shared cache is off so a
+// disabled instance offers no surface to probe. A pull is served
+// only on a signature by the puller's pinned key over the exact
+// body; a bearer alone never serves one. The other endpoints are
+// bearer-gated by the shared secret.
 //
 //   GET  /swarm/members: this instance's signed membership list
 //   POST /swarm/pull: signed public-data entries for wanted keys
+//   GET  /swarm/warms: the kinds this instance warms for the swarm
 //   POST /swarm/seed/register: a peer's self-signed heartbeat (see below)
 //
 // Data moves pull-only: instances fetch from peers they trust;
@@ -466,10 +469,9 @@ type SwarmClient struct {
 	Secret string
 	Http   *http.Client
 	// ID is this instance's signing identity, set when the
-	// client is built for a running instance (module.go). With
-	// it, pulls are signed as well as bearer-authed (dual-send
-	// through the transition); without it, tests and any path
-	// built outside an instance, pulls send the bearer only.
+	// client is built for a running instance (module.go).
+	// Pulls are signed with it; a client without one cannot
+	// pull.
 	ID *SwarmIdentity
 }
 
@@ -552,13 +554,11 @@ func (c *SwarmClient) AuthedGET(ctx context.Context, url string, into any) error
 // checks every entry against the signer's pinned key before
 // anything is stored.
 //
-// The request itself is signed when the client carries this
-// instance's identity, and the bearer goes with it either way
-// (dual-send): a peer that verifies signatures takes the signed
-// path, a peer from before signatures takes the bearer, and this
-// instance can pull from both while the swarm transitions. The
-// body is marshaled once, here, because the signature covers
-// the exact bytes sent.
+// The request is signed with this instance's identity: a peer
+// refuses an unsigned pull, and serves a pull on the signature
+// alone (the bearer header every swarm request carries plays no
+// part). The body is marshaled once, here, because the
+// signature covers the exact bytes sent.
 func (c *SwarmClient) PullEntries(ctx context.Context, baseURL string, keys []SwarmPullKey) ([]SwarmSignedEntry, error) {
 	if len(keys) > MaxSwarmPullKeys {
 		return nil, fmt.Errorf("swarm: %d keys exceeds the pull cap of %d", len(keys), MaxSwarmPullKeys)

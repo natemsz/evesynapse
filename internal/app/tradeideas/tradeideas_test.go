@@ -229,6 +229,9 @@ func TestCallMetaAIRequestAndAnswer(t *testing.T) {
 	if sent.MaxOutputTokens != 2222 {
 		t.Fatalf("max_output_tokens = %d, want the ask's cap (2222) sent", sent.MaxOutputTokens)
 	}
+	if sent.Reasoning == nil || sent.Reasoning.Effort != metaAIReasoningEffort {
+		t.Fatalf("reasoning = %+v, want effort %q", sent.Reasoning, metaAIReasoningEffort)
+	}
 	if sent.Model != metaAIModel || sent.Stream || len(sent.Input) != 1 || sent.Input[0].Role != "user" ||
 		len(sent.Input[0].Content) != 1 || sent.Input[0].Content[0].Type != "input_text" ||
 		!strings.Contains(sent.Input[0].Content[0].Text, "Tritanium") ||
@@ -257,6 +260,20 @@ func TestCallMetaAIFailures(t *testing.T) {
 		} else if strings.Contains(err.Error(), "meta-test-key") {
 			t.Errorf("%s: error carries the key: %v", name, err)
 		}
+	}
+	// An incomplete response reports its stop reason and token counts.
+	incStub := &cloudflareStub{reply: `{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"usage":{"output_tokens":6000,"output_tokens_details":{"reasoning_tokens":4800}},"output":[]}`}
+	_, err := callMetaAI(ctx, &http.Client{Transport: incStub}, metaAIAPIBase, "meta-test-key", metaAIModel, "hi", 100, 100)
+	if err == nil {
+		t.Fatal("incomplete with details: want an error")
+	}
+	for _, want := range []string{"response incomplete", "reason max_output_tokens", "6000 output tokens", "4800 reasoning"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("incomplete error %q missing %q", err.Error(), want)
+		}
+	}
+	if strings.Contains(err.Error(), "meta-test-key") {
+		t.Errorf("incomplete error carries the key: %v", err)
 	}
 	// The convenience field stands in when no parts carry text.
 	stub := &cloudflareStub{reply: `{"output_text":"* **Pyerite**"}`}

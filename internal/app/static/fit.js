@@ -4047,6 +4047,72 @@ var FitGauges = (function () {
   }
 })();
 
+// --- My Loadouts: delete confirmation modal ----------------
+// Intercepts .lo-delete-form submissions on /fittings/saved/ and
+// opens the native <dialog id="lo-delete-dialog"> confirmation so
+// deleting a saved EveSynapse fit asks before posting. Without JS,
+// each card's form posts directly to /fittings/delete/.
+(function () {
+  var dlg = document.getElementById("lo-delete-dialog");
+  if (!dlg || typeof dlg.showModal !== "function") return;
+  var msg = document.getElementById("lo-delete-msg");
+  var dlgForm = dlg.querySelector("form");
+  var dlgId = dlgForm ? dlgForm.querySelector('input[name="id"]') : null;
+  var dlgNext = dlgForm ? dlgForm.querySelector('input[name="next"]') : null;
+  if (!msg || !dlgForm || !dlgId) return;
+
+  dlg.addEventListener("close", function () {
+    dlg.returnValue = "";
+  });
+
+  var hasInvoker = typeof HTMLButtonElement !== "undefined" &&
+    "commandForElement" in HTMLButtonElement.prototype;
+  if (!hasInvoker) {
+    var closers = dlg.querySelectorAll('[command="close"]');
+    for (var i = 0; i < closers.length; i++) {
+      closers[i].addEventListener("click", function () {
+        dlg.close();
+      });
+    }
+  }
+
+  var hasClosedBy = typeof HTMLDialogElement !== "undefined" &&
+    "closedBy" in HTMLDialogElement.prototype;
+  if (!hasClosedBy) {
+    var outside = function (e) {
+      var r = dlg.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    var pressedOutside = false;
+    dlg.addEventListener("pointerdown", function (e) {
+      pressedOutside = outside(e);
+    });
+    dlg.addEventListener("pointerup", function (e) {
+      if (pressedOutside && outside(e)) dlg.close();
+      pressedOutside = false;
+    });
+  }
+
+  document.addEventListener("submit", function (ev) {
+    var form = ev.target && ev.target.closest ? ev.target.closest(".lo-delete-form") : null;
+    if (!form) return;
+    var idInput = form.querySelector('input[name="id"]');
+    if (!idInput || !idInput.value) return;
+    ev.preventDefault();
+    var fitName = form.getAttribute("data-fit-delete") || "this fit";
+    var isPublic = form.getAttribute("data-fit-public") === "1";
+    msg.textContent = isPublic
+      ? 'Delete "' + fitName + '"? This removes the saved fit, its public page, and its ratings, and cannot be undone.'
+      : 'Delete "' + fitName + '"? This removes the saved fit from EveSynapse and cannot be undone.';
+    dlgId.value = idInput.value;
+    if (dlgNext) {
+      var nextInput = form.querySelector('input[name="next"]');
+      if (nextInput && nextInput.value) dlgNext.value = nextInput.value;
+    }
+    dlg.showModal();
+  });
+})();
+
 // --- read-only workbench tooltips ---------------------------
 // A public fit's page renders the same workbench without the
 // editor, and the editor block above bails when there is no

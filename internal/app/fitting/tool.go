@@ -849,7 +849,22 @@ func (app *tool) handleFitSaveToEVE(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleFitDelete serves POST /fittings/delete/ (form field id).
+// safeFitNext reports whether n is an on-site path under /fittings/
+// safe to hand to http.Redirect (no backslashes or control bytes).
+func safeFitNext(n string) bool {
+	if !strings.HasPrefix(n, "/fittings/") {
+		return false
+	}
+	for i := 0; i < len(n); i++ {
+		if c := n[i]; c == '\\' || c < 0x20 || c == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// handleFitDelete serves POST /fittings/delete/ (form field id,
+// optional on-site next under /fittings/).
 func (app *tool) handleFitDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := app.deps.UserID(ctx)
@@ -857,14 +872,18 @@ func (app *tool) handleFitDelete(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/fittings/", http.StatusSeeOther)
 		return
 	}
+	dest := "/fittings/#fit-editor"
 	if err := r.ParseForm(); err == nil {
 		if id, perr := strconv.ParseInt(r.FormValue("id"), 10, 64); perr == nil && id > 0 {
 			if err := app.queries.DeleteLocalFitting(ctx, db.DeleteLocalFittingParams{ID: id, UserID: userID}); err != nil {
 				logging.Errorf("fittings delete: %d: %v", id, err)
 			}
 		}
+		if next := r.FormValue("next"); safeFitNext(next) {
+			dest = next
+		}
 	}
-	http.Redirect(w, r, "/fittings/#fit-editor", http.StatusSeeOther)
+	http.Redirect(w, r, dest, http.StatusSeeOther)
 }
 
 // fitMineRow is one entry in the your-fits search results.

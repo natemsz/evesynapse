@@ -514,23 +514,7 @@ func (f searchFilters) pageURL(q url.Values, page int) string {
 
 // tierLabel words a stored price tier for readers.
 func tierLabel(tier string) string {
-	switch tier {
-	case module.AppraisalTierTypical:
-		return "Our Forge typical"
-	case module.AppraisalTierEstimate:
-		return "Estimated sell"
-	case module.AppraisalTierAbyssal:
-		return "Our abyssal estimate"
-	case module.AppraisalTierCopyMedian:
-		return "Our copy median"
-	case module.AppraisalTierResearchMedian:
-		return "Our research median"
-	case module.AppraisalTierFallback:
-		return "Fuzzwork aggregate"
-	case module.AppraisalTierBuildCost:
-		return "Build cost"
-	}
-	return "Not priced"
+	return module.TierLabel(tier, "Forge")
 }
 
 // tierMixLabel words the stored tier mix stamp ("typical:4,

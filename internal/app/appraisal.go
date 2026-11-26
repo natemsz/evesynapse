@@ -169,20 +169,6 @@ func resolveAppraisalPriceMode(own *db.MarketRegionStat, tv *db.TrueValue, fb *d
 	return appraisalPrice{tier: module.AppraisalTierUnpriced}
 }
 
-// typicalTier reports whether a pricing tier is the swept-
-// typical family -- the tiers that speak from a region row, as
-// opposed to the basis-independent estimate, abyssal, copy-
-// median and fallback tiers.
-func typicalTier(tier string) bool {
-	switch tier {
-	case module.AppraisalTierTypical, module.AppraisalTierTypicalBuy,
-		module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell,
-		module.AppraisalTierTypicalSplitBuy:
-		return true
-	}
-	return false
-}
-
 // AppraiseLines prices a line list from stored data only: the
 // three pricing tables are read once per distinct type set,
 // and each line resolves through the house order. It is the
@@ -362,7 +348,7 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 		} else if p := resolveAppraisalPriceMode(own[ln.TypeID], tvs[ln.TypeID], fbs[ln.TypeID], now, mode); p.ok {
 			al.UnitPrice, al.LineValue = p.unit, p.unit*float64(ln.Quantity)
 			al.Tier, al.AsOf, al.Priced = p.tier, p.asOf, true
-			if row := own[ln.TypeID]; row != nil && row.RegionID != regionID && typicalTier(p.tier) {
+			if row := own[ln.TypeID]; row != nil && row.RegionID != regionID && module.IsTypicalTier(p.tier) {
 				// The price spoke from another region's book
 				// (the global market's, per the fill above):
 				// the line carries that provenance so no

@@ -306,7 +306,7 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 		if sl.Priced {
 			snap.PricedLines++
 			snap.TotalValue += sl.LineValue
-			if b, ok := buys[ln.TypeID]; ok && isTypicalTier(sl.Tier) {
+			if b, ok := buys[ln.TypeID]; ok && module.IsTypicalTier(sl.Tier) {
 				snap.BuyValue += b * float64(ln.Qty)
 				snap.BuyLines++
 			}
@@ -696,17 +696,6 @@ func lineNote(ln resolvedLine) string {
 	return strings.Join(parts, " · ")
 }
 
-// isTypicalTier reports whether a tier is one of the swept
-// typical family, in any mode.
-func isTypicalTier(tier string) bool {
-	switch tier {
-	case module.AppraisalTierTypical, module.AppraisalTierTypicalBuy,
-		module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy:
-		return true
-	}
-	return false
-}
-
 // typicalBuys reads the stored typical buys at the basis hub
 // for the priced set in one batched lookup, for the buy total.
 func (app *page) typicalBuys(ctx context.Context, agg []aggLine, res module.Appraisal, basis pricingBasis) (map[int64]float64, error) {
@@ -714,7 +703,7 @@ func (app *page) typicalBuys(ctx context.Context, agg []aggLine, res module.Appr
 	var typeIDs []int64
 	seen := map[int64]bool{}
 	for i, ln := range agg {
-		if i < len(res.Lines) && res.Lines[i].Priced && isTypicalTier(res.Lines[i].Tier) && !seen[ln.TypeID] {
+		if i < len(res.Lines) && res.Lines[i].Priced && module.IsTypicalTier(res.Lines[i].Tier) && !seen[ln.TypeID] {
 			seen[ln.TypeID] = true
 			typeIDs = append(typeIDs, ln.TypeID)
 		}
@@ -940,7 +929,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 	case snap.TotalLines > 0 && snap.PricedLines == snap.TotalLines:
 		allTypical := true
 		for _, ln := range snap.Lines {
-			if ln.Priced && !isTypicalTier(ln.Tier) {
+			if ln.Priced && !module.IsTypicalTier(ln.Tier) {
 				allTypical = false
 			}
 		}
@@ -1045,7 +1034,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 				rl.SharePct = share
 			}
 			rl.AsOf = ln.AsOf.Format("Jan 2, 3:04 PM")
-			if isTypicalTier(ln.Tier) && time.Since(ln.AsOf) > typicalFreshAge {
+			if module.IsTypicalTier(ln.Tier) && time.Since(ln.AsOf) > typicalFreshAge {
 				rl.AsOf += " (" + app.deps.AgeText(ln.AsOf) + ")"
 			}
 		}

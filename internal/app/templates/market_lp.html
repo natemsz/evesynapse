@@ -101,13 +101,13 @@
         <td class="mt-reqs">{{template "reqicons" .Requirements}}</td>
         <td class="mt-num lp-worth" title="{{.Value}} ISK" data-sort="{{.Value}}">{{sparkFig .ValueShort .Spark}}</td>
         <td class="mt-num lp-per" data-sort="{{.ISKPerLP}}">{{if .ISKPerLPDir}}<span class="mt-chg {{.ISKPerLPDir}}"><strong>{{.ISKPerLP}}</strong></span>{{else}}<strong>{{.ISKPerLP}}</strong>{{end}}<svg class="l-meter lp-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.MeterPct}}" height="4"/></svg></td>
-        <td class="mt-num">{{.TradedDay}}</td>
+        <td class="mt-num">{{.TradedDay}}{{if .VolumeWarn}}<br><small class="lp-vol-warn" title="{{.VolumeNote}}">{{.VolumeWarn}}</small>{{end}}</td>
       </tr>
     {{end}}
     </tbody>
   </table>
   </div>
-  <p class="lp-note"><small>Prices in ISK, typical (median) prices in {{.RegionName}}{{with index .Rows 0}}{{if .Age}}, as of {{.Age}}{{end}}{{end}}. ISK per LP is what the items sell for, less the ISK cost and the items the offer also needs (bought at their typical sell), divided by the LP. Before broker fees and sales tax. Showing up to 100 offers.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}offer has{{else}}offers have{{end}} no price here: blueprint copies, or an item with no market in {{.RegionName}}.{{end}}</small></p>
+  <p class="lp-note"><small>Prices in ISK, typical (median) prices in {{.RegionName}}{{with index .Rows 0}}{{if .Age}}, as of {{.Age}}{{end}}{{end}}. ISK per LP is net sale proceeds (after 1% broker fee and 3.375% sales tax at max skills when listing a sell order, or 3.375% sales tax when selling to buy orders), less the ISK cost and the items the offer also needs (bought at their typical sell), divided by the LP. Showing up to 100 offers.{{if .Unpriced}} {{.Unpriced}} {{if eq .Unpriced 1}}offer has{{else}}offers have{{end}} no price here: blueprint copies, or an item with no market in {{.RegionName}}.{{end}}</small></p>
   {{else}}
   <p>No priced offers clear those filters in {{.RegionName}}.{{if .Item}} No store in this view sells “{{.Item}}”, or its price is missing here.{{else}} Try a lower sold-per-day.{{end}}</p>
   {{end}}
@@ -134,6 +134,7 @@
   <h4 class="lp-h">Market</h4>
   <dl class="insp-facts">
     <div><dt>Sold per day</dt><dd>{{.TradedDay}}</dd></div>
+    {{if .VolumeNote}}<div><dt>Output vs daily volume</dt><dd>{{.VolumeNote}}{{if .VolumeWarn}} <span class="lp-vol-warn">{{.VolumeWarn}}</span>{{end}}</dd></div>{{end}}
     <div><dt>Sell price, 7 days</dt><dd>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}no comparison yet{{end}}</dd></div>
     {{if .Age}}<div><dt>Priced</dt><dd>{{.Age}}</dd></div>{{end}}
   </dl>

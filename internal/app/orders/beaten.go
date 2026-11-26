@@ -104,9 +104,9 @@ func (app *mod) buildBeatenOrders(ctx context.Context, userID int64) []beatenRow
 				row.MarginBasis = "on a cost of " + esi.FormatISK(r.UnitCost) + " ISK"
 			}
 			if r.TaxRate > 0 {
-				row.MarginBasis += fmt.Sprintf(", after %.2f%% sales tax", r.TaxRate*100)
+				row.MarginBasis += fmt.Sprintf(", after broker fee and %.2f%% sales tax", r.TaxRate*100)
 			} else {
-				row.MarginBasis += ", before sales tax"
+				row.MarginBasis += ", after broker fee"
 			}
 		} else if !buy {
 			row.MarginBasis = "No cost on record for this stock"

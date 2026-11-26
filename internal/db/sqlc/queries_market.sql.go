@@ -3384,18 +3384,20 @@ FROM (
       AND ss.buy_orders >= 3
       AND (ss.typical_sell - ss.typical_buy) / ss.typical_buy * 100 >= $2
       AND COALESCE(rs.avg_daily_volume, 0) >= $3::bigint
+      AND ($4::double precision <= 0 OR COALESCE(rs.avg_daily_volume, 0) * COALESCE(NULLIF(rs.typical_sell, 0), ss.typical_sell) >= $4::double precision)
       AND LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) > 0
       AND (COALESCE(rs.typical_sell, 0) <= 0 OR ss.typical_sell <= rs.typical_sell * 10)
       AND (COALESCE(rs.typical_buy, 0) <= 0 OR ss.typical_buy * 10 >= rs.typical_buy)
 ) ranked
 ORDER BY profit DESC, type_id, location_id
-LIMIT $4::bigint
+LIMIT $5::bigint
 `
 
 type ListScannerOpportunitiesParams struct {
 	RegionID  int64   `json:"region_id"`
 	MinSpread float64 `json:"min_spread"`
 	MinVolume int64   `json:"min_volume"`
+	MinIsk    float64 `json:"min_isk"`
 	RowCap    int64   `json:"row_cap"`
 }
 
@@ -3430,6 +3432,7 @@ func (q *Queries) ListScannerOpportunities(ctx context.Context, arg ListScannerO
 		arg.RegionID,
 		arg.MinSpread,
 		arg.MinVolume,
+		arg.MinIsk,
 		arg.RowCap,
 	)
 	if err != nil {

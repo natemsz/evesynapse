@@ -911,6 +911,7 @@ FROM (
       AND ss.buy_orders >= 3
       AND (ss.typical_sell - ss.typical_buy) / ss.typical_buy * 100 >= sqlc.arg(min_spread)
       AND COALESCE(rs.avg_daily_volume, 0) >= sqlc.arg(min_volume)::bigint
+      AND (sqlc.arg(min_isk)::double precision <= 0 OR COALESCE(rs.avg_daily_volume, 0) * COALESCE(NULLIF(rs.typical_sell, 0), ss.typical_sell) >= sqlc.arg(min_isk)::double precision)
       AND LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) > 0
       AND (COALESCE(rs.typical_sell, 0) <= 0 OR ss.typical_sell <= rs.typical_sell * 10)
       AND (COALESCE(rs.typical_buy, 0) <= 0 OR ss.typical_buy * 10 >= rs.typical_buy)

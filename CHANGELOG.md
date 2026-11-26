@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.2.14] - 2026-11-26
+## [v1.0.3.0] - 2026-11-26
+
+Automated build of EveSynapse v1.0.3.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### 🧰 Maintenance & Dependencies
+* Upgrade ranvia.io/go to v0.6.0 by @natemsz in #635
+* Share ISK formatting, passkey refusals, token pairs and the snapshot fetch by @natemsz in #630
+
+### Other Changes
+* Update changelog for v1.0.2.14 by @natemsz in #634
+* Update changelog for v1.0.2.13 by @natemsz in #632
+* Update changelog for v1.0.2.12 by @natemsz in #624
+* Update changelog for v1.0.2.11 by @natemsz in #621
+* Update changelog for v1.0.2.10 by @natemsz in #619
+
+## [v1.0.2.14]
 
 Automated build of EveSynapse v1.0.2.14. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).

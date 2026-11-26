@@ -679,8 +679,8 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 		scope = []int64{}
 	}
 	if len(res.changed) > 0 {
-		// The stat pack's trend figures (schema 101), so a reader
-		// never sees today's prices beside yesterday's trends.
+		// The stat pack's trend and mover figures (schemas 101 and 188),
+		// so a reader never sees today's prices beside yesterday's trends.
 		if _, err := qtx.RefreshMarketStatPackTrends(ctx, db.RefreshMarketStatPackTrendsParams{
 			RegionID: regionID, Today: now, TypeIds: scope,
 		}); err != nil {
@@ -906,6 +906,20 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return res, err
+	}
+	// Cross-hub confirmation (schema 188) runs post-commit under a
+	// short mutex so concurrent hub sweeps see each other's committed
+	// moves without deadlocking across regions.
+	if len(res.changed) > 0 {
+		if _, isHub := marketRegionName(regionID); isHub {
+			app.hubConfirmMu.Lock()
+			if _, err := app.queries.RefreshMarketHubConfirmation(ctx, db.RefreshMarketHubConfirmationParams{
+				HubRegions: marketHubRegionIDs(), TypeIds: scope,
+			}); err != nil {
+				logging.Errorf("worker: hub confirmation after sweep of %s: %v", marketRegionLabel(regionID), err)
+			}
+			app.hubConfirmMu.Unlock()
+		}
 	}
 	app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")
 	return res, nil

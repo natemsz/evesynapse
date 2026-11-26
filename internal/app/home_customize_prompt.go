@@ -20,8 +20,10 @@ import (
 // the account (users.customize_prompt_seen_at, schema 185) so it
 // follows the person and not the browser, and opening Customize
 // counts as answering, since the reader has found the thing the
-// card points at. The demo account never sees it: its answer
-// would stick for every visitor.
+// card points at. The demo account reads the same shape without
+// the remembered answer: it drops once per login (the session
+// mark), and nothing is saved for it, so every visitor sees it
+// once.
 // ---------------------------------------------------------------------------
 
 // sessionCustomizePromptShown marks a session that has already
@@ -40,12 +42,9 @@ type customizePromptView struct {
 }
 
 // customizePromptFor builds the card for an account, or nil when
-// it must not drop: already answered, already shown this
-// session, or the demo account.
+// it must not drop: already answered, or already shown this
+// session.
 func (app *Application) customizePromptFor(ctx context.Context, userID int64) *customizePromptView {
-	if app.isDemoUser(ctx, userID) {
-		return nil
-	}
 	seen, err := app.queries.GetUserCustomizePromptSeen(ctx, userID)
 	if err != nil {
 		logging.Errorf("home: customize hint stamp for user %d: %v", userID, err)
@@ -58,8 +57,12 @@ func (app *Application) customizePromptFor(ctx context.Context, userID int64) *c
 	// card is unanswered it owns the first-run moment, and this
 	// one drops on a home view after it instead. The gate sits
 	// before the session mark, so waiting does not spend this
-	// hint's once-per-session drop.
-	if !app.notifyPrefsFor(ctx, userID).PromptAnswered {
+	// hint's once-per-session drop. The demo account never
+	// answers that prompt (its writes are turned away), so the
+	// gate would hold this hint back forever; demo reads the
+	// session drop instead, once per login, and nothing is
+	// saved for it.
+	if !app.isDemoUser(ctx, userID) && !app.notifyPrefsFor(ctx, userID).PromptAnswered {
 		return nil
 	}
 	if app.sessions.GetBool(ctx, sessionCustomizePromptShown) {

@@ -1103,7 +1103,7 @@ td, .isk, dd, .kpi-v, .kpi-sub, .fleet-foot, .flow-figs { font-variant-numeric: 
    ember border between rows, and the glow mockup's hover wash
    (rgba(255, 106, 0, 0.045)) across the whole row. */
 tbody tr { background: transparent; }
-tbody tr:hover td, tbody tr:hover th { background: rgba(255, 106, 0, 0.045); }
+tbody tr:hover td, tbody tr:hover th { background: var(--row-hover, rgba(255, 106, 0, 0.045)); }
 
 /* Inside a .tw scroll container the first column stays pinned.
    Backgrounds are restated per cell: a pinned cell cannot rely on
@@ -3025,7 +3025,7 @@ tr.fleet-detail > td { background: #120d09; border-bottom: 1px solid color-mix(i
   .home-bar .esi-pill .esi-label { display: none; }
   .home-bar .home-settings > summary > span { display: none; }
 }
-.btn.btn-quiet { background: transparent; color: var(--text); border: 1px solid #4a2408; box-shadow: none; }
+.btn.btn-quiet { background: transparent; color: var(--text); border: 1px solid var(--box-edge); box-shadow: none; }
 .btn.btn-quiet:hover { border-color: var(--accent); color: var(--text-bright); }
 .menu-pop { position: relative; }
 .menu-pop > summary { list-style: none; display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
@@ -6616,6 +6616,14 @@ html[data-vision="blueyellow"] .pip-t2 { background: #6b5280; color: #f5ecff; }
 .insp-facts > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--box-edge); font-size: var(--fs-sm); }
 .insp-facts dt { color: var(--muted); }
 .insp-facts dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+.insp-links { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.75rem 0 0; }
+.insp-links .btn { flex: 1 1 auto; justify-content: center; }
+.insp-stats { margin: 0.9rem 0 0; }
+.insp-stats h4 { margin: 0 0 0.4rem; }
+.insp-stats .fit-tip-lines { margin-top: 0; gap: 0.28rem; }
+.insp-stats .fit-tip-line, .insp-stats .fit-tip-res { font-size: var(--fs-sm); }
+.is-mini-tags, .is-mini-slots { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem; }
+.is-mini-resists { margin-bottom: 0.45rem; }
 .insp-foot { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding-top: 0.7rem; border-top: 1px solid var(--box-edge); color: var(--muted); font-size: var(--fs-xs); }
 .slotsec .modrow .mq { color: var(--accent); font-weight: 700; }
 .insp-note { margin-top: 0.6rem; color: var(--muted); font-size: var(--fs-xs); }

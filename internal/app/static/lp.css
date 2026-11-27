@@ -40,6 +40,7 @@
 .lp-item img { flex: none; border-radius: var(--r-xs); }
 .lp-worth { color: var(--gold); font-weight: 600; }
 .lp-per .lp-meter { width: 4.5rem; margin: 0.3rem 0 0 auto; }
+#main-content .lp-table.cards-on .lp-per .lp-meter { margin: 0.3rem 0 0; }
 .lp-vol-warn { color: var(--v-warn, #e8b04a); font-size: var(--fs-xs); white-space: nowrap; }
 .lp-note { margin: var(--space-3) 0 0; color: var(--muted); }
 
@@ -48,10 +49,15 @@
 .lp-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: var(--space-3) 0 0; }
 .lp-kpis .l-stat-value { font-size: var(--fs-3xl); font-size: clamp(var(--fs-sm), 9cqw, var(--fs-3xl)); }
 .lp-insp .insp-facts dt a { color: inherit; }
-.lp-links { margin: var(--space-4) 0 0; }
+.lp-links { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-4) 0 0; }
+.lp-links .btn { flex: 1 1 auto; justify-content: center; }
 .lp-table td:first-child { white-space: normal; min-width: 9rem; }
 
-/* With an offer open beside the list, the columns its inspector
-   repeats (store, what it also needs, sold per day) step out, so
-   the rest stays a table in the narrower main pane. */
-.l-console.lp[data-depth="2"] .lp-table :is(th, td):is(:nth-child(2), :nth-child(6), :nth-child(9)) { display: none; }
+/* With an offer open beside the list (wide 3-pane console only), the
+   columns its inspector repeats (store, what it also needs, sold per
+   day) step out, so the rest stays a table in the narrower main pane.
+   At mid-width the inspector is an overlay drawer, so the table behind
+   it keeps all columns and its layout unchanged. */
+@container console (width >= 70rem) {
+  .l-console.lp[data-depth="2"] .lp-table :is(th, td):is(:nth-child(2), :nth-child(6), :nth-child(9)) { display: none; }
+}

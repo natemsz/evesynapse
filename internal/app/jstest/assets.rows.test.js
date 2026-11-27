@@ -154,3 +154,72 @@ test("initMatrixRows: data-row-sel routes clicks through its matching link and i
   click(row, false);
   assert.equal(linkClicks, 1);
 });
+
+test("status modal: reopens cleanly after backdrop close via EveSynapseModal", function () {
+  const byId = {};
+  function makeEl(tag, id, cls) {
+    const el = new El(tag);
+    if (id) { el.id = id; byId[id] = el; }
+    if (cls) el.className = cls;
+    el.offsetParent = {};
+    el.closest = function (sel) {
+      if (sel === "[data-close-modal]" && el.hasAttribute("data-close-modal")) return el;
+      if (sel === ".modal-backdrop") return byId["status-modal"];
+      return null;
+    };
+    return el;
+  }
+  const openBtn = makeEl("button", "status-open", "navlink");
+  const modal = makeEl("div", "status-modal", "modal-backdrop modal-top");
+  modal.hidden = true;
+  let popOpen = false;
+  modal.showPopover = function () { popOpen = true; };
+  modal.hidePopover = function () { popOpen = false; };
+  const closeBtn = makeEl("button", "status-close", "btn");
+  closeBtn.setAttribute("data-close-modal", "");
+  modal.appendChild(closeBtn);
+  const dot = makeEl("span", "status-dot", "");
+  const modalDot = makeEl("span", "status-modal-dot", "");
+  const apiLabel = makeEl("span", "status-api-label", "");
+  const apiPlayers = makeEl("span", "status-api-players", "");
+  const routes = makeEl("small", "status-routes", "");
+  const rowsBody = makeEl("ul", "status-rows", "");
+  const note = makeEl("small", "status-note", "");
+  void dot; void modalDot; void apiLabel; void apiPlayers; void routes; void rowsBody; void note;
+
+  const doc = new El("html");
+  doc.documentElement = doc;
+  doc.body = new El("body");
+  doc.contains = function () { return true; };
+  doc.createElement = function (tag) { return new El(tag); };
+  doc.getElementById = function (id) { return byId[id] || null; };
+  global.document = doc;
+  global.window = global;
+  global.fetch = function () { return Promise.resolve({ ok: false }); };
+  const path = require.resolve("../static/app.js");
+  delete require.cache[path];
+  require(path);
+
+  // Open via sidebar button.
+  for (const fn of openBtn._listeners.click || []) fn({ target: openBtn });
+  assert.equal(modal.hidden, false);
+  assert.equal(popOpen, true);
+
+  // Close via backdrop click (global EveSynapseModal listener).
+  for (const fn of doc._listeners.click || []) fn({ target: modal });
+  assert.equal(modal.hidden, true);
+  assert.equal(popOpen, false);
+
+  // Reopen via sidebar button without refreshing the page.
+  for (const fn of openBtn._listeners.click || []) fn({ target: openBtn });
+  assert.equal(modal.hidden, false);
+  assert.equal(popOpen, true);
+
+  // Close via Close button ([data-close-modal]) and reopen again.
+  for (const fn of doc._listeners.click || []) fn({ target: closeBtn });
+  assert.equal(modal.hidden, true);
+  assert.equal(popOpen, false);
+  for (const fn of openBtn._listeners.click || []) fn({ target: openBtn });
+  assert.equal(modal.hidden, false);
+  assert.equal(popOpen, true);
+});

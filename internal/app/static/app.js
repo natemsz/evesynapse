@@ -214,7 +214,7 @@
       var entry = modalStack.splice(i, 1)[0];
       if (!modalStack.length) document.documentElement.classList.remove("modal-open");
       if (entry.onClose) entry.onClose();
-      if (entry.back && entry.back.focus && document.contains(entry.back)) entry.back.focus({ preventScroll: true });
+      if (entry.back && entry.back.focus && document.contains(entry.back) && entry.back.offsetParent !== null) entry.back.focus({ preventScroll: true });
     },
     isOpen: function (el) { return modalIndex(el) >= 0; }
   };
@@ -2123,7 +2123,8 @@
       rows.push(["Low", dot.getAttribute("data-low") + " ISK"]);
       rows.push(["Volume", dot.getAttribute("data-vol")]);
       if (dot.getAttribute("data-orders")) rows.push(["Orders", dot.getAttribute("data-orders")]);
-      if (dot.getAttribute("data-ma20")) rows.push(["20-day average", dot.getAttribute("data-ma20") + " ISK"]);
+      if (dot.getAttribute("data-ma7")) rows.push(["7-day average", dot.getAttribute("data-ma7") + " ISK"]);
+      if (dot.getAttribute("data-ma30")) rows.push(["30-day average", dot.getAttribute("data-ma30") + " ISK"]);
     }
     for (var i = 0; i < rows.length; i++) {
       var line = document.createElement("div");
@@ -2399,6 +2400,65 @@
       hide(pinned);
       pinned = null;
     }
+  });
+})();
+
+// --- Price-history range switcher ------------------------------
+// Range pills inside .history-body carry data-history-fragment pointing
+// to /market/history-fragment. Clicking a pill swaps only the enclosing
+// .history-body in place without reloading or navigating away (keeping
+// the Item Details page on /items/type/... and Market on /market/...).
+(function () {
+  if (!window.fetch || !window.DOMParser) return;
+  var reqSeq = 0;
+  document.addEventListener("click", function (ev) {
+    if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    var link = ev.target && ev.target.closest ? ev.target.closest(".history-body .viz-ranges a[data-history-fragment]") : null;
+    if (!link) return;
+    var body = link.closest(".history-body");
+    var fragURL = link.getAttribute("data-history-fragment");
+    if (!body || !fragURL) return;
+    ev.preventDefault();
+    if (link.classList.contains("active")) return;
+    var seq = ++reqSeq;
+    var rangeKey = link.getAttribute("data-range") || "";
+    var keepFocus = document.activeElement === link;
+    body.setAttribute("aria-busy", "true");
+    window.fetch(fragURL, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error("status " + resp.status);
+        return resp.text();
+      })
+      .then(function (html) {
+        if (seq !== reqSeq || !body.isConnected) return;
+        var doc = new window.DOMParser().parseFromString(html, "text/html");
+        var next = doc.querySelector(".history-body");
+        if (!next) throw new Error("missing history-body");
+        // Keep the existing hoisted visualization settings modal if already present.
+        var dupModal = next.querySelector("#viz-settings-modal");
+        if (dupModal && document.getElementById("viz-settings-modal") && !body.contains(document.getElementById("viz-settings-modal"))) {
+          dupModal.parentNode.removeChild(dupModal);
+        }
+        body.parentNode.replaceChild(next, body);
+        if (rangeKey && window.history && window.history.replaceState) {
+          try {
+            var nextURL = new URL(window.location.href);
+            nextURL.searchParams.set("range", rangeKey);
+            window.history.replaceState(window.history.state, "", nextURL.pathname + nextURL.search + nextURL.hash);
+          } catch (e) { /* keep current URL */ }
+        }
+        document.dispatchEvent(new CustomEvent("evesynapse:content-ready", {
+          detail: { root: next, part: true }
+        }));
+        if (keepFocus && rangeKey) {
+          var activeLink = next.querySelector('.viz-ranges a[data-range="' + rangeKey + '"]');
+          if (activeLink && activeLink.focus) activeLink.focus({ preventScroll: true });
+        }
+      })
+      .catch(function () {
+        if (body.isConnected) body.removeAttribute("aria-busy");
+        window.location.href = link.getAttribute("href") || window.location.href;
+      });
   });
 })();
 
@@ -3455,7 +3515,7 @@
     var pop = cell && cell.querySelector(".spark-pop");
     var text = cell ? (pop ? cell.textContent.replace(pop.textContent, "") : cell.textContent) : "";
     var raw = (cell ? (cell.getAttribute("data-sort") || text) : "").trim();
-    var m = raw.replace(/ISK|,|\s|%|\+|×/g, "").replace(/^[−–]/, "-").match(/^(-?\d+(?:\.\d+)?)([KMBT]?)$/i);
+    var m = raw.replace(/ISK|m³|,|\s|%|\+|×/g, "").replace(/^[−–]/, "-").match(/^(-?\d+(?:\.\d+)?)([KMBT]?)$/i);
     if (m) {
       var mult = { "": 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2].toLowerCase()];
       return { num: parseFloat(m[1]) * mult, text: raw };
@@ -3493,7 +3553,7 @@
     segments.forEach(function (seg) {
       var groups = seg.groups;
       var keys = groups.map(function (g) { return sortKey(g[0].cells[col]); });
-      var numeric = keys.every(function (k) { return k.num !== null || k.text === "" || k.text === "—"; });
+      var numeric = keys.every(function (k) { return k.num !== null || k.text === "" || k.text === "—" || k.text === "-" || k.text === "no price"; });
       var order = groups.map(function (g, i) { return i; });
       order.sort(function (a, b) {
         var ka = keys[a], kb = keys[b], r;
@@ -5679,17 +5739,25 @@
   }
 
   function open() {
-    modal.hidden = false;
     load();
-    if (closeBtn) closeBtn.focus();
-  }
-  function close() {
-    modal.hidden = true;
-    if (opener && opener.offsetParent !== null) opener.focus();
-    opener = openBtn;
+    if (window.EveSynapseModal) {
+      window.EveSynapseModal.open(modal, {
+        focus: false,
+        onClose: function () {
+          if (opener && opener.offsetParent !== null && opener.focus) opener.focus({ preventScroll: true });
+          opener = openBtn;
+        }
+      });
+    } else {
+      modal.hidden = false;
+    }
+    if (closeBtn) closeBtn.focus({ preventScroll: true });
   }
 
-  openBtn.addEventListener("click", open);
+  openBtn.addEventListener("click", function () {
+    opener = openBtn;
+    open();
+  });
   // The phone menu's ESI row opens the same modal.
   var extraOpeners = document.querySelectorAll("[data-status-open]");
   for (var o = 0; o < extraOpeners.length; o++) {
@@ -5698,11 +5766,6 @@
       open();
     });
   }
-  if (closeBtn) closeBtn.addEventListener("click", close);
-  modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && !modal.hidden) close();
-  });
   load();
 })();
 

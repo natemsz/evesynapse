@@ -76,3 +76,42 @@
   </div>
   <p class="ib-note">Highlighted figures beat the selected item; red ones trail it. Prices at The Forge from our own swept orders. Any other source is named under the figure.</p>
 {{end}}{{end}}
+
+{{/* Compact color-coded item stats for inspectors (items_sheet.go
+     buildItemBasicStats): reuses the fitting tool's .fit-tip-lines,
+     .k-* color kinds, #fg-* glyphs, and .res-* resist bars. */}}
+{{define "item-basic-stats"}}{{with .}}
+  {{if .Slot}}<div class="is-mini-tags"><span class="lchip">{{.Slot}}</span></div>{{end}}
+  {{if .Slots}}<div class="is-mini-slots">{{range .Slots}}<span class="lchip"><i>{{.Label}}</i> {{.Value}}</span>{{end}}</div>{{end}}
+  {{if .Resists}}
+  <div class="fit-tip-lines is-mini-resists">
+    {{range .Resists}}
+    {{$layer := "structure"}}{{if eq .Layer "Shield"}}{{$layer = "shield"}}{{else if eq .Layer "Armor"}}{{$layer = "armor"}}{{end}}
+    <div class="fit-tip-res k-{{$layer}}">
+      <svg class="fit-tip-g" viewBox="0 0 16 16" aria-hidden="true"><use href="#fg-{{$layer}}"/></svg>
+      <span class="fit-tip-k" title="{{.Layer}}{{if .HP}} ({{.HP}}){{end}}">{{.Layer}}</span>
+      {{range .Cells}}<span class="fit-tip-rc res-{{.Kind}}" title="{{.Kind}} {{.Text}}"><span class="fit-tip-rbar" data-w="{{printf "%.1f" .Pct}}"></span><span>{{.Text}}</span></span>{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+  {{if .Lines}}
+  <div class="fit-tip-lines">
+    {{range .Lines}}
+      {{if .Resists}}
+      <div class="fit-tip-res k-{{.Layer}}">
+        <svg class="fit-tip-g" viewBox="0 0 16 16" aria-hidden="true"><use href="#fg-{{.Layer}}"/></svg>
+        <span class="fit-tip-k">{{.Label}}</span>
+        {{range .Resists}}<span class="fit-tip-rc res-{{.Kind}}" title="{{.Kind}} {{.Text}}%"><span class="fit-tip-rbar" data-w="{{printf "%.1f" .Pct}}"></span><span>{{.Text}}</span></span>{{end}}
+      </div>
+      {{else}}
+      <div class="fit-tip-line{{if .Kind}} k-{{.Kind}}{{end}}">
+        <svg class="fit-tip-g" viewBox="0 0 16 16" aria-hidden="true">{{if .Kind}}<use href="#fg-{{.Kind}}"/>{{end}}</svg>
+        <span class="fit-tip-k">{{.Label}}</span>
+        <span class="fit-tip-v">{{.Value}}</span>
+      </div>
+      {{end}}
+    {{end}}
+  </div>
+  {{end}}
+{{end}}{{end}}

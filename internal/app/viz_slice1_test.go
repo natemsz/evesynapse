@@ -23,16 +23,16 @@ import (
 )
 
 func vizFixtureRows() []db.MarketHistory {
-	base := time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)
+	base := time.Date(2026, 8, 28, 0, 0, 0, 0, time.UTC)
 	avgs := []float64{200, 204, 208, 212, 216}
-	rows := make([]db.MarketHistory, 0, 25)
-	for g := 0; g < 25; g++ {
+	rows := make([]db.MarketHistory, 0, 35)
+	for g := 0; g < 35; g++ {
 		avg := avgs[g%5]
-		if g == 24 {
+		if g == 34 {
 			avg = 220
 		}
 		high := avg + 6
-		if g == 17 {
+		if g == 27 {
 			high = avg + 30 // a warmup spike the channel must see
 		}
 		rows = append(rows, db.MarketHistory{
@@ -71,14 +71,14 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 	if !ok {
 		t.Fatal("ranged chart not built")
 	}
-	// Displayed days are rows 20..24; the price scale spans their
-	// wick extents: lowest 194 (day 20), highest 226 (day 24).
+	// Displayed days are rows 30..34; the price scale spans their
+	// wick extents: lowest 194 (day 30), highest 226 (day 34).
 	// Band: TopY 12, BaseY 131, so y(v) = 131 - (v-194)/32*119.
 	if chart.TopY != 12 || chart.BaseY != 131 {
 		t.Fatalf("band: TopY %d BaseY %d, want 12/131", chart.TopY, chart.BaseY)
 	}
-	if chart.From != rows[20].Date || chart.To != rows[24].Date {
-		t.Fatalf("range labels: %s to %s, want %s to %s", chart.From, chart.To, rows[20].Date, rows[24].Date)
+	if chart.From != rows[30].Date || chart.To != rows[34].Date {
+		t.Fatalf("range labels: %s to %s, want %s to %s", chart.From, chart.To, rows[30].Date, rows[34].Date)
 	}
 
 	// Wicks: one per displayed day, from highest to lowest.
@@ -92,16 +92,19 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 		t.Fatalf("first wick: %+v, want x=0 top=87 bottom=131", w)
 	}
 
-	// MA20 exists from the first displayed day only because the
-	// 20 warmup rows are read (day 20 averages days 1..20 = 208
-	// -> y 79).
-	ma20 := vizPoints(t, chart.MA20Points)
-	if len(ma20) != 5 || ma20[0] != [2]int{0, 79} {
-		t.Fatalf("MA20 points: %v, want 5 points starting 0,79 (warmup boundary)", ma20)
+	// MA30 exists from the first displayed day only because the
+	// 30 warmup rows are read (day 30 averages days 1..30 = 208
+	// -> y 79), and each dot carries both 7-day and 30-day averages.
+	ma30 := vizPoints(t, chart.MA30Points)
+	if len(ma30) != 5 || ma30[0] != [2]int{0, 79} {
+		t.Fatalf("MA30 points: %v, want 5 points starting 0,79 (warmup boundary)", ma30)
+	}
+	if chart.Dots[0].MA7 == "" || chart.Dots[0].MA30 != "208.00" {
+		t.Fatalf("first dot moving averages: MA7=%q MA30=%q, want non-empty MA7 and MA30=208.00", chart.Dots[0].MA7, chart.Dots[0].MA30)
 	}
 
 	// Donchian: the first displayed day's upper edge is the
-	// warmup spike on day 17 (highest 238 -> y -32), not anything
+	// warmup spike on day 27 (highest 238 -> y -32), not anything
 	// inside the displayed window.
 	band := vizPoints(t, chart.ChannelPoints)
 	if len(band) != 10 {
@@ -112,18 +115,23 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 	}
 
 	// The strip: volume bars plus the orders line on its own
-	// scale (max order count 34 on day 24 -> the band's top).
+	// scale (max order count 44 on day 34 -> the band's top).
 	if len(chart.Bars) != 5 {
 		t.Fatalf("volume bars: got %d, want 5", len(chart.Bars))
 	}
 	orders := vizPoints(t, chart.OrdersPoints)
-	if len(orders) != 5 || orders[0] != [2]int{0, 150} || orders[4] != [2]int{719, 141} {
-		t.Fatalf("orders points: %v, want 5 points from 0,150 to 719,141", orders)
+	if len(orders) != 5 || orders[0] != [2]int{0, 148} || orders[4] != [2]int{719, 141} {
+		t.Fatalf("orders points: %v, want 5 points from 0,148 to 719,141", orders)
 	}
 	// The recent-days table keeps its full span: newest 14 of all
 	// rows read, not just the 5 displayed.
-	if len(chart.Recent) != 14 || chart.Recent[0].Date != rows[24].Date || chart.Recent[13].Date != rows[11].Date {
-		t.Fatalf("recent table: %d rows from %v, want 14 ending at %s", len(chart.Recent), chart.Recent, rows[11].Date)
+	if len(chart.Recent) != 14 || chart.Recent[0].Date != rows[34].Date || chart.Recent[13].Date != rows[21].Date {
+		t.Fatalf("recent table: %d rows from %v, want 14 ending at %s", len(chart.Recent), chart.Recent, rows[21].Date)
+	}
+
+	// Range selector resolves 7d, 1m, 3m, 6m, 1y cleanly.
+	if k, d := vizRangeDays("7d"); k != "7d" || d != 7 {
+		t.Fatalf("vizRangeDays(7d) = (%q, %d), want (7d, 7)", k, d)
 	}
 
 	// Every layer off: only the average line remains, and the
@@ -132,7 +140,7 @@ func TestVizChartMathAndPrefs(t *testing.T) {
 	if !ok || bare.Points == "" {
 		t.Fatal("bare chart: not built or no average line")
 	}
-	if len(bare.Wicks) != 0 || bare.MA20Points != "" ||
+	if len(bare.Wicks) != 0 || bare.MA30Points != "" ||
 		bare.ChannelPoints != "" || bare.OrdersPoints != "" || len(bare.Bars) != 0 {
 		t.Fatal("bare chart: a switched-off layer still drew")
 	}

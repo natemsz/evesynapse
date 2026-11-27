@@ -266,6 +266,57 @@ pages are the worked example. This is a convenience over an
 already-rendered table, never a substitute for the bounded-
 read rule on big data.
 
+### Sortable tables
+
+Every table under `#main-content` with a `<thead>` sorts client-side on
+header click via `app.js` (clicking again reverses between `ascending`
+and `descending`, setting `aria-sort` on the active `<th>` so
+`style.css` renders `▲`/`▼`). Cells may carry `data-sort="<raw>"` to
+sort on an unformatted number; `data-sort-barrier` marks group-header
+rows that never move and bound sorting to each segment; `data-nosort`
+opts a table out (used when sorting must happen server-side across
+paginated rows, as on Assets and Contract Search, where the server sets
+`aria-sort` on the active `<th>` and toggles `asc`/`desc` links).
+
+### Clickable table rows
+
+A `<tr>` carrying `data-row-sel` and `data-sel="<href>"` (or
+`.amx-trow[data-sel]`) routes clicks anywhere on the row through its
+matching `<a href>` link (`initMatrixRows` in `app.js`, styled by
+`layout.css`), ignoring clicks on interactive controls (`a`, `button`,
+`input`, `select`, `details`, `summary`) and active text selections.
+Spread Scanner, Industry Jobs, Assets, and the LP Store use it.
+
+### Pagination (`pager`)
+
+Reusable pagination controls live in `templates/pager.html`
+(`{{template "pager" .}}` with a `*pageNav` from `core_pager.go`,
+styled by `.l-pager` in `layout.css`): first (`«`), previous (`‹`),
+`Page X of Y`, next (`›`), and last (`»`). Links carrying
+`data-land-target="<id>"` tell `swap.js` to swap the new page in place
+without a full reload and scroll straight to `#<id>` cleanly below any
+sticky pane bar (Assets is the worked example).
+
+### Dynamic chart range switching
+
+Price-history range pills inside `.history-body .viz-ranges` carry
+`data-no-swap`, `data-history-fragment="<fragment url>"`, and
+`data-range="<key>"`. `app.js` intercepts clicks, fetches
+`/market/history-fragment`, replaces only the enclosing `.history-body`
+in place, updates `?range=` with `history.replaceState`, and fires
+`evesynapse:content-ready` (`part: true`). Without JS, the plain `href`
+still navigates to the page with `?range=`.
+
+### Compact item stats (`item-basic-stats`)
+
+Inspectors that summarize an item's stats reuse
+`{{template "item-basic-stats" .}}` (`templates/itemsheet.html`) fed by
+`app.buildItemBasicStats(ctx, typeID)` (`items_sheet.go`), which reads
+the stored `sde_item_sheets` row and renders ship slots/resists or
+module fitting costs and top attributes using the fitting tool's shared
+`.fit-tip-lines`, `.k-*` color tokens, `#fg-*` SVG symbols (`base.html`),
+and `.res-*` resistance bars (`data-w` fill width, no inline styles).
+
 ### Copy buttons
 
 Any button with `data-copy` copies text, through one delegated
@@ -293,6 +344,9 @@ Delegated in app.js, so swapped pages need nothing:
 | `data-autosubmit` on a control | submits its form when it changes (the form's button stays for readers without JavaScript) |
 | `data-href="/path"` on a button | goes to that same-site path on click (no inline handlers under the CSP) |
 | `data-open-modal="<id>"` on a button | opens that dialog through `EveSynapseModal` |
+| `data-row-sel` + `data-sel="/path"` on a `tr` | clicking anywhere in the row activates its matching link |
+| `data-land-target="<id>"` on an `a` | after a `swap.js` swap, scrolls cleanly to `#<id>` below sticky pane bars |
+| `data-history-fragment="<url>"` on `.viz-ranges a` | swaps `.history-body` in place without reloading or leaving the page |
 | `data-local-time="<RFC3339>"` | the browser writes in the reader's own local time for that moment (the element stays hidden without JS) |
 | `data-finish="<RFC3339>"` | a countdown (see Countdowns); only for times, never for anything else |
 

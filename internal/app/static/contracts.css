@@ -544,11 +544,13 @@
   cursor: pointer;
 }
 .cs-table tbody tr.cs-row:first-child { border-top: 0; }
-.cs-table tbody tr.cs-row:hover { background: rgba(30, 20, 13, 0.35); }
+.cs-table tbody tr.cs-row:hover { background: var(--row-hover); }
+.cs-table tbody tr.cs-row:hover > td { background: transparent; }
 .cs-table tbody tr.cs-row.open {
-  background: rgba(34, 22, 14, 0.55);
+  background: var(--sel-row);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+.cs-table tbody tr.cs-row.open > td { background: transparent; }
 /* The type label sits in a fixed-width slot so the deal
    badge starts at the same x on every row, however long
    the type text runs. */
@@ -898,7 +900,7 @@
    cells already carry courier terms (reward, collateral,
    the sealed wrap, no spread), so its card reads in those
    terms with no second shape to build. */
-@container page (width < 45rem) {
+@container page (width < 50rem) {
   .cs-results { overflow-x: visible; }
   .cs-table { display: block; min-width: 0; }
   .cs-table colgroup { display: none; }
@@ -916,6 +918,10 @@
     border: 1px solid var(--box-edge); border-radius: var(--r-sm);
     background: var(--row-alt);
   }
+  .cs-table tbody tr.cs-row:hover {
+    background: color-mix(in srgb, var(--accent) 6%, var(--row-alt));
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--box-edge));
+  }
   .cs-table tbody tr.cs-row:first-child { border-top: 1px solid var(--box-edge); }
   .cs-table tbody tr.cs-row.open { border-color: var(--accent); }
   .cs-table tbody tr.cs-row.is-live {
@@ -923,6 +929,7 @@
     box-shadow: inset 3px 0 0 var(--accent);
   }
   .cs-table tbody tr.cs-row.is-live > :first-child { box-shadow: none; }
+  .cs-table tbody tr.cs-row > td { min-width: 0; background: none; }
   .cs-table td.cs-c1 { grid-area: head; padding: 0; }
   .cs-table td.cs-c2 { grid-area: contents; padding: 0; }
   .cs-table td.cs-c3 { grid-area: price; padding: 0; }

@@ -10,6 +10,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -514,5 +515,145 @@ func TestAssetInspectorEFTComesFromTheShipsFit(t *testing.T) {
 		"[Rifter, Vale&#39;s Rifter]",
 		"200mm AutoCannon II",
 		"Hobgoblin II x2",
+	)
+}
+
+// TestAssetsSortingReversesAndPaginatesFullList verifies that sorting
+// toggles ascending/descending across all columns, sorts the entire
+// station list before slicing pages, and renders top and bottom
+// pagination controls without truncating rows behind "+N more stacks".
+func TestAssetsSortingReversesAndPaginatesFullList(t *testing.T) {
+	f := newAssetsFixture(t)
+	ctx := context.Background()
+	if _, err := f.app.db.ExecContext(ctx, `INSERT INTO sde_groups (group_id, name, category_id) VALUES (18, 'Mineral', 4)`); err != nil {
+		t.Fatalf("seed group: %v", err)
+	}
+	f.app.esi.StorePlaceName(nestStation, "Jita IV - Moon 4 - Caldari Navy Assembly Plant")
+
+	// Seed 105 distinct types with distinct unit prices (100 .. 10500 ISK)
+	// so page 1 has 100 rows and page 2 has 5 rows.
+	assets := make([]esi.Asset, 0, 105)
+	for i := 1; i <= 105; i++ {
+		tid := int64(50000 + i)
+		name := fmt.Sprintf("Widget %03d", i)
+		if _, err := f.app.db.ExecContext(ctx,
+			`INSERT INTO sde_types (type_id, name, group_id, market_group_id) VALUES ($1, $2, 18, 1)`,
+			tid, name); err != nil {
+			t.Fatalf("seed type %d: %v", tid, err)
+		}
+		if _, err := f.app.db.ExecContext(ctx,
+			`INSERT INTO sde_type_physics (type_id, volume) VALUES ($1, $2)`,
+			tid, float64(i)); err != nil {
+			t.Fatalf("seed physics %d: %v", tid, err)
+		}
+		if _, err := f.app.db.ExecContext(ctx,
+			`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at, swept_at) VALUES (10000002, $1, $2, NOW(), NOW())`,
+			tid, float64(i*100)); err != nil {
+			t.Fatalf("seed price %d: %v", tid, err)
+		}
+		assets = append(assets, esi.Asset{
+			ItemID: int64(70000 + i), TypeID: tid, Quantity: int64(106 - i),
+			LocationID: nestStation, LocationType: "station", LocationFlag: "Hangar",
+		})
+	}
+	seedSnapshot(t, f.q, fixtureCharA, esi.SnapAssets, assets)
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+
+	// Default sort is Est. value descending (item 53 = 5300 * 53 = 280,900 max; item 1 = 100 * 105 = 10,500 min).
+	// Wait: i*(106-i) peaks at i=53 (280,900 ISK) and is lowest at i=1 (10,500) and i=105 (10,500).
+	code, descP1 := getPage(t, f.app, cookie, "/assets/?scope=90000001")
+	if code != http.StatusOK {
+		t.Fatalf("GET /assets/ = %d", code)
+	}
+	mustContain(t, "assets page 1 desc", descP1,
+		`id="assets-list-top"`,
+		`aria-sort="descending"`,
+		`href="/assets/?dir=asc"`,
+		`Page 1 of 2`,
+		`data-land-target="assets-list-top"`,
+		`Widget 053`,
+	)
+	if strings.Contains(descP1, "Widget 001") {
+		t.Error("value-desc page 1 contains the lowest-value stack Widget 001")
+	}
+
+	// Clicking Est. value reverses to ascending across the ENTIRE 105-item list,
+	// putting Widget 001 on page 1 and Widget 053 on page 2.
+	_, ascP1 := getPage(t, f.app, cookie, "/assets/?scope=90000001&dir=asc")
+	mustContain(t, "assets page 1 asc", ascP1,
+		`aria-sort="ascending"`,
+		`href="/assets/" class="srt-on">Est. value</a>`,
+		`Page 1 of 2`,
+		`Widget 001`,
+	)
+	if strings.Contains(ascP1, "Widget 053") {
+		t.Error("value-asc page 1 still shows highest-value Widget 053 instead of sorting the full list first")
+	}
+
+	// Page 2 of ascending sort holds the top 5 stacks including Widget 053.
+	_, ascP2 := getPage(t, f.app, cookie, "/assets/?scope=90000001&dir=asc&page=2")
+	mustContain(t, "assets page 2 asc", ascP2,
+		`Page 2 of 2`,
+		`Widget 053`,
+	)
+	if strings.Contains(ascP2, "Widget 001") {
+		t.Error("value-asc page 2 repeats page 1 item Widget 001")
+	}
+
+	// Qty sorting also works and reverses cleanly (Widget 001 has qty 105, Widget 105 has qty 1).
+	_, qtyAsc := getPage(t, f.app, cookie, "/assets/?scope=90000001&sort=qty&dir=asc")
+	mustContain(t, "assets qty asc", qtyAsc, `aria-sort="ascending"`, `Widget 105`)
+	if strings.Contains(qtyAsc, "Widget 001") {
+		t.Error("qty-asc page 1 should not contain highest-qty Widget 001")
+	}
+}
+
+// TestAssetsInspectorShowsLinksAndBasicStats verifies that inspecting a
+// plain item or module shows Market Details, Item Details, Contracts links,
+// and fitting-tool-styled basic stats from the stored item sheet.
+func TestAssetsInspectorShowsLinksAndBasicStats(t *testing.T) {
+	f := newAssetsFixture(t)
+	ctx := context.Background()
+	stmts := []string{
+		`INSERT INTO sde_groups (group_id, name, category_id) VALUES (77, 'Shield Hardener', 7)`,
+		`INSERT INTO sde_categories (category_id, name) VALUES (7, 'Module')`,
+		`INSERT INTO sde_types (type_id, name, group_id, market_group_id) VALUES (2281, 'Multispectrum Shield Hardener II', 77, 1)`,
+		`INSERT INTO sde_type_physics (type_id, volume) VALUES (2281, 5)`,
+		`INSERT INTO sde_units (unit_id, display_name) VALUES (105, '%'), (106, 'tf'), (107, 'MW')`,
+		`INSERT INTO sde_attribute_types (attribute_id, name, display_name, unit_id, category_id, published) VALUES
+			(50, 'cpu', 'CPU usage', 106, 1, 1),
+			(30, 'power', 'Powergrid usage', 107, 1, 1),
+			(984, 'emDamageResistanceBonus', 'EM Damage Resistance Bonus', 105, 2, 1),
+			(985, 'explosiveDamageResistanceBonus', 'Explosive Damage Resistance Bonus', 105, 2, 1),
+			(986, 'kineticDamageResistanceBonus', 'Kinetic Damage Resistance Bonus', 105, 2, 1),
+			(987, 'thermalDamageResistanceBonus', 'Thermal Damage Resistance Bonus', 105, 2, 1)`,
+		`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+			(2281, 50, 30), (2281, 30, 1),
+			(2281, 984, -32.5), (2281, 985, -32.5), (2281, 986, -32.5), (2281, 987, -32.5)`,
+		`INSERT INTO sde_type_effects (type_id, effect_id) VALUES (2281, 13)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := f.app.db.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed: %v (%s)", err, stmt)
+		}
+	}
+	f.app.esi.StorePlaceName(nestStation, "Jita IV - Moon 4 - Caldari Navy Assembly Plant")
+	seedSnapshot(t, f.q, fixtureCharA, esi.SnapAssets, []esi.Asset{
+		{ItemID: 901, TypeID: 2281, Quantity: 2, LocationID: nestStation, LocationType: "station", LocationFlag: "Hangar"},
+	})
+	cookie := sessionCookie(t, f.app, f.userID, f.ch.CharacterID, f.ch.Name)
+	code, body := getPage(t, f.app, cookie, "/assets/?scope=90000001&item=901")
+	if code != http.StatusOK {
+		t.Fatalf("GET item inspector = %d", code)
+	}
+	mustContain(t, "item inspector", body,
+		`href="/market/?type=2281">Market Details</a>`,
+		`href="/items/type/2281/">Item Details</a>`,
+		`href="/contracts/search/?item_type=2281">Contracts</a>`,
+		`Mid slot`,
+		`fit-tip-line k-cpu`,
+		`fit-tip-line k-powergrid`,
+		`fit-tip-res k-bonus`,
+		`data-w="32.5"`,
 	)
 }

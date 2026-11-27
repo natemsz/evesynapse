@@ -231,7 +231,7 @@ type PriceChart struct {
 	// The ranged chart's extra layers (BuildPriceChartRange);
 	// empty when a layer is off or the legacy builder ran.
 	Wicks         []Wick // per-day lowest-to-highest lines
-	MA20Points    string // polyline of the 20-day moving average
+	MA30Points    string // polyline of the 30-day moving average
 	ChannelPoints string // polygon of the trailing 5-day Donchian band
 	OrdersPoints  string // polyline of order_count over the volume band
 }
@@ -286,7 +286,8 @@ type Day struct {
 	Lowest  string
 	Volume  string // esi.FormatInt
 	Orders  string // esi.FormatInt: orders that traded that day
-	MA20    string // the 20-day average price, esi.FormatISK ("" before 20 days)
+	MA7     string // the 7-day average price, esi.FormatISK ("" before 7 days)
+	MA30    string // the 30-day average price, esi.FormatISK ("" before 30 days)
 	Title   string // "<date>: average X ISK · high … · low … · volume …"
 }
 
@@ -481,7 +482,8 @@ func buildChart(rows []db.MarketHistory, display int, opts ChartOptions, legacy 
 		px, py := x(i), y(r.Average)
 		day := dayFigures(r)
 		g := len(rows) - display + i // global index of the day
-		day.MA20 = movingAt(g, 20)
+		day.MA7 = movingAt(g, 7)
+		day.MA30 = movingAt(g, 30)
 		chart.Dots = append(chart.Dots, Dot{X: px, Y: py, Day: day})
 		pts = append(pts, fmt.Sprintf("%d,%d", px, py))
 		if opts.VolumeStrip && maxV > 0 && r.Volume > 0 {
@@ -539,7 +541,7 @@ func buildChart(rows []db.MarketHistory, display int, opts ChartOptions, legacy 
 			}
 		}
 		if opts.MAChannel {
-			chart.MA20Points = movingAverage20(rows, start, x, y)
+			chart.MA30Points = movingAverage30(rows, start, x, y)
 			chart.ChannelPoints = donchianBand(rows, start, x, y)
 		}
 		if opts.VolumeStrip && maxOrd > 0 {
@@ -618,12 +620,12 @@ func smoothPathString(pts []chartPoint) string {
 	return b.String()
 }
 
-// movingAverage20 computes the 20-day moving average of the
+// movingAverage30 computes the 30-day moving average of the
 // daily average for the displayed days (global indexes from
 // start), reading warmup rows before start so the first displayed
 // day is already correct. A day contributes a point only once its
 // full window exists; the polyline starts at the first such day.
-func movingAverage20(rows []db.MarketHistory, start int, x func(int) int, y func(float64) int) (ma20 string) {
+func movingAverage30(rows []db.MarketHistory, start int, x func(int) int, y func(float64) int) (ma30 string) {
 	prefix := make([]float64, len(rows)+1)
 	for i, r := range rows {
 		prefix[i+1] = prefix[i] + r.Average
@@ -634,17 +636,17 @@ func movingAverage20(rows []db.MarketHistory, start int, x func(int) int, y func
 		}
 		return (prefix[g+1] - prefix[g+1-n]) / float64(n), true
 	}
-	var p20 []string
+	var p30 []string
 	for g := start; g < len(rows); g++ {
 		i := g - start
-		if v, ok := mean(g, 20); ok {
-			p20 = append(p20, fmt.Sprintf("%d,%d", x(i), y(v)))
+		if v, ok := mean(g, 30); ok {
+			p30 = append(p30, fmt.Sprintf("%d,%d", x(i), y(v)))
 		}
 	}
-	if len(p20) > 1 {
-		ma20 = strings.Join(p20, " ")
+	if len(p30) > 1 {
+		ma30 = strings.Join(p30, " ")
 	}
-	return ma20
+	return ma30
 }
 
 // donchianBand computes the trailing 5-day Donchian channel for

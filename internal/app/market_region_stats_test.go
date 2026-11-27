@@ -592,6 +592,67 @@ func TestRegionSweepStoresStationLeaderboard(t *testing.T) {
 	}
 }
 
+// TestStationLeaderboardExcludesNPCAndThinBookOutliers verifies that
+// 365-day NPC-seeded orders do not count toward station rankings and
+// that thin-book outlier prices (fewer than 10 orders, where Low90 to
+// High90 trims nothing on its own) cannot push a minor station past a
+// trading hub.
+func TestStationLeaderboardExcludesNPCAndThinBookOutliers(t *testing.T) {
+	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
+	app, _, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+
+	const forge, metropolis = int64(10000002), int64(10000042)
+	for _, region := range marketRegions {
+		if region.ID != forge && region.ID != metropolis {
+			markRegionFresh(t, q, region.ID)
+		}
+	}
+	// The Forge: Jita 4-4 has normal player sells for type 34 (10 ISK)
+	// and type 35 (100 ISK).
+	transport.books[forge] = [][]esi.MarketOrder{{
+		{OrderID: 1, TypeID: 34, LocationID: 60003760, Price: 10, VolumeRemain: 100, Duration: 90},
+		{OrderID: 2, TypeID: 35, LocationID: 60003760, Price: 100, VolumeRemain: 50, Duration: 90},
+	}}
+	// Metropolis:
+	// - Station 60004588 has an NPC-seeded 365-day BPO order worth 75T ISK.
+	// - Station 60004589 has a thin 3-order book on type 34 with one 10B joke sell,
+	//   plus a single-order 10B joke sell on type 35 (checked against The Forge median).
+	transport.books[metropolis] = [][]esi.MarketOrder{{
+		{OrderID: 10, TypeID: 999, LocationID: 60004588, Price: 75_000_000_000, VolumeRemain: 1000, Duration: 365},
+		{OrderID: 11, TypeID: 34, LocationID: 60004589, Price: 10, VolumeRemain: 10, Duration: 90},
+		{OrderID: 12, TypeID: 34, LocationID: 60004589, Price: 11, VolumeRemain: 10, Duration: 90},
+		{OrderID: 13, TypeID: 34, LocationID: 60004589, Price: 10_000_000_000, VolumeRemain: 5, Duration: 90},
+		{OrderID: 14, TypeID: 35, LocationID: 60004589, Price: 10_000_000_000, VolumeRemain: 1, Duration: 90},
+	}}
+
+	// Sweep Forge first so its held book is populated, then Metropolis.
+	markRegionFresh(t, q, metropolis)
+	sweepUntilIdle(t, app)
+	if _, err := app.db.ExecContext(ctx, `DELETE FROM market_fetch_state WHERE kind = $1`, regionSweepKind(metropolis)); err != nil {
+		t.Fatalf("unmark metropolis: %v", err)
+	}
+	sweepUntilIdle(t, app)
+
+	rows, err := q.ListMarketStationLeaderboardByValue(ctx, db.ListMarketStationLeaderboardByValueParams{
+		RegionIds: []int64{forge, metropolis},
+		RowLimit:  10,
+	})
+	if err != nil {
+		t.Fatalf("list leaderboard: %v", err)
+	}
+	// NPC-only station 60004588 must be absent; Jita (6000 ISK) must outrank 60004589 (210 ISK).
+	if len(rows) != 2 {
+		t.Fatalf("leaderboard rows = %+v, want 2 player-order stations", rows)
+	}
+	if rows[0].LocationID != 60003760 || rows[0].OpenValue != 6000 {
+		t.Errorf("top station = %+v, want Jita 60003760 with open_value 6000", rows[0])
+	}
+	if rows[1].LocationID != 60004589 || rows[1].OpenOrders != 4 || rows[1].OpenValue != 210 {
+		t.Errorf("second station = %+v, want 60004589 with 4 open orders and open_value 210", rows[1])
+	}
+}
+
 // The swept set is the five hubs plus the global market
 // region -- and the global market is not a hub: it must
 // never leak into the regions the pages offer as places.

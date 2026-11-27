@@ -781,6 +781,12 @@
       syncActiveNav(new URL(url, window.location.href).pathname, entry.nav);
       if (push === "top") {
         window.scrollTo(0, 0);
+      } else if (typeof push === "string" && push.indexOf("target:") === 0) {
+        scrollToTarget(push.slice(7));
+        try {
+          window.history.replaceState(
+            { esSwap: 1, scroll: window.scrollY }, "", url);
+        } catch (e) { /* private mode: the landing still holds */ }
       } else if (push === "region") {
         // The new view starts at the top of its window: the
         // marked element scrolls to its margin line under the
@@ -869,9 +875,36 @@
     };
   }
 
+  function scrollToTarget(id) {
+    var el = id && document.getElementById ? document.getElementById(id) : null;
+    if (!el) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    var bar = el.closest && el.closest(".l-pane") ? el.closest(".l-pane").querySelector(":scope > .l-pane-bar") : null;
+    var barBottom = 0;
+    if (bar && typeof bar.getBoundingClientRect === "function" && typeof window.getComputedStyle === "function") {
+      var bs = window.getComputedStyle(bar);
+      if (bs.position === "sticky" && bs.display !== "none") {
+        var br = bar.getBoundingClientRect();
+        if (br.bottom > barBottom) barBottom = br.bottom;
+      }
+    }
+    if (barBottom > 0 && typeof el.getBoundingClientRect === "function") {
+      var top = (window.scrollY || 0) + el.getBoundingClientRect().top - barBottom - 8;
+      window.scrollTo(0, Math.max(0, Math.round(top)));
+    } else if (typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ block: "start" });
+    }
+  }
+
   // Re-applies numeric scroll restoration after content-ready runs
   // (e.g. after layoutTableCards restores .cards-on document height).
   function restoreAfterReady(push, anchor) {
+    if (typeof push === "string" && push.indexOf("target:") === 0) {
+      scrollToTarget(push.slice(7));
+      return;
+    }
     if (typeof push !== "number") return;
     if (anchor && main && typeof main.querySelectorAll === "function") {
       var match = null;
@@ -949,15 +982,21 @@
       // list shows, so it lands at the top like a new page. The
       // current place is spelled two ways: no loc at all, or
       // loc=0 in the hrefs a page hands out; both are the same
-      // place, so they compare equal here. Picking a container,
-      // ship or item only changes the selection, so it keeps
-      // the reader's place like search, sort and filter
-      // changes do.
+      // place, so they compare equal here. Turning pages inside
+      // a station or search lands at the top of the assets list
+      // (below containers and assembled ships). Picking a
+      // container, ship or item keeps the reader's place.
       var placeOf = function (params) {
         var v = params.get("loc") || "";
         return v === "0" ? "" : v;
       };
-      return placeOf(from) !== placeOf(to) ? "top" : "keep";
+      if (placeOf(from) !== placeOf(to)) return "top";
+      var pageOf = function (params) {
+        var p = params.get("page") || "1";
+        return p === "0" ? "1" : p;
+      };
+      if (pageOf(from) !== pageOf(to)) return "target:assets-list-top";
+      return "keep";
     }
     if (path === "/character") {
       // The sheet's surfaces (trained skills, skill browse,
@@ -1011,10 +1050,13 @@
         var landing = landingFor(window.location.pathname,
           new URL(window.location.href).searchParams,
           target.searchParams);
+        // A link naming data-land-target scrolls straight to that
+        // element after the swap (e.g. table pagination controls).
+        if (opts.landTarget) landing = "target:" + opts.landTarget;
         // A link between console levels (data-l-step) opens a new
         // screen while the console shows one pane: it lands at the
         // console's top. Side by side, the page's own rule holds.
-        if (opts.step && consoleMode() === 1) landing = "region";
+        else if (opts.step && consoleMode() === 1) landing = "region";
         landScroll = landing === "keep" ? window.scrollY : landing;
         if (landing === "top") samePage = false;
       }
@@ -1115,6 +1157,7 @@
     navigate(d.url.href, {
       push: true,
       step: a.getAttribute("data-l-step"),
+      landTarget: a.getAttribute("data-land-target"),
       anchor: tableAnchorFor(a)
     });
   });

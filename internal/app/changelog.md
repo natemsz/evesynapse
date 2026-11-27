@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.4.0] - 2026-11-27
+## [v1.0.4.1] - 2026-11-27
+
+Automated build of EveSynapse v1.0.4.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### 🚀 Features
+* Use entity-first primary keys in kill stats rebuild tables by @natemsz in #655
+
+### 🐛 Bug Fixes
+* Fix station leaderboard ranking, assets sorting/pagination, and market/UI polish by @natemsz in #654
+* Clear statement_timeout inside schema migration transactions by @natemsz in #653
+
+## [v1.0.4.0]
 
 Automated build of EveSynapse v1.0.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).

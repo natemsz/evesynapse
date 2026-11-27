@@ -1392,6 +1392,12 @@ func applySchemaStep(ctx context.Context, conn *sql.DB, step schemaStep) error {
 	}
 	defer tx.Rollback() // no-op once committed
 
+	// Migrations run DDL and one-time backfills that may outlast a
+	// server-wide statement_timeout; clear it for this transaction only.
+	if _, err := tx.ExecContext(ctx, `SET LOCAL statement_timeout = 0`); err != nil {
+		return err
+	}
+
 	// 1165387091 is "EveS" in ASCII (0x45766553): an arbitrary
 	// key this app alone takes.
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(1165387091)`); err != nil {

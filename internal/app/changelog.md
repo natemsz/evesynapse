@@ -7,7 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [v1.0.3.1] - 2026-11-26
+## [v1.0.4.0] - 2026-11-27
+
+Automated build of EveSynapse v1.0.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
+If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).
+
+## What's Changed
+
+### 🚀 Features
+* Cache abyssal models, widen appraisal cadence, and optimize hot queries by @natemsz in #650
+* Fix item margin, appraisal depth, multi-sell floor, and restock hub by @natemsz in #649
+* Precompute band-filtered station leaderboard totals and rank in SQL with LIMIT by @natemsz in #648
+* Apply shared ISK and trade-count floors across baskets, browse, scanner, and trade finder by @natemsz in #647
+* Precompute ranked movers from market history and align change feed and watchlist moves by @natemsz in #645
+
+### 🐛 Bug Fixes
+* Filter automated changelog-update entries from release notes and /changelog/ by @natemsz in #652
+* Apply tradefees broker fee and sales tax in LP Store, beaten orders, and Trade Ideas, and fix numeric Orders tie-break by @natemsz in #646
+
+### Other Changes
+* Align robots.txt wildcard allow list with public routes and sitemap by @natemsz in #651
+* Precompute volume-confirmed market mover metrics and filter Trends and Market Movers by ISK and trade count by @natemsz in #643
+
+## [v1.0.3.1]
 
 Automated build of EveSynapse v1.0.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).

@@ -761,11 +761,11 @@ func Window(rows []db.MarketHistory, days int) (priceAvg, volAvg float64, ok boo
 }
 
 // BuildTraderStats computes the trading snapshot from stored
-// rows plus the live book's bests (0 when a side is absent).
-// The margin is what buying at the best buy and selling at the
-// best sell returns as a share of the net sell proceeds, after
-// broker fees and sales tax at the given rates. The template
-// says so.
+// history rows plus the hub station's best sell and best buy prices
+// (0 when a side is absent). The margin is what buying at the hub's
+// best buy and selling at the hub's best sell returns as a share of
+// the net sell proceeds, after broker fees and sales tax at the
+// given rates.
 func BuildTraderStats(rows []db.MarketHistory, bestSell, bestBuy, broker, salesTax float64) *TraderStats {
 	stats := &TraderStats{}
 	if avg, _, ok := Window(rows, 7); ok {

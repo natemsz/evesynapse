@@ -94,6 +94,7 @@ Pyerite 250000</pre>
           <input id="ap-multiplier" type="number" name="multiplier" min="1" max="1000" step="1" value="1">
         </div>
       </div>
+      <label class="ap-depthopt"><input type="checkbox" name="depth" value="1"{{if .Basis.WalkBuyDepth}} checked{{end}}> <span>Walk buy-order depth (price against open buy orders from highest down)</span></label>
     </div>
     <p class="ap-actions"><button class="btn ap-appraise" type="submit">Appraise paste</button> <button class="btn" type="button" data-clear-appraise>Clear</button></p>
   </form>
@@ -108,8 +109,10 @@ Pyerite 250000</pre>
   <div class="ap-linkacts">
     {{if $r.RepriceURL}}<form class="ap-reprice" method="post" action="{{$r.RepriceURL}}">
       <input type="hidden" name="hub" value="{{$r.Basis.RegionID}}">
+      <input type="hidden" name="depth" value="0">
       <select name="mode" aria-label="Re-price basis"><option value="sell"{{if eq $r.Basis.Mode "sell"}} selected{{end}}>Typical sell</option><option value="buy"{{if eq $r.Basis.Mode "buy"}} selected{{end}}>Typical buy</option><option value="split"{{if eq $r.Basis.Mode "split"}} selected{{end}}>Split</option></select>
       <input type="number" name="pct" min="50" max="200" step="1" value="{{$r.Basis.Percent}}" aria-label="Re-price percent">
+      <label class="ap-reprice-depth"><input type="checkbox" name="depth" value="1"{{if $r.Basis.WalkBuyDepth}} checked{{end}}> Depth</label>
       <button class="btn small" type="submit">Re-price as New</button>
     </form>{{end}}
     {{if $r.CanDelete}}<form class="ap-delform" method="post" action="{{$r.DeleteURL}}"><button class="ap-delbtn" type="submit" title="Delete this appraisal" aria-label="Delete this appraisal"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></form>{{end}}
@@ -243,6 +246,7 @@ Pyerite 250000</pre>
   {{if $r.Multisell}}<p><small>Multi-sell format, one <em>name price</em> line per priced item at this basis:</small> <button class="btn small" type="button" data-copy data-copy-from="ap-multisell">Copy multi-sell list</button></p><pre id="ap-multisell">{{$r.Multisell}}</pre>{{else}}<p><small>No priced lines to export.</small></p>{{end}}
   {{if $r.SellItems}}<p><small>Sell these items: undercut the cheapest sale order at {{$r.SellItemsStation}} by one tick. Paste into the MultiSell window in game to list them as new orders:</small> <button class="btn small" type="button" data-copy data-copy-from="ap-sellitems">Copy sell list</button></p><pre id="ap-sellitems">{{$r.SellItems}}</pre>{{end}}
   {{if $r.SellItemsNone}}<p><small>No sale order to undercut at {{$r.SellItemsStation}} for: {{$r.SellItemsNone}}.</small></p>{{end}}
+  {{if $r.SellItemsSkipped}}<p><small>Skipped from the sell list because the cheapest order sits well below the house price:</small></p><ul class="ap-skipped">{{range $r.SellItemsSkipped}}<li>{{.}}</li>{{end}}</ul>{{end}}
   </div>
 </section>
 {{end}}

@@ -9,18 +9,28 @@
 {{$s := .Restock}}
 <div class="l-page">
 <div class="l-head">
-  <p class="prose">Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at current market sell prices.</p>
+  <p class="prose">Set target stock levels for the items you trade. The planner compares each target against your open sell orders, shows the shortfall, and estimates the restock cost at your selected hub's market sell prices.</p>
 </div>
+
+<form method="get" action="/market/restock/" class="l-panel mk-filters">
+  <label><small>Pricing hub</small>
+    <select name="region">
+      {{range $s.Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <button class="btn" type="submit">Update</button>
+</form>
 
 {{if $s.HasData}}
 <div class="l-tiles mk-tiles">
   <div class="l-stat"><span class="l-stat-label">Targets</span><span class="l-stat-value">{{len $s.Rows}}</span><span class="l-stat-sub">Items you keep stocked</span></div>
   <div class="l-stat{{if $s.Short}} warn{{else}} ok{{end}}"><span class="l-stat-label">Running short</span><span class="l-stat-value">{{$s.Short}}</span><span class="l-stat-sub">{{if $s.Short}}Listed below their target{{else}}Every target is listed{{end}}</span></div>
-  <div class="l-stat"><span class="l-stat-label">Restock cost</span><span class="l-stat-value text">{{$s.TotalCost}}</span><span class="l-stat-sub">At current market sell prices</span></div>
+  <div class="l-stat"><span class="l-stat-label">Restock cost</span><span class="l-stat-value text">{{$s.TotalCost}}</span><span class="l-stat-sub">{{$s.RegionName}} sell prices{{if $s.AsOf}} · {{$s.AsOf}}{{end}}</span></div>
 </div>
 {{end}}
 
 <form method="post" action="/market/restock/save/" class="l-panel mk-filters mk-add">
+  <input type="hidden" name="region" value="{{$s.RegionID}}">
   <label class="mk-wide"><small>Item</small>
     <span class="searchwrap">
       <input type="search" name="item" id="restock-item" required placeholder="Item name, e.g. Tritanium" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="restock-suggest" aria-autocomplete="list" data-suggest="/market/suggest" data-suggest-target="restock-type">
@@ -35,10 +45,10 @@
 
 {{if $s.HasData}}
 <section class="l-panel mk-results">
-  <div class="mk-bar"><h2 class="mk-title">Targets <small>largest shortfall first</small></h2></div>
+  <div class="mk-bar"><h2 class="mk-title">Targets <small>largest shortfall first · {{$s.RegionName}}{{if $s.AsOf}} · {{$s.AsOf}}{{end}}</small></h2></div>
   <div class="tw">
   <table class="mk-table" data-rank="4">
-    <thead><tr><th class="card-title">Item</th><th class="mt-num">Target</th><th class="mt-num">Listed</th><th class="mt-num">Shortfall</th><th class="mt-num">Unit price</th><th class="mt-num">Est. cost</th><th class="opt"><span class="visually-hidden">Remove</span></th></tr></thead>
+    <thead><tr><th class="card-title">Item</th><th class="mt-num">Target</th><th class="mt-num">Listed</th><th class="mt-num">Shortfall</th><th class="mt-num">Unit price</th><th class="mt-num">Est. cost</th><th>As of</th><th class="opt"><span class="visually-hidden">Remove</span></th></tr></thead>
     <tbody>
     {{range $s.Rows}}
       <tr>
@@ -48,9 +58,11 @@
         <td class="mt-num">{{.Shortfall}}</td>
         <td class="mt-num">{{sparkFig .UnitPrice .Spark}}</td>
         <td class="mt-num mk-gold">{{.EstCost}}</td>
+        <td>{{if .PriceAsOf}}{{.PriceAsOf}}{{if .PriceSource}}<br><small>{{.PriceSource}}</small>{{end}}{{else}}-{{end}}</td>
         <td class="mt-num">
           <form method="post" action="/market/restock/delete/" class="inline-form">
             <input type="hidden" name="type_id" value="{{.TypeID}}">
+            <input type="hidden" name="region" value="{{$s.RegionID}}">
             <button class="btn btn-quiet" type="submit" aria-label="Remove the target for {{.Name}}">Remove</button>
           </form>
         </td>

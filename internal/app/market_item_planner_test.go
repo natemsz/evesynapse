@@ -75,9 +75,14 @@ func TestTraderStatsWindowsAndMargin(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMarketItemChartMarkupAndSnapshot(t *testing.T) {
+	// Include better orders at a non-hub station (60003761) so the
+	// test pins that the Trading snapshot margin uses the hub
+	// station's best sell (20) and best buy (10), not region extremes.
 	book := `[
 		{"order_id":1,"type_id":34,"location_id":60003760,"system_id":30000142,"is_buy_order":false,"price":20.0,"volume_remain":5,"volume_total":5},
-		{"order_id":2,"type_id":34,"location_id":60003760,"system_id":30000142,"is_buy_order":true,"price":10.0,"volume_remain":7,"volume_total":7}
+		{"order_id":2,"type_id":34,"location_id":60003760,"system_id":30000142,"is_buy_order":true,"price":10.0,"volume_remain":7,"volume_total":7},
+		{"order_id":3,"type_id":34,"location_id":60003761,"system_id":30000142,"is_buy_order":false,"price":11.0,"volume_remain":5,"volume_total":5},
+		{"order_id":4,"type_id":34,"location_id":60003761,"system_id":30000142,"is_buy_order":true,"price":19.0,"volume_remain":7,"volume_total":7}
 	]`
 	transport := &historyStub{bodies: map[int64]string{}, fail: map[int64]bool{}, bookJSON: book}
 	app, _, q := buildCorpTestApp(t, transport)

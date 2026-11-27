@@ -530,15 +530,15 @@ func TestLiveRegionFragments(t *testing.T) {
 
 	// Trader fragment: the averages carry the same live-fill
 	// contract as the chart. Pending shows the loading
-	// treatment; the bests ride in the poll URL so the margin
-	// survives the swap.
-	code, body = frag("/market/trader-fragment?region=10000002&type=34&bs=12&bb=10")
+	// treatment; prices come from stored hub station stats, never
+	// from query-string parameters.
+	code, body = frag("/market/trader-fragment?region=10000002&type=34")
 	if code != http.StatusOK {
 		t.Fatalf("trader fragment: status %d", code)
 	}
 	mustContain(t, "trader fragment (pending)", body,
 		`data-live-region`, `data-poll-state="pending"`,
-		`data-poll-url="/market/trader-fragment?region=10000002&amp;type=34&amp;bs=12&amp;bb=10"`,
+		`data-poll-url="/market/trader-fragment?region=10000002&amp;type=34"`,
 		"loading-pulse", "The averages fill in")
 
 	// Then the chart state once rows exist.
@@ -546,6 +546,7 @@ func TestLiveRegionFragments(t *testing.T) {
 		`INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES (10000002, 34, '2026-09-30', 10, 11, 9, 100, 5)`,
 		`INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES (10000002, 34, '2026-10-01', 10.5, 11.5, 9.5, 90, 4)`,
 		`INSERT INTO market_history (region_id, type_id, date, average, highest, lowest, volume, order_count) VALUES (10000002, 34, '2026-10-02', 11, 12, 10, 80, 3)`,
+		`INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy) VALUES (60003760, 10000002, 34, 12, 10, 5, 5, 1000, 1000, NOW(), 12, 10)`,
 	} {
 		if _, err := conn.ExecContext(ctx, stmt); err != nil {
 			t.Fatalf("seed history: %v", err)
@@ -562,9 +563,9 @@ func TestLiveRegionFragments(t *testing.T) {
 	}
 
 	// Trader fragment once rows exist: the averages populate
-	// and the margin comes from the passed-along bests, the
-	// whole snapshot settles with the chart, no refresh needed.
-	code, body = frag("/market/trader-fragment?region=10000002&type=34&bs=12&bb=10")
+	// and the margin comes from the hub station's stored bests;
+	// forged bs/bb query parameters are ignored.
+	code, body = frag("/market/trader-fragment?region=10000002&type=34&bs=999999&bb=1")
 	if code != http.StatusOK {
 		t.Fatalf("trader fragment (chart): status %d", code)
 	}

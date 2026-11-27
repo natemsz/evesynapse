@@ -1021,6 +1021,10 @@ SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_or
 FROM market_station_stats
 WHERE region_id = $1
 ORDER BY location_id, type_id;
+-- name: GetMarketStationStat :one
+SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy
+FROM market_station_stats
+WHERE location_id = $1 AND type_id = $2;
 -- One station's current best sell for each type asked about:
 -- the appraisal tool's sell list prices 0.01 under it.
 -- name: ListMarketStationBestsByTypes :many
@@ -1465,6 +1469,11 @@ SELECT region_id, type_id, is_buy_order, rank, price, volume_remain, location_id
 FROM market_book_orders
 WHERE region_id = $1 AND type_id = $2
 ORDER BY is_buy_order, rank;
+-- name: ListMarketBookBuyOrdersForTypes :many
+SELECT region_id, type_id, rank, price, volume_remain, location_id, system_id, updated_at
+FROM market_book_orders
+WHERE region_id = $1 AND type_id = ANY($2::bigint[]) AND is_buy_order = 1
+ORDER BY type_id, rank;
 
 -- ---------------------------------------------------------------------
 -- Site settings (schema 050): live operator switches, one row

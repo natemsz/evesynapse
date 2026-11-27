@@ -3,7 +3,6 @@ package app
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
 
@@ -88,10 +87,9 @@ func (app *Application) handleMarketHistoryFragment(w http.ResponseWriter, r *ht
 // handleMarketTraderFragment re-renders just the trading
 // snapshot of the market item view from stored rows, so the
 // averages fill in alongside the chart instead of waiting for
-// a manual refresh. The order book's best prices ride in from
-// the page render (bs/bb query params, numbers the page had
-// already fetched) purely so the margin row survives the swap;
-// the handler itself never fetches.
+// a manual refresh. Hub-station best prices come from stored
+// market_station_stats inside attachHistory, never from the
+// query string.
 func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := r.URL.Query()
@@ -107,12 +105,6 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 	regionName, _ := marketRegionName(regionID)
 	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName, Anonymous: app.userID(ctx) == 0}
 	app.vizSetup(ctx, item, q.Get("range"))
-	if v, err := strconv.ParseFloat(q.Get("bs"), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
-		item.BestSellRaw = v
-	}
-	if v, err := strconv.ParseFloat(q.Get("bb"), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
-		item.BestBuyRaw = v
-	}
 	// The poll URL carries the page's scope, so the re-rendered
 	// margin quotes the same viewer as the page.
 	viewer, scope, _ := app.tradeViewerForRequest(ctx, q)

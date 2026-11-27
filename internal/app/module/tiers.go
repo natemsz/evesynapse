@@ -30,6 +30,8 @@ func TierLabel(tier, hub string) string {
 		return "Our " + hub + " typical (split, sell side only)"
 	case AppraisalTierTypicalSplitBuy:
 		return "Our " + hub + " typical (split, buy side only)"
+	case AppraisalTierBuyDepth:
+		return "Walked " + hub + " buy orders"
 	case AppraisalTierEstimate:
 		return "Estimated sell"
 	case AppraisalTierAbyssal:

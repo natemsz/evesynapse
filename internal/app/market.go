@@ -173,8 +173,11 @@ type marketItem struct {
 	Buys              []marketOrderRow
 	MoreBuys          []marketOrderRow
 
-	BestSellRaw float64 // numeric bests behind the formatted strings (0 = none)
-	BestBuyRaw  float64
+	BestSellRaw    float64 // numeric bests behind the formatted strings (0 = none)
+	BestBuyRaw     float64
+	HubBestSellRaw float64 // hub station's best sell/buy for trader margin (0 = none)
+	HubBestBuyRaw  float64
+	HubBookLoaded  bool // true when HubBest* was computed from a full live/held book
 
 	// Honest prices: stats over the whole book behind the bests,
 	// so one joke order cannot stand in for the market. Typical*
@@ -290,16 +293,11 @@ func spreadBand(pct float64) string {
 }
 
 // TraderPollURL is the trading snapshot's live-region target:
-// the region/type plus the order book's best prices, which the
-// page itself already fetched live. The fragment handler stays
-// cache-only, the bests ride along from the render that had
-// them, so the margin survives the live-fill swap unchanged
-// instead of flickering back to a dash.
+// the region and type (plus viewer scope when set). The fragment
+// handler reads stored hub-station prices on the server rather than
+// accepting prices from the query string.
 func (item *marketItem) TraderPollURL() string {
-	url := fmt.Sprintf("/market/trader-fragment?region=%d&type=%d&bs=%s&bb=%s",
-		item.RegionID, item.TypeID,
-		strconv.FormatFloat(item.BestSellRaw, 'f', -1, 64),
-		strconv.FormatFloat(item.BestBuyRaw, 'f', -1, 64))
+	url := fmt.Sprintf("/market/trader-fragment?region=%d&type=%d", item.RegionID, item.TypeID)
 	if item.ScopeParam != "" {
 		url += "&scope=" + item.ScopeParam
 	}
@@ -680,17 +678,27 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 			})
 		}
 		// The trading snapshot rides on whatever rows exist
-		// (possibly none yet) plus the book's bests; missing
-		// figures render as dashes, never invented numbers.
-		// The margin is net of broker fees and sales tax at
-		// the region hub's station, for the viewer.
+		// (possibly none yet) plus the hub station's own best
+		// orders; missing figures render as dashes, never
+		// invented numbers. The margin is net of broker fees and
+		// sales tax at the region hub's station, for the viewer.
 		var broker, salesTax float64
+		hubSell, hubBuy := item.HubBestSellRaw, item.HubBestBuyRaw
 		if stationID, ok := marketHubStations[regionID]; ok {
 			broker, salesTax, _ = app.tradeRatesFor(ctx, viewer, stationID)
+			if !item.HubBookLoaded {
+				if st, err := app.queries.GetMarketStationStat(ctx, db.GetMarketStationStatParams{
+					LocationID: stationID, TypeID: typeID,
+				}); err == nil {
+					hubSell, hubBuy = st.BestSell, st.BestBuy
+				} else if !errors.Is(err, pgx.ErrNoRows) {
+					logging.Errorf("market: hub station stat for type %d at station %d: %v", typeID, stationID, err)
+				}
+			}
 		} else {
 			broker, salesTax = app.tradeRatesNoStation(viewer)
 		}
-		item.Trader = markethistory.BuildTraderStats(win, item.BestSellRaw, item.BestBuyRaw, broker, salesTax)
+		item.Trader = markethistory.BuildTraderStats(win, hubSell, hubBuy, broker, salesTax)
 	}
 	if len(rows) == 0 {
 		if item != nil {
@@ -1117,6 +1125,23 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 		item.BestBuy = esi.FormatISK(buys[0].Price)
 		item.BestBuyVol = esi.FormatInt(buys[0].VolumeRemain)
 		item.BestBuyLoc = app.orderPlace(ctx, buys[0].LocationID, buys[0].SystemID)
+	}
+	if fromSnapshot == nil {
+		if stationID, ok := marketHubStations[regionID]; ok {
+			item.HubBookLoaded = true
+			for _, o := range sells {
+				if o.LocationID == stationID && o.Price > 0 {
+					item.HubBestSellRaw = o.Price
+					break
+				}
+			}
+			for _, o := range buys {
+				if o.LocationID == stationID && o.Price > 0 {
+					item.HubBestBuyRaw = o.Price
+					break
+				}
+			}
+		}
 	}
 	// The typicals come first: the spread below is priced from
 	// them, so the card never quotes a gap the book's own median

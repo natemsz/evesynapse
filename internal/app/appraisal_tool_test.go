@@ -185,17 +185,25 @@ func TestAppraisalSellItemsUndercut(t *testing.T) {
 	app, conn, q := buildCorpTestApp(t, tr)
 	seedAppraisalTool(t, conn, q)
 	ctx := context.Background()
-	// Jita's current best sell for Tritanium is 6.40. Pyerite
-	// prices off its stored estimate in this fixture and has
-	// no sell orders at Jita.
-	if _, err := conn.ExecContext(ctx, `INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy) VALUES (60003760, 10000002, 34, 6.40, 5.10, 3, 1, 1000, 100, $1, 6.40, 5.10)`, time.Now().UTC()); err != nil {
+	now := time.Now().UTC()
+	// Jita's current best sell for Tritanium is 6.40 (close to its
+	// 6.50 typical sell). Rifter has a bait 5,000 ISK order against
+	// its 250,000 ISK typical sell, which must be skipped rather
+	// than undercut. Pyerite has no sell orders at Jita.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy) VALUES
+		(60003760, 10000002, 34, 6.40, 5.10, 3, 1, 1000, 100, $1, 6.40, 5.10),
+		(60003760, 10000002, 587, 5000, 200000, 3, 3, 10, 10, $1, 250000, 200000)`, now); err != nil {
 		t.Fatalf("seed station stats: %v", err)
 	}
-	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 100\nPyerite x 10"}})
+	body, _, _ := postAnonAppraisal(t, app, url.Values{"items": {"Tritanium x 100\nPyerite x 10\nRifter x 1"}})
 	mustContain(t, "appraisal sell items", body,
 		"Sell these items: undercut the cheapest sale order",
 		"Tritanium 6.39",
-		"No sale order to undercut", "Pyerite")
+		"No sale order to undercut", "Pyerite",
+		"Rifter: skipped because the cheapest sell order (5,000.00 ISK) is 98% below the 250,000.00 ISK typical price")
+	if strings.Contains(body, "Rifter 4999") {
+		t.Error("multi-sell undercut a bait sell order instead of skipping it")
+	}
 }
 
 func TestAppraisalToolBlueprintAndAbyssalLines(t *testing.T) {
@@ -883,6 +891,32 @@ func TestAppraisalToolPricingBasis(t *testing.T) {
 	mustContain(t, "original after reprice", body, "810.00", "Our Domain typical (split)")
 	if n := appraisalRowCount(t, conn); n < 3 {
 		t.Fatalf("rows = %d, want the originals and the reprice stored separately", n)
+	}
+
+	// Buy-order depth walk: opt-in only, walking open buy orders
+	// from highest price down and reporting partial fills plainly.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO market_book_orders (region_id, type_id, is_buy_order, rank, price, volume_remain, location_id, system_id, updated_at) VALUES
+		(10000002, 34, 1, 1, 5.20, 60, 60003760, 30000142, $1),
+		(10000002, 34, 1, 2, 4.80, 100, 60003760, 30000142, $1)`, now.Add(-10*time.Minute)); err != nil {
+		t.Fatalf("seed buy book orders: %v", err)
+	}
+	// Full fill: 60 * 5.20 + 40 * 4.80 = 504.00.
+	body, depthCookies, _ := postAnonAppraisal(t, app, url.Values{
+		"items": {"Tritanium x 100"}, "hub": {"10000002"}, "mode": {"sell"}, "pct": {"100"}, "depth": {"1"},
+	})
+	mustContain(t, "buy-order depth full fill", body,
+		"504.00", "The Forge • Buy-order depth", "Walked Forge buy orders", "Filled across 2 buy orders")
+	// Partial fill: 60 * 5.20 + 100 * 4.80 = 792.00 across 160 of 200 units, 40 unfilled.
+	body, _, _ = postAnonAppraisal(t, app, url.Values{
+		"items": {"Tritanium x 200"}, "hub": {"10000002"}, "mode": {"sell"}, "pct": {"100"}, "depth": {"1"},
+	})
+	mustContain(t, "buy-order depth partial fill", body,
+		"792.00", "Partial fill: 160 of 200 units filled", "40 unfilled")
+	// Depth walk is off by default on a fresh page load even after
+	// running one, so ordinary appraisals remain depth-blind.
+	_, freshBody := getWithCookies(t, app, depthCookies, "/market/appraise/")
+	if strings.Contains(freshBody, `name="depth" value="1" checked`) {
+		t.Error("buy-order depth option stayed checked on a fresh appraisal form")
 	}
 }
 

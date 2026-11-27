@@ -49,6 +49,13 @@ const maxPasteBytes = 512 << 10
 // into a query fan-out.
 const suggestionCap = 10
 
+// sellUndercutMinHouseRatio guards the "Sell these items" undercut
+// list against bait or typo listings: if the hub station's cheapest
+// sell order sits below 50% of the item's house price (typical sell
+// in this hub, or stored estimate), the item is skipped with an
+// explanation instead of telling the player to undercut a trap order.
+const sellUndercutMinHouseRatio = 0.5
+
 // --- the snapshot ----------------------------------------------------------
 
 // snapLine is one priced (or honestly unpriced) line of a
@@ -295,6 +302,13 @@ func (app *page) computeAppraisal(ctx context.Context, input string, basis prici
 					sl.Note += fmt.Sprintf(" · median of %s copy listings", esi.FormatInt(al.SampleCount))
 				case module.AppraisalTierResearchMedian:
 					sl.Note += fmt.Sprintf(" · median of %s researched listings", esi.FormatInt(al.SampleCount))
+				}
+			}
+			if al.DepthNote != "" {
+				if sl.Note != "" {
+					sl.Note += " · " + al.DepthNote
+				} else {
+					sl.Note = al.DepthNote
 				}
 			}
 		}
@@ -804,8 +818,9 @@ type resultView struct {
 	// for pasting into the client's MultiSell window as new
 	// orders.
 	SellItems        string
-	SellItemsStation string // the hub station's name, for the sell list's label
-	SellItemsNone    string // priced items with no sale order to undercut there, comma-joined
+	SellItemsStation string   // the hub station's name, for the sell list's label
+	SellItemsNone    string   // priced items with no sale order to undercut there, comma-joined
+	SellItemsSkipped []string // priced items skipped because the cheapest sell sits far below house price
 
 	HubStrip   []hubTotal
 	Basis      pricingBasis
@@ -916,7 +931,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 	if globalPriced {
 		v.BasisText += " PLEX lines are priced from the global PLEX market, the one market PLEX trades on."
 	}
-	v.BasisLabel = basis.HubName + " • " + basisModeLong(basis.Mode)
+	v.BasisLabel = basis.label()
 	v.TotalRaw = strconv.FormatFloat(snap.TotalValue, 'f', 2, 64)
 	v.CompactTotal = formatCompactISK(snap.TotalValue)
 	if snap.BuyLines > 0 && snap.BuyValue > 0 {
@@ -987,7 +1002,54 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 				for _, r := range rows {
 					bests[r.TypeID] = r.BestSell
 				}
-				var sell, none []string
+				type housePrice struct {
+					price float64
+					label string
+				}
+				houses := make(map[int64]housePrice, len(typeIDs))
+				if rStats, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
+					RegionID: basis.RegionID, Column2: typeIDs,
+				}); err != nil {
+					logging.Errorf("appraisal: region stats for undercut guard: %v", err)
+				} else {
+					hadRow := make(map[int64]bool, len(rStats))
+					for _, rs := range rStats {
+						hadRow[rs.TypeID] = true
+						if rs.TypicalSell > 0 {
+							houses[rs.TypeID] = housePrice{price: rs.TypicalSell, label: "typical price"}
+						}
+					}
+					if globalID := app.deps.GlobalMarketRegion(); globalID != 0 && globalID != basis.RegionID {
+						var missing []int64
+						for _, id := range typeIDs {
+							if !hadRow[id] {
+								missing = append(missing, id)
+							}
+						}
+						if len(missing) > 0 {
+							if gStats, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
+								RegionID: globalID, Column2: missing,
+							}); err == nil {
+								for _, rs := range gStats {
+									if rs.TypicalSell > 0 {
+										houses[rs.TypeID] = housePrice{price: rs.TypicalSell, label: "typical price"}
+									}
+								}
+							}
+						}
+					}
+				}
+				if len(houses) < len(typeIDs) {
+					estimates := app.deps.TrueValues(ctx)
+					for _, id := range typeIDs {
+						if _, ok := houses[id]; !ok {
+							if est := estimates[id]; est > 0 {
+								houses[id] = housePrice{price: est, label: "estimated value"}
+							}
+						}
+					}
+				}
+				var sell, none, skipped []string
 				for _, ln := range snap.Lines {
 					if !ln.Priced {
 						continue
@@ -998,10 +1060,17 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 						none = append(none, ln.Name)
 						continue
 					}
+					if hp, hasHouse := houses[ln.TypeID]; hasHouse && hp.price > 0 && best < hp.price*sellUndercutMinHouseRatio {
+						belowPct := math.Round((1 - best/hp.price) * 100)
+						skipped = append(skipped, fmt.Sprintf("%s: skipped because the cheapest sell order (%s ISK) is %.0f%% below the %s ISK %s",
+							ln.Name, esi.FormatISK(best), belowPct, esi.FormatISK(hp.price), hp.label))
+						continue
+					}
 					sell = append(sell, fmt.Sprintf("%s %s", ln.Name, strconv.FormatFloat(under, 'f', 2, 64)))
 				}
 				v.SellItems = strings.Join(sell, "\n")
 				v.SellItemsNone = strings.Join(none, ", ")
+				v.SellItemsSkipped = skipped
 			}
 		}
 	}
@@ -1033,15 +1102,17 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 				share := max(int(math.Round(100*ln.LineValue/maxLine)), 3)
 				rl.SharePct = share
 			}
-			rl.AsOf = ln.AsOf.Format("Jan 2, 3:04 PM")
-			if module.IsTypicalTier(ln.Tier) && time.Since(ln.AsOf) > typicalFreshAge {
-				rl.AsOf += " (" + app.deps.AgeText(ln.AsOf) + ")"
+			if !ln.AsOf.IsZero() {
+				rl.AsOf = ln.AsOf.Format("Jan 2, 3:04 PM")
+				if (module.IsTypicalTier(ln.Tier) || ln.Tier == module.AppraisalTierBuyDepth) && time.Since(ln.AsOf) > typicalFreshAge {
+					rl.AsOf += " (" + app.deps.AgeText(ln.AsOf) + ")"
+				}
 			}
 		}
 		v.Lines = append(v.Lines, rl)
 	}
 	var parts []string
-	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierResearchMedian, module.AppraisalTierFallback} {
+	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierBuyDepth, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierResearchMedian, module.AppraisalTierFallback} {
 		if n := counts[tier] - globalCounts[tier]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d × %s", n, tierLabelWithBasis(tier, basis)))
 		}
@@ -1223,7 +1294,7 @@ func (app *page) savedBasisText(row db.UserAppraisal) string {
 			b.HubName = name
 		}
 	}
-	text := b.HubName + " • " + basisModeLong(b.Mode)
+	text := b.label()
 	if b.Percent != 0 && b.Percent != 100 {
 		text += " · " + strconv.FormatFloat(b.Percent, 'f', -1, 64) + "%"
 	}

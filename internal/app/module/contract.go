@@ -471,6 +471,9 @@ const (
 	AppraisalTierTypicalSplit     = "typical_split"
 	AppraisalTierTypicalSplitSell = "typical_split_sell"
 	AppraisalTierTypicalSplitBuy  = "typical_split_buy"
+	// AppraisalTierBuyDepth: valued by walking open buy orders from
+	// highest price down for the line's quantity (opt-in mode).
+	AppraisalTierBuyDepth = "buy_depth"
 )
 
 // Appraisal pricing modes for AppraisalBasis.
@@ -484,11 +487,13 @@ const (
 // region whose swept typicals speak first, the side of those
 // typicals (or split between them), and a percent modifier
 // applied on top of the selected price. The zero value is the
-// house default: the default region, typical sell, 100%.
+// house default: the default region, typical sell, 100%,
+// depth-blind.
 type AppraisalBasis struct {
-	RegionID int64   // hub region; 0 means the default region
-	Mode     string  // AppraisalModeSell, Buy or Split; "" means sell
-	Percent  float64 // 100 means no modifier
+	RegionID     int64   // hub region; 0 means the default region
+	Mode         string  // AppraisalModeSell, Buy or Split; "" means sell
+	Percent      float64 // 100 means no modifier
+	WalkBuyDepth bool    // walk buy-order depth for each line's quantity (off by default)
 }
 
 // AppraisalLine is one line handed to the appraisal core: a
@@ -570,6 +575,9 @@ type AppraisedLine struct {
 	// SampleCount is how many listings the stored copy or research
 	// median behind the price stands on; zero for every other tier.
 	SampleCount int64
+	// DepthNote describes buy-order depth fill or partial fill when
+	// WalkBuyDepth is active; empty otherwise.
+	DepthNote string
 }
 
 // Appraisal is a priced line list: the lines, the offered and

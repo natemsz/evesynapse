@@ -97,6 +97,17 @@
   padding: 0.8rem;
 }
 .ap-pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.ap-depthopt {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  margin-top: 0.75rem; padding-top: 0.65rem;
+  border-top: 1px solid var(--box-edge);
+  font-size: var(--fs-xs); color: var(--muted); cursor: pointer;
+}
+.ap-depthopt input { margin-top: 0.15rem; flex: none; }
+.ap-skipped {
+  margin: 0.35rem 0 0; padding-left: 1.2rem;
+  font-size: var(--fs-xs); color: var(--muted);
+}
 .ap-pfield { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
 .ap-pfield select, .ap-pfield input { width: 100%; }
 .ap-lrow {
@@ -134,8 +145,12 @@
   white-space: nowrap;
 }
 .ap-linkacts { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.ap-reprice { display: inline-flex; align-items: center; gap: 0.4rem; }
+.ap-reprice { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .ap-reprice input[type="number"] { width: 4.5rem; }
+.ap-reprice-depth {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: var(--fs-xs); color: var(--muted); cursor: pointer; white-space: nowrap;
+}
 .ap-delform { display: inline-flex; }
 .ap-delbtn {
   font: inherit; color: var(--danger); cursor: pointer;

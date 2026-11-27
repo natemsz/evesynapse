@@ -23,24 +23,32 @@ import (
 )
 
 // pricingBasis is the basis as the appraisal tool shapes it:
-// hub region id and display name, mode, percent.
+// hub region id and display name, mode, percent, and optional
+// buy-order depth walking.
 type pricingBasis struct {
-	RegionID int64
-	HubName  string
-	Mode     string
-	Percent  float64
+	RegionID     int64
+	HubName      string
+	Mode         string
+	Percent      float64
+	WalkBuyDepth bool
 }
 
 func (b pricingBasis) toModule() module.AppraisalBasis {
-	return module.AppraisalBasis{RegionID: b.RegionID, Mode: b.Mode, Percent: b.Percent}
+	return module.AppraisalBasis{
+		RegionID:     b.RegionID,
+		Mode:         b.Mode,
+		Percent:      b.Percent,
+		WalkBuyDepth: b.WalkBuyDepth,
+	}
 }
 
 // snapshotBasis is the basis as stored in a snapshot.
 type snapshotBasis struct {
-	RegionID int64   `json:"region_id"`
-	HubName  string  `json:"hub_name"`
-	Mode     string  `json:"mode"`
-	Percent  float64 `json:"percent"`
+	RegionID     int64   `json:"region_id"`
+	HubName      string  `json:"hub_name"`
+	Mode         string  `json:"mode"`
+	Percent      float64 `json:"percent"`
+	WalkBuyDepth bool    `json:"walk_buy_depth,omitempty"`
 }
 
 func (b pricingBasis) snapshot() snapshotBasis {
@@ -144,6 +152,10 @@ func (app *page) basisFromValues(base pricingBasis, q url.Values) pricingBasis {
 		if p, err := strconv.ParseFloat(strings.TrimSuffix(raw, "%"), 64); err == nil && p > 0 {
 			out.Percent = clampPercent(p)
 		}
+	}
+	if vals, ok := q["depth"]; ok && len(vals) > 0 {
+		v := strings.ToLower(strings.TrimSpace(vals[len(vals)-1]))
+		out.WalkBuyDepth = v == "1" || v == "true" || v == "on"
 	}
 	if out.Mode == "" {
 		out.Mode = module.AppraisalModeSell
@@ -266,6 +278,15 @@ func tierLabelWithBasis(tier string, b pricingBasis) string {
 	return module.TierLabel(tier, hub)
 }
 
+// label formats the short basis headline for the hero card and saved
+// list ("The Forge • Typical sell" or "The Forge • Buy-order depth").
+func (b pricingBasis) label() string {
+	if b.WalkBuyDepth {
+		return b.HubName + " • Buy-order depth"
+	}
+	return b.HubName + " • " + basisModeLong(b.Mode)
+}
+
 // tierLabelForLine words one priced line's tier: a typical
 // that spoke from a book other than the basis hub's -- the
 // global market's, the only other book the pricing core ever
@@ -273,7 +294,7 @@ func tierLabelWithBasis(tier string, b pricingBasis) string {
 // line's stated source is never a hub the type does not
 // trade in. Every other line words as tierLabelWithBasis.
 func tierLabelForLine(tier string, b pricingBasis, sourceRegionID int64) string {
-	if sourceRegionID == 0 || sourceRegionID == b.RegionID || !module.IsTypicalTier(tier) {
+	if sourceRegionID == 0 || sourceRegionID == b.RegionID || (!module.IsTypicalTier(tier) && tier != module.AppraisalTierBuyDepth) {
 		return tierLabelWithBasis(tier, b)
 	}
 	switch tier {
@@ -287,6 +308,8 @@ func tierLabelForLine(tier string, b pricingBasis, sourceRegionID int64) string 
 		return "Our global PLEX market typical (split, sell side only)"
 	case module.AppraisalTierTypicalSplitBuy:
 		return "Our global PLEX market typical (split, buy side only)"
+	case module.AppraisalTierBuyDepth:
+		return "Walked global PLEX buy orders"
 	}
 	return tierLabelWithBasis(tier, b)
 }
@@ -298,7 +321,12 @@ func (b pricingBasis) basisText() string {
 	if hub == "" {
 		hub = "The Forge"
 	}
-	s := fmt.Sprintf("Priced from %s typical %s prices", hub, modeLabel(b.Mode))
+	var s string
+	if b.WalkBuyDepth {
+		s = fmt.Sprintf("Valued by walking open buy orders in %s from highest price down (unfilled units are left unpriced)", hub)
+	} else {
+		s = fmt.Sprintf("Priced from %s typical %s prices", hub, modeLabel(b.Mode))
+	}
 	if b.Percent != 100 && b.Percent != 0 {
 		s += fmt.Sprintf(" at %s%%", strconv.FormatFloat(b.Percent, 'f', -1, 64))
 	}

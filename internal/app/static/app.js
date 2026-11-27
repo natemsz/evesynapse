@@ -5687,6 +5687,12 @@
   var rowsBody = document.getElementById("status-rows");
   var note = document.getElementById("status-note");
   var closeBtn = document.getElementById("status-close");
+  // Live refresh: a 5s poll while the modal is open, a 60s dot
+  // refresh while it is closed. inFlight keeps overlapping
+  // freshness reads from stacking.
+  var pollTimer = null;
+  var dotTimer = null;
+  var inFlight = false;
 
   function paintDot(el, state) {
     if (!el) return;
@@ -5738,12 +5744,22 @@
       .catch(function () { /* the dot stays grey; the modal says checking */ });
   }
 
+  function loadGuarded() {
+    if (inFlight) return;
+    inFlight = true;
+    load().then(function () { inFlight = false; }, function () { inFlight = false; });
+  }
+
   function open() {
-    load();
+    loadGuarded();
     if (window.EveSynapseModal) {
       window.EveSynapseModal.open(modal, {
         focus: false,
         onClose: function () {
+          if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+          }
           if (opener && opener.offsetParent !== null && opener.focus) opener.focus({ preventScroll: true });
           opener = openBtn;
         }
@@ -5751,6 +5767,20 @@
     } else {
       modal.hidden = false;
     }
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function () {
+      if (modal.hidden) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        return;
+      }
+      if (!document.hidden) loadGuarded();
+    }, 5000);
+    // In node (the jstest DOM stub loads this file) a pending
+    // timer holds the process open; unref lets the runner exit.
+    // In a browser setInterval returns a number, so this is a
+    // no-op there and the poll runs as intended.
+    if (pollTimer.unref) pollTimer.unref();
     if (closeBtn) closeBtn.focus({ preventScroll: true });
   }
 
@@ -5767,6 +5797,19 @@
     });
   }
   load();
+  // While the modal is closed, the sidebar dot refreshes on a
+  // light interval when the tab is visible; returning to a hidden
+  // tab refreshes it at once, and an open modal refreshes through
+  // its own poll.
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    if (modal.hidden) load();
+    else loadGuarded();
+  });
+  dotTimer = setInterval(function () {
+    if (modal.hidden && !document.hidden) load();
+  }, 60000);
+  if (dotTimer.unref) dotTimer.unref();
 })();
 
 // esLive: the shared live-feed treatment (killboard, market item

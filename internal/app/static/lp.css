@@ -40,6 +40,7 @@
 .lp-item img { flex: none; border-radius: var(--r-xs); }
 .lp-worth { color: var(--gold); font-weight: 600; }
 .lp-per .lp-meter { width: 4.5rem; margin: 0.3rem 0 0 auto; }
+.lp-vol-warn { color: var(--v-warn, #e8b04a); font-size: var(--fs-xs); white-space: nowrap; }
 .lp-note { margin: var(--space-3) 0 0; color: var(--muted); }
 
 /* The inspector. */

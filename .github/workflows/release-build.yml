@@ -73,32 +73,6 @@ jobs:
       - name: Install the toolbox
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Build the release files
-        run: |
-          make assets
-          VERSION="$(tr -d '[:space:]' < internal/app/version.txt)"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          mkdir -p dist
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/evesynapse-windows-amd64.exe ./cmd/evesynapse
-          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o dist/evesynapse-windows-arm64.exe ./cmd/evesynapse
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o dist/evesynapse-darwin-amd64 ./cmd/evesynapse
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/evesynapse-darwin-arm64 ./cmd/evesynapse
-          cd dist
-          for a in arm64 amd64; do
-            sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
-            printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$a" "$sha" > "latest-$a.json"
-          done
-          # Windows and macOS carry the operating system in
-          # their manifest names, the way the Linux ones carry
-          # only the CPU kind.
-          for p in windows-amd64 windows-arm64 darwin-amd64 darwin-arm64; do
-            bin="evesynapse-$p"
-            case "$p" in windows-*) bin="$bin.exe" ;; esac
-            sha=$(sha256sum "$bin" | cut -d' ' -f1)
-            printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$p" "$sha" > "latest-$p.json"
-          done
       # A version carrying a suffix (0.4.1.4-dev) is a
       # development build, reached with `evesynapse -update
       # -dev`. Plain versions are releases and are only ever
@@ -111,6 +85,8 @@ jobs:
       - name: Decide whether this push publishes
         id: decide
         run: |
+          VERSION="$(tr -d '[:space:]' < internal/app/version.txt)"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           publish=true
           released=false
           if [ "$VERSION" = "${VERSION%%-*}" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
@@ -139,30 +115,14 @@ jobs:
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
           echo "released=$released" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      # Only a signed release is published. The step fails, and
-      # nothing is published, when the key is missing or is not
-      # the other half of a key listed in
-      # internal/releasesig/trusted_keys.pem. The secret holds
-      # the key base64-encoded and releasesign reads it in that
-      # form; a value that is a path to a file is read from that
-      # file instead, as in the GitLab job.
-      - name: Sign the manifests
-        env:
-          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: |
-          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "Nothing to sign."; exit 0; fi
-          if [ -n "$RELEASE_SIGNING_KEY" ] && [ -f "$RELEASE_SIGNING_KEY" ]; then
-            RELEASE_SIGNING_KEY="$(cat "$RELEASE_SIGNING_KEY")"
-            export RELEASE_SIGNING_KEY
-          fi
-          go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json dist/latest-windows-amd64.json dist/latest-windows-arm64.json dist/latest-darwin-amd64.json dist/latest-darwin-arm64.json
-          go run ./cmd/releasesign bundle -out dist/latest.json dist/latest-arm64.json dist/latest-amd64.json dist/latest-windows-amd64.json dist/latest-windows-arm64.json dist/latest-darwin-amd64.json dist/latest-darwin-arm64.json
       # The release notes: the pull requests merged since the
       # previous release, grouped by label the way
-      # .github/release.yml groups them. On a run that finds
-      # the release already published, the published notes are
-      # fetched instead, so the kept files carry them on every
-      # run the follow-on jobs read.
+      # .github/release.yml groups them. Written before go build
+      # so plain releases embed their own version's notes into
+      # internal/app/changelog.md for the build itself. On a run
+      # that finds the release already published, the published
+      # notes are fetched instead, so the kept files carry them
+      # on every run the follow-on jobs read.
       - name: Write the release notes
         run: |
           if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then
@@ -213,6 +173,9 @@ jobs:
           for pr in merged:
               if since and (pr.get("merged_at") or "") <= since:
                   continue
+              head_ref = (pr.get("head") or {}).get("ref") or ""
+              if head_ref.startswith("chore/changelog-") or (pr.get("title") or "").startswith("Update changelog for v"):
+                  continue
               labels = {l["name"] for l in pr.get("labels") or []}
               for name, wanted in cats:
                   if wanted is None or labels & wanted:
@@ -230,6 +193,57 @@ jobs:
               with open("release-notes.md", "a") as fh:
                   fh.write("\n## What's Changed\n\n" + "\n".join(notes))
           PYEOF
+      # Stamp the release notes into CHANGELOG.md and internal/app/changelog.md
+      # before go build runs so the binaries built for v$VERSION carry v$VERSION's
+      # own changelog entry immediately.
+      - name: Stamp the changelog for the build
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "Nothing to stamp."; exit 0; fi
+          if [ "$VERSION" != "${VERSION%%-*}" ]; then echo "Development build $VERSION; leaving changelog untouched."; exit 0; fi
+          python3 deploy/stamp_changelog.py --version "$VERSION" --notes release-notes.md
+          cmp -s CHANGELOG.md internal/app/changelog.md
+      - name: Build the release files
+        run: |
+          make assets
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o dist/evesynapse-arm64 ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dist/evesynapse-amd64 ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/evesynapse-windows-amd64.exe ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o dist/evesynapse-windows-arm64.exe ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o dist/evesynapse-darwin-amd64 ./cmd/evesynapse
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o dist/evesynapse-darwin-arm64 ./cmd/evesynapse
+          cd dist
+          for a in arm64 amd64; do
+            sha=$(sha256sum "evesynapse-$a" | cut -d' ' -f1)
+            printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$a" "$sha" > "latest-$a.json"
+          done
+          # Windows and macOS carry the operating system in
+          # their manifest names, the way the Linux ones carry
+          # only the CPU kind.
+          for p in windows-amd64 windows-arm64 darwin-amd64 darwin-arm64; do
+            bin="evesynapse-$p"
+            case "$p" in windows-*) bin="$bin.exe" ;; esac
+            sha=$(sha256sum "$bin" | cut -d' ' -f1)
+            printf '{"version":"%s","arch":"%s","sha256":"%s"}\n' "$VERSION" "$p" "$sha" > "latest-$p.json"
+          done
+      # Only a signed release is published. The step fails, and
+      # nothing is published, when the key is missing or is not
+      # the other half of a key listed in
+      # internal/releasesig/trusted_keys.pem. The secret holds
+      # the key base64-encoded and releasesign reads it in that
+      # form; a value that is a path to a file is read from that
+      # file instead, as in the GitLab job.
+      - name: Sign the manifests
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ "${{ steps.decide.outputs.publish }}" != "true" ]; then echo "Nothing to sign."; exit 0; fi
+          if [ -n "$RELEASE_SIGNING_KEY" ] && [ -f "$RELEASE_SIGNING_KEY" ]; then
+            RELEASE_SIGNING_KEY="$(cat "$RELEASE_SIGNING_KEY")"
+            export RELEASE_SIGNING_KEY
+          fi
+          go run ./cmd/releasesign sign dist/latest-arm64.json dist/latest-amd64.json dist/latest-windows-amd64.json dist/latest-windows-arm64.json dist/latest-darwin-amd64.json dist/latest-darwin-arm64.json
+          go run ./cmd/releasesign bundle -out dist/latest.json dist/latest-arm64.json dist/latest-amd64.json dist/latest-windows-amd64.json dist/latest-windows-arm64.json dist/latest-darwin-amd64.json dist/latest-darwin-arm64.json
       # The release is created as a draft, the seven files
       # are uploaded to it, and then it is published: the publish
       # is the commit point, and the updater skips drafts, so
@@ -518,10 +532,13 @@ jobs:
           print("Release v%s created on GitLab." % version)
           PYEOF
 
-  # After a plain release publishes from main, add its notes to
-  # CHANGELOG.md and the embedded internal/app/changelog.md copy on
-  # a pull request on Forgejo for review. Runs with continue-on-error
-  # so a changelog issue never fails a published release.
+  # After a plain release publishes from main, persist its notes to
+  # CHANGELOG.md and internal/app/changelog.md on main so subsequent
+  # releases start with a complete history. The published binaries
+  # already embed these notes from the stamp step before go build.
+  # Pushes directly to main with [skip ci] and falls back to a
+  # Forgejo pull request if direct push is refused. Runs with
+  # continue-on-error so a changelog issue never fails a release.
   changelog:
     if: github.server_url == 'https://github.com' && needs.release.outputs.publish == 'true'
     runs-on: ubuntu-latest
@@ -538,43 +555,39 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: Open a changelog pull request on Forgejo
+      - name: Persist the changelog on Forgejo
         run: |
           if [ "$VERSION" != "${VERSION%%-*}" ]; then
             echo "Development build $VERSION; skipping changelog update."
             exit 0
           fi
-          git -c "http.https://natems.dev/.extraheader=Authorization: token $FORGEJO_TOKEN" clone --depth=5 --branch main "$FORGEJO_GIT" repo
+          AUTH_CFG="http.https://natems.dev/.extraheader=Authorization: token $FORGEJO_TOKEN"
+          git -c "$AUTH_CFG" clone --depth=5 --branch main "$FORGEJO_GIT" repo
           cd repo
           if grep -qF "## [v$VERSION]" CHANGELOG.md; then
             echo "CHANGELOG.md already documents v$VERSION; nothing to do."
             exit 0
           fi
-          BRANCH="chore/changelog-v$VERSION"
-          git checkout -B "$BRANCH"
-          VERSION="$VERSION" NOTES_PATH="$PWD/../dist/release-notes.md" python3 - <<'PYEOF'
-          import datetime, os, re
-
-          version = os.environ["VERSION"]
-          date = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-          notes = open(os.environ["NOTES_PATH"], encoding="utf-8").read().replace("\r\n", "\n").strip()
-          notes = "\n".join(ln for ln in notes.splitlines() if not ln.lstrip().startswith("<!--")).strip()
-
-          existing = open("CHANGELOG.md", encoding="utf-8").read()
-          existing = re.sub(r'^(## \[v[^\]]+\]) - \d{4}-\d{2}-\d{2}$', r'\1', existing, flags=re.M)
-          marker = "## [Unreleased]\n\n"
-          if marker not in existing:
-              raise SystemExit("CHANGELOG.md is missing the Unreleased heading")
-          section = f"## [v{version}] - {date}\n\n{notes}\n\n"
-          updated = existing.replace(marker, marker + section, 1)
-          open("CHANGELOG.md", "w", encoding="utf-8").write(updated)
-          open("internal/app/changelog.md", "w", encoding="utf-8").write(updated)
-          PYEOF
+          python3 deploy/stamp_changelog.py --version "$VERSION" --notes "$PWD/../dist/release-notes.md"
           git config user.name "Nate"
           git config user.email "nate@evesynapse.app"
           git add CHANGELOG.md internal/app/changelog.md
-          git commit -m "Update CHANGELOG.md and embedded changelog for v$VERSION"
-          git -c "http.https://natems.dev/.extraheader=Authorization: token $FORGEJO_TOKEN" push --force-with-lease origin "$BRANCH"
+          git commit -m "Update CHANGELOG.md and embedded changelog for v$VERSION [skip ci]"
+          if git -c "$AUTH_CFG" push origin HEAD:main; then
+            echo "Pushed changelog update for v$VERSION to main."
+            exit 0
+          fi
+          echo "Direct push to main did not succeed; retrying after rebase."
+          if git -c "$AUTH_CFG" fetch origin main && git rebase origin/main && git -c "$AUTH_CFG" push origin HEAD:main; then
+            echo "Pushed changelog update for v$VERSION to main after rebase."
+            exit 0
+          fi
+          git rebase --abort 2>/dev/null || true
+          echo "Could not push directly to main; falling back to a pull request."
+          BRANCH="chore/changelog-v$VERSION"
+          git checkout -B "$BRANCH"
+          git -c "$AUTH_CFG" fetch origin "$BRANCH" 2>/dev/null || true
+          git -c "$AUTH_CFG" push --force-with-lease origin "$BRANCH"
           BRANCH="$BRANCH" VERSION="$VERSION" python3 - <<'PYEOF'
           import json, os, urllib.request
 

@@ -3,16 +3,18 @@ package app
 // The Trends screen (/market/trends/): volume-confirmed price movers,
 // ISK-move and spread-profit rankings, raw % movers with manipulation
 // warning columns, volatility leaders, and the filtered change feed.
-// Every figure is precomputed at sweep and history ingest time on
-// market_region_stats (schemas 101 and 188) and read in one bounded
-// SQL query; the page never scores or filters full tables in Go.
+// Every figure and ranking is precomputed at sweep and history ingest
+// time (schemas 101, 188, and 189) and read directly from
+// market_movers_ranked with LIMIT; the page never scores, sorts, or
+// caches rankings at request time.
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"html/template"
 	"math"
 	"net/http"
-	"net/url"
 	"slices"
 	"strconv"
 	"time"
@@ -21,6 +23,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 const (
@@ -31,9 +34,9 @@ const (
 	moversSortSpreadProfit = "spread_profit"
 	moversSortRawPct       = "raw_pct"
 
-	defaultMoversMinISKForge = 100_000_000
-	defaultMoversMinISKHub   = 20_000_000
-	defaultMoversMinTrades   = 10
+	defaultMoversMinISKForge = markethistory.DefaultMinISKForge
+	defaultMoversMinISKHub   = markethistory.DefaultMinISKHub
+	defaultMoversMinTrades   = markethistory.DefaultMinTrades
 )
 
 type moversFloorChoice struct {
@@ -78,10 +81,7 @@ func marketHubRegionIDs() []int64 {
 }
 
 func defaultMoversMinISK(regionID int64) int64 {
-	if regionID == defaultMarketRegion {
-		return defaultMoversMinISKForge
-	}
-	return defaultMoversMinISKHub
+	return markethistory.DefaultMinISK(regionID)
 }
 
 func normalizeMoversSort(s string) string {
@@ -232,32 +232,8 @@ func (app *Application) handleMarketTrends(w http.ResponseWriter, r *http.Reques
 	app.render(ctx, w, http.StatusOK, "market_trends.html", data)
 }
 
-var marketTrendsCache = newViewCache[marketTrendsView](30*time.Second, 128)
-
-// buildMarketTrendsView ranks the region's stat pack for the query.
-// The view is a pure function of the query over stored rows, so a
-// built view is reused briefly.
+// buildMarketTrendsView reads the pre-ranked movers table for the query.
 func (app *Application) buildMarketTrendsView(ctx context.Context, q map[string][]string) *marketTrendsView {
-	// The open item is not part of the ranking: the cache keys on
-	// the ranking's own query, and the selection lands on a copy.
-	vals := url.Values{}
-	for k, v := range q {
-		if k != "type" {
-			vals[k] = v
-		}
-	}
-	key := vals.Encode()
-	if view, ok := marketTrendsCache.get(key); ok {
-		return view
-	}
-	view := app.buildMarketTrendsViewFresh(ctx, q)
-	if view.HasData {
-		marketTrendsCache.put(key, view)
-	}
-	return view
-}
-
-func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[string][]string) *marketTrendsView {
 	get := func(k string) string {
 		if v := q[k]; len(v) > 0 {
 			return v[0]
@@ -390,22 +366,23 @@ func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[st
 
 	stamp, err := app.queries.GetMarketTrendStamp(ctx, view.RegionID)
 	if err != nil {
-		logging.Errorf("market trends: stamp for region %d: %v", view.RegionID, err)
+		if !errors.Is(err, sql.ErrNoRows) {
+			logging.Errorf("market trends: stamp for region %d: %v", view.RegionID, err)
+		}
 		return view
 	}
-	view.HasData = stamp.WithChange > 0 || stamp.WithVolatility > 0
-	if t, ok := stamp.Stamp.(time.Time); ok {
-		view.Age = ageText(time.Now(), t)
-	}
-	if !view.HasData {
-		return view
-	}
+	view.HasData = true
+	view.Age = ageText(time.Now(), stamp)
 
-	rows, err := app.queries.ListMarketTrendTypes(ctx, db.ListMarketTrendTypesParams{
+	queryPeriod := int32(view.Period)
+	if view.Mode == "volatile" {
+		queryPeriod = 0
+	}
+	rows, err := app.queries.ListRankedMarketMovers(ctx, db.ListRankedMarketMoversParams{
 		RegionID:  view.RegionID,
-		Mode:      view.Mode,
 		SortBy:    view.Sort,
-		Period:    int32(view.Period),
+		Mode:      view.Mode,
+		Period:    queryPeriod,
 		MinIsk:    float64(effectiveMinISK),
 		MinTrades: float64(effectiveMinTrades),
 		RowCap:    marketTrendsRowCap,
@@ -501,8 +478,8 @@ func (app *Application) buildMarketTrendsViewFresh(ctx context.Context, q map[st
 	return view
 }
 
-// withSelection is the view with one ranked item open in the
-// inspector: a copy, since the ranking itself is cached and shared.
+// withSelection returns a copy of the view with one ranked item open in
+// the inspector.
 func (v *marketTrendsView) withSelection(typeParam string) *marketTrendsView {
 	out := *v
 	out.Depth = 1

@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"math"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -46,7 +44,7 @@ func init() {
 				"Volume-confirmed screens out thin spikes. Raw % move turns off all gates and shows warning signs."),
 			withHint(optChoice("min_isk", "Minimum ISK traded/day", "auto", iskChoices...),
 				"7-day average daily ISK traded from regional history. Ignored for Raw % move."),
-			withHint(optChoice("min_trades", "Minimum trades/day", strconv.Itoa(defaultMoversMinTrades), tradeChoices...),
+			withHint(optChoice("min_trades", "Minimum trades/day", strconv.FormatInt(defaultMoversMinTrades, 10), tradeChoices...),
 				"7-day average daily trade count from regional history. Ignored for Raw % move."),
 		},
 		Build: buildMoversWidget,
@@ -67,9 +65,8 @@ type moverRow struct {
 	Line     string // the stored 30-day line: polyline points in a 100 by 28 box
 	HubBadge string
 	HubTitle string
-	Meta     string // secondary figure (ISK traded/day, ISK move/day, or spread profit/day)
+	Meta     string // secondary figure (ISK traded/day, ISK move/day, spread profit/day, or swing)
 	Warn     string // raw % warning signs (low trades, widening spread, 1 hub only)
-	score    float64
 }
 
 // moversWidgetView is what the Market Movers forms draw.
@@ -78,7 +75,7 @@ type moversWidgetView struct {
 	Rising   []moverRow
 	Falling  []moverRow
 	Volatile []moverRow
-	Moves    []moverRow // tall, risers and fallers: highest ranked either way
+	Moves    []moverRow // tall, risers and fallers: pre-ranked either way
 	Show     string
 	Note     string
 	Empty    wEmpty
@@ -86,7 +83,7 @@ type moversWidgetView struct {
 
 // Any reports whether a list has an item.
 func (v *moversWidgetView) Any() bool {
-	return len(v.Rising)+len(v.Falling)+len(v.Volatile) > 0
+	return len(v.Rising)+len(v.Falling)+len(v.Volatile)+len(v.Moves) > 0
 }
 
 // Lists is how many lists the card draws.
@@ -120,9 +117,11 @@ func buildMoversWidget(ctx context.Context, app *Application, in *widgetInput) a
 		}
 	}
 	rawMode := sortBy == moversSortRawPct
+	effectiveMinISK := minISK
+	effectiveMinTrades := minTrades
 	if rawMode {
-		minISK = 0
-		minTrades = 0
+		effectiveMinISK = 0
+		effectiveMinTrades = 0
 	}
 
 	trendsHref := "/market/trends/?region=" + strconv.FormatInt(regionID, 10) +
@@ -139,13 +138,17 @@ func buildMoversWidget(ctx context.Context, app *Application, in *widgetInput) a
 
 	useMedian7 := sortBy == moversSortConfirmed || sortBy == moversSortISKMove
 	read := func(mode string) []moverRow {
-		rows, err := app.queries.ListMarketTrendTypes(ctx, db.ListMarketTrendTypesParams{
+		period := int32(7)
+		if mode == "volatile" {
+			period = 0
+		}
+		rows, err := app.queries.ListRankedMarketMovers(ctx, db.ListRankedMarketMoversParams{
 			RegionID:  regionID,
-			Mode:      mode,
 			SortBy:    sortBy,
-			Period:    7,
-			MinIsk:    float64(minISK),
-			MinTrades: float64(minTrades),
+			Mode:      mode,
+			Period:    period,
+			MinIsk:    float64(effectiveMinISK),
+			MinTrades: float64(effectiveMinTrades),
 			RowCap:    moversWidgetRows,
 		})
 		if err != nil {
@@ -174,20 +177,12 @@ func buildMoversWidget(ctx context.Context, app *Application, in *widgetInput) a
 			}
 			switch sortBy {
 			case moversSortConfirmed:
-				if r.MoverScore.Valid {
-					row.score = r.MoverScore.Float64
-				}
 				row.Meta = iskCompact(r.IskTraded7d) + "/d"
 			case moversSortISKMove:
-				row.score = r.IskMove7d
 				row.Meta = "move " + iskCompact(r.IskMove7d) + "/d"
 			case moversSortSpreadProfit:
-				row.score = r.DailySpreadProfit
 				row.Meta = "profit " + iskCompact(r.DailySpreadProfit) + "/d"
 			default:
-				if r.SellChg7d.Valid {
-					row.score = math.Abs(r.SellChg7d.Float64)
-				}
 				var flags []string
 				if r.AvgOrders7d < float64(defaultMoversMinTrades) {
 					flags = append(flags, formatTradesPerDay(r.AvgOrders7d)+" trades/d")
@@ -204,33 +199,40 @@ func buildMoversWidget(ctx context.Context, app *Application, in *widgetInput) a
 					row.Meta = iskCompact(r.IskTraded7d) + "/d"
 				}
 			}
+			if mode == "volatile" && row.Swing != "" {
+				if row.Meta != "" {
+					row.Meta = "swings " + row.Swing + " · " + row.Meta
+				} else {
+					row.Meta = "swings " + row.Swing
+				}
+			}
 			out = append(out, row)
 		}
 		return out
 	}
 
 	both := show == "both"
-	if both || show == "rising" {
+	drawsSplit := in.Draws("small") || in.Draws("medium") || in.Draws("large") || len(in.Forms) == 0
+	if show == "rising" || (both && drawsSplit) {
 		v.Rising = read("rising")
 	}
-	if both || show == "falling" {
+	if show == "falling" || (both && drawsSplit) {
 		v.Falling = read("falling")
 	}
 	if show == "volatile" || (both && in.Draws("large")) {
 		v.Volatile = read("volatile")
 	}
 	if both && in.Draws("tall") {
-		v.Moves = append(append(v.Moves, v.Rising...), v.Falling...)
-		sort.SliceStable(v.Moves, func(i, j int) bool { return v.Moves[i].score > v.Moves[j].score })
+		v.Moves = read("both")
 	}
 
 	switch sortBy {
 	case moversSortConfirmed:
-		v.Note = "Volume-confirmed 7d vs 30d moves in " + region + " (at least " + iskCompact(float64(minISK)) + " ISK/d, " + strconv.FormatInt(minTrades, 10) + " trades/d)."
+		v.Note = "Volume-confirmed 7d vs 30d moves in " + region + " (at least " + iskCompact(float64(effectiveMinISK)) + " ISK/d, " + strconv.FormatInt(effectiveMinTrades, 10) + " trades/d)."
 	case moversSortISKMove:
-		v.Note = "Ranked by daily ISK move in " + region + " (at least " + iskCompact(float64(minISK)) + " ISK/d, " + strconv.FormatInt(minTrades, 10) + " trades/d)."
+		v.Note = "Ranked by daily ISK move in " + region + " (at least " + iskCompact(float64(effectiveMinISK)) + " ISK/d, " + strconv.FormatInt(effectiveMinTrades, 10) + " trades/d)."
 	case moversSortSpreadProfit:
-		v.Note = "Ranked by daily spread profit in " + region + " (at least " + iskCompact(float64(minISK)) + " ISK/d, " + strconv.FormatInt(minTrades, 10) + " trades/d)."
+		v.Note = "Ranked by daily spread profit in " + region + " (at least " + iskCompact(float64(effectiveMinISK)) + " ISK/d, " + strconv.FormatInt(effectiveMinTrades, 10) + " trades/d)."
 	default:
 		v.Note = "Raw 7-day % moves in " + region + " (all gates off; warning signs shown)."
 	}

@@ -204,6 +204,80 @@ html[data-backdrop="glow"] body::before {
   margin: 0;
 }
 
+/* Changelog version explorer */
+.cl-explorer {
+  margin: 0;
+}
+.cl-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+.cl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 5.5rem;
+}
+.cl-field-rev {
+  min-width: 9.5rem;
+}
+.cl-field label {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  font-weight: 500;
+}
+.cl-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cl-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+.cl-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-decoration: none;
+}
+.cl-pill:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.cl-pill.is-active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.cl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  margin-bottom: 0.5rem;
+}
+.cl-head h2 {
+  margin: 0;
+}
+.cl-meta {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+
 /* The character selector's dropdown (style.css) paints with
    --input-bg: right for the input resting on a panel,
    wrong for the open list floating over page content, where the

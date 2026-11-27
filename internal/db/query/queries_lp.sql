@@ -68,20 +68,21 @@ DELETE FROM lp_offer_values WHERE region_id = $1;
 -- name: RefreshLPOfferValues :execrows
 -- Values every mirrored offer in one region from the stat pack's
 -- stored rows. The product sells at its typical sell (into sell
--- orders) or its typical buy (at once into buy orders); every
--- required item is bought at its typical sell. Unpriced when the
--- product is a blueprint copy (its original's market is not its
--- price), when the product has no typical price, or when any
--- required item has none.
+-- orders, net of broker fee and sales tax via sell_net_factor) or its
+-- typical buy (instant sale into buy orders, net of sales tax via
+-- buy_net_factor); every required item is bought at its typical sell.
+-- Unpriced when the product is a blueprint copy (its original's market
+-- is not its price), when the product has no typical price, or when
+-- any required item has none.
 INSERT INTO lp_offer_values (region_id, corporation_id, offer_id, type_id, quantity, lp_cost, isk_cost,
     required_cost, unit_sell, unit_buy, isk_per_lp_sell, isk_per_lp_buy, unpriced_reason,
     daily_volume, sell_chg_7d, volatility_30d, prices_at, updated_at)
 SELECT sqlc.arg(region_id)::bigint, v.corporation_id, v.offer_id, v.type_id, v.quantity, v.lp_cost, v.isk_cost,
        v.required_cost, v.unit_sell, v.unit_buy,
        CASE WHEN v.reason = '' AND v.lp_cost > 0 AND v.unit_sell > 0
-            THEN (v.quantity * v.unit_sell - v.isk_cost - v.required_cost) / v.lp_cost END,
+            THEN (v.quantity * v.unit_sell * sqlc.arg(sell_net_factor)::double precision - v.isk_cost - v.required_cost) / v.lp_cost END,
        CASE WHEN v.reason = '' AND v.lp_cost > 0 AND v.unit_buy > 0
-            THEN (v.quantity * v.unit_buy - v.isk_cost - v.required_cost) / v.lp_cost END,
+            THEN (v.quantity * v.unit_buy * sqlc.arg(buy_net_factor)::double precision - v.isk_cost - v.required_cost) / v.lp_cost END,
        v.reason, v.daily_volume, v.sell_chg_7d, v.volatility_30d, v.prices_at, sqlc.arg(now)::timestamptz
 FROM (
     SELECT o.corporation_id, o.offer_id, o.type_id, o.quantity, o.lp_cost, o.isk_cost,

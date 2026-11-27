@@ -9,12 +9,13 @@ import (
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/tradefees"
 )
 
-// An offer's ISK per LP: product value at the typical price, less
-// the ISK cost and the required items at their typical sell, over
-// the LP; blueprint copies and offers needing an unpriced item stay
-// unpriced.
+// An offer's ISK per LP: net product proceeds after broker fee and
+// sales tax (or sales tax alone for instant buy sales), less the ISK
+// cost and the required items at their typical sell, over the LP;
+// blueprint copies and offers needing an unpriced item stay unpriced.
 func TestRefreshLPOfferValues(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, &countingTransport{})
 	ctx := context.Background()
@@ -34,7 +35,7 @@ func TestRefreshLPOfferValues(t *testing.T) {
 		exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, updated_at) VALUES (10000002, $1, $2, $3, $4)`, s.typeID, s.sell, s.buy, now)
 	}
 	// 100 ammo for 1,000 LP and 1,000 ISK plus 200 Tritanium:
-	// (100*50 - 1000 - 200*5) / 1000 = 3.0 on the sell side, 2.0 instant.
+	// net sell proceeds = 100*50*(1 - tax - broker), net buy proceeds = 100*40*(1 - tax).
 	exec(`INSERT INTO lp_offers VALUES (1, 1, 100, 100, 1000, 1000, 0), (1, 2, 101, 1, 1000, 0, 0), (1, 3, 100, 100, 1000, 0, 0)`)
 	exec(`INSERT INTO lp_offer_requirements VALUES (1, 1, 34, 200), (1, 3, 999, 1)`)
 	if err := app.refreshLPOfferValues(ctx, q, 10000002, now); err != nil {
@@ -55,11 +56,13 @@ func TestRefreshLPOfferValues(t *testing.T) {
 	if len(rows) != 1 || rows[0].OfferID != 1 {
 		t.Fatalf("priced rows = %+v, want offer 1 only", rows)
 	}
-	if got := rows[0].IskPerLpSell.Float64; math.Abs(got-3) > 1e-9 {
-		t.Errorf("ISK per LP (sell) = %v, want 3", got)
+	wantSell := tradefees.LPOfferISKPerLP(100, 50, 1000, 200*5, 1000, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
+	if got := rows[0].IskPerLpSell.Float64; math.Abs(got-wantSell) > 1e-9 {
+		t.Errorf("ISK per LP (sell) = %v, want %v", got, wantSell)
 	}
-	if got := rows[0].IskPerLpBuy.Float64; math.Abs(got-2) > 1e-9 {
-		t.Errorf("ISK per LP (instant) = %v, want 2", got)
+	wantBuy := tradefees.LPOfferISKPerLP(100, 40, 1000, 200*5, 1000, 0, tradefees.PerfectSalesTax())
+	if got := rows[0].IskPerLpBuy.Float64; math.Abs(got-wantBuy) > 1e-9 {
+		t.Errorf("ISK per LP (instant) = %v, want %v", got, wantBuy)
 	}
 	n, err := q.CountLPOfferValuesUnpriced(ctx, db.CountLPOfferValuesUnpricedParams{RegionID: 10000002})
 	if err != nil || n != 2 {
@@ -166,6 +169,8 @@ func TestMarketLPFiltersAndExports(t *testing.T) {
 		`Pilot One 2,500 · Pilot Two 1,200`,
 		`<dt>Redemptions it covers</dt><dd>3</dd>`,
 		`ISK per LP ≥ 1`,
+		`Output vs daily volume`,
+		`One redemption is 20% of daily regional sales`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("lp page lacks %q", want)

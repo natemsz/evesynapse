@@ -213,6 +213,63 @@ func TestTradeIdeasCSVRowCap(t *testing.T) {
 	}
 }
 
+// TestTradeIdeasCSVFiltersNetFloorAndRanksByNetProfit verifies that
+// Trade Ideas drops rows whose post-fee spread falls below the net floor
+// or whose daily ISK traded falls below the shared Forge floor, and
+// re-ranks surviving rows by net daily profit before numbering them.
+func TestTradeIdeasCSVFiltersNetFloorAndRanksByNetProfit(t *testing.T) {
+	transport := &countingTransport{}
+	app, conn, q := buildCorpTestApp(t, transport)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	for _, stmt := range []string{
+		`INSERT INTO sde_types (type_id, name, group_id) VALUES
+			(501, 'SubNetSpread', 18),
+			(502, 'ThinISK', 18),
+			(503, 'GrossHigherNetLower', 18),
+			(504, 'GrossLowerNetHigher', 18)`,
+		`INSERT INTO sde_stations (station_id, name, system_id) VALUES (60003760, 'Jita 4', 30000142)`,
+		`INSERT INTO sde_systems (system_id, name, region_id, security) VALUES (30000142, 'Jita', 10000002, 0.9)`,
+		`INSERT INTO sde_regions (region_id, name) VALUES (10000002, 'The Forge')`,
+	} {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("seed sde: %v", err)
+		}
+	}
+	for _, s := range []db.UpsertMarketStationStatParams{
+		// 501: gross 6.38% >= 5%, net 0.72% < 5% -> dropped after fees.
+		{LocationID: 60003760, RegionID: 10000002, TypeID: 501, BestSell: 100, BestBuy: 94, TypicalSell: 100, TypicalBuy: 94, SellOrders: 5, BuyOrders: 5, SellVolume: 10000, BuyVolume: 10000, UpdatedAt: now},
+		// 502: wide spread, only 20,000 ISK/day < 100M Forge floor -> dropped.
+		{LocationID: 60003760, RegionID: 10000002, TypeID: 502, BestSell: 20, BestBuy: 10, TypicalSell: 20, TypicalBuy: 10, SellOrders: 5, BuyOrders: 5, SellVolume: 1000, BuyVolume: 1000, UpdatedAt: now},
+		// 503: gross profit 100 * 1000 = 100,000, net profit 47.25 * 1000 = 47,250, net spread 5.20%.
+		{LocationID: 60003760, RegionID: 10000002, TypeID: 503, BestSell: 1000, BestBuy: 900, TypicalSell: 1000, TypicalBuy: 900, SellOrders: 5, BuyOrders: 5, SellVolume: 1000, BuyVolume: 1000, UpdatedAt: now},
+		// 504: gross profit 100 * 900 = 90,000 (below 503), net profit 68.75 * 900 = 61,875 (above 503), net spread 13.61%.
+		{LocationID: 60003760, RegionID: 10000002, TypeID: 504, BestSell: 600, BestBuy: 500, TypicalSell: 600, TypicalBuy: 500, SellOrders: 5, BuyOrders: 5, SellVolume: 900, BuyVolume: 900, UpdatedAt: now},
+	} {
+		if err := q.UpsertMarketStationStat(ctx, s); err != nil {
+			t.Fatalf("seed station stat %d: %v", s.TypeID, err)
+		}
+	}
+	seedScannerVolume(t, conn, q, 10000002, 501, 2_000_000) // 200M ISK/d
+	seedScannerVolume(t, conn, q, 10000002, 502, 1_000)     // 20K ISK/d (< 100M)
+	if _, err := conn.ExecContext(ctx, `UPDATE market_region_stats SET isk_traded_7d = 20000 WHERE region_id = 10000002 AND type_id = 502`); err != nil {
+		t.Fatalf("seed thin isk_traded_7d: %v", err)
+	}
+	seedScannerVolume(t, conn, q, 10000002, 503, 200_000) // 200M ISK/d
+	seedScannerVolume(t, conn, q, 10000002, 504, 300_000) // 180M ISK/d
+
+	rows, ok := tradeideas.BuildCSVRows(ctx, app, csvRows)
+	if !ok {
+		t.Fatal("BuildCSVRows = not ok, want 2 rows")
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows (%+v), want 2 (SubNetSpread and ThinISK dropped)", len(rows), rows)
+	}
+	if rows[0].N != 1 || rows[0].Item != "GrossLowerNetHigher" || rows[1].N != 2 || rows[1].Item != "GrossHigherNetLower" {
+		t.Fatalf("order = %+v, want #1 GrossLowerNetHigher then #2 GrossHigherNetLower", rows)
+	}
+}
+
 func TestTradeIdeasRefreshStores(t *testing.T) {
 	transport := &countingTransport{}
 	app, conn, q := buildCorpTestApp(t, transport)

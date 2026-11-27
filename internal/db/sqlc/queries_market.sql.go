@@ -617,11 +617,11 @@ func (q *Queries) GetMarketStatChange7(ctx context.Context, arg GetMarketStatCha
 const getMarketStationLeaderboardStamp = `-- name: GetMarketStationLeaderboardStamp :one
 SELECT MAX(updated_at) AS stamp
 FROM market_station_leaderboard
-WHERE ($1::bigint = 0 OR region_id = $1::bigint)
+WHERE region_id = ANY($1::bigint[])
 `
 
-func (q *Queries) GetMarketStationLeaderboardStamp(ctx context.Context, dollar_1 int64) (interface{}, error) {
-	row := q.db.QueryRow(ctx, getMarketStationLeaderboardStamp, dollar_1)
+func (q *Queries) GetMarketStationLeaderboardStamp(ctx context.Context, regionIds []int64) (interface{}, error) {
+	row := q.db.QueryRow(ctx, getMarketStationLeaderboardStamp, regionIds)
 	var stamp interface{}
 	err := row.Scan(&stamp)
 	return stamp, err
@@ -2737,15 +2737,22 @@ func (q *Queries) ListMarketStationHeatByLocations(ctx context.Context, dollar_1
 	return items, nil
 }
 
-const listMarketStationLeaderboard = `-- name: ListMarketStationLeaderboard :many
-SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at
+const listMarketStationLeaderboardByOrders = `-- name: ListMarketStationLeaderboardByOrders :many
+SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at, open_orders, open_value
 FROM market_station_leaderboard
-WHERE ($1::bigint = 0 OR region_id = $1::bigint)
-ORDER BY region_id, location_id
+WHERE region_id = ANY($1::bigint[])
+ORDER BY open_orders DESC, open_value DESC, location_id ASC
+LIMIT $2::bigint
 `
 
-func (q *Queries) ListMarketStationLeaderboard(ctx context.Context, dollar_1 int64) ([]MarketStationLeaderboard, error) {
-	rows, err := q.db.Query(ctx, listMarketStationLeaderboard, dollar_1)
+type ListMarketStationLeaderboardByOrdersParams struct {
+	RegionIds []int64 `json:"region_ids"`
+	RowLimit  int64   `json:"row_limit"`
+}
+
+// Top stations ranked by open-order count in SQL with LIMIT.
+func (q *Queries) ListMarketStationLeaderboardByOrders(ctx context.Context, arg ListMarketStationLeaderboardByOrdersParams) ([]MarketStationLeaderboard, error) {
+	rows, err := q.db.Query(ctx, listMarketStationLeaderboardByOrders, arg.RegionIds, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -2761,6 +2768,52 @@ func (q *Queries) ListMarketStationLeaderboard(ctx context.Context, dollar_1 int
 			&i.SellValue,
 			&i.BuyValue,
 			&i.UpdatedAt,
+			&i.OpenOrders,
+			&i.OpenValue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketStationLeaderboardByValue = `-- name: ListMarketStationLeaderboardByValue :many
+SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at, open_orders, open_value
+FROM market_station_leaderboard
+WHERE region_id = ANY($1::bigint[])
+ORDER BY open_value DESC, open_orders DESC, location_id ASC
+LIMIT $2::bigint
+`
+
+type ListMarketStationLeaderboardByValueParams struct {
+	RegionIds []int64 `json:"region_ids"`
+	RowLimit  int64   `json:"row_limit"`
+}
+
+// Top stations ranked by band-filtered open ISK value in SQL with LIMIT.
+func (q *Queries) ListMarketStationLeaderboardByValue(ctx context.Context, arg ListMarketStationLeaderboardByValueParams) ([]MarketStationLeaderboard, error) {
+	rows, err := q.db.Query(ctx, listMarketStationLeaderboardByValue, arg.RegionIds, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarketStationLeaderboard
+	for rows.Next() {
+		var i MarketStationLeaderboard
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.LocationID,
+			&i.SellOrders,
+			&i.BuyOrders,
+			&i.SellValue,
+			&i.BuyValue,
+			&i.UpdatedAt,
+			&i.OpenOrders,
+			&i.OpenValue,
 		); err != nil {
 			return nil, err
 		}
@@ -5471,13 +5524,15 @@ func (q *Queries) UpsertMarketRegionStatDaily(ctx context.Context, arg UpsertMar
 }
 
 const upsertMarketStationLeaderboard = `-- name: UpsertMarketStationLeaderboard :exec
-INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, open_orders, open_value, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $3::bigint + $4::bigint, $5::double precision + $6::double precision, $7)
 ON CONFLICT (region_id, location_id) DO UPDATE SET
     sell_orders = excluded.sell_orders,
     buy_orders  = excluded.buy_orders,
     sell_value  = excluded.sell_value,
     buy_value   = excluded.buy_value,
+    open_orders = excluded.open_orders,
+    open_value  = excluded.open_value,
     updated_at  = excluded.updated_at
 `
 

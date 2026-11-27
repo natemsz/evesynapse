@@ -1,11 +1,12 @@
 package leaderboard
 
 // Station leaderboard: a completed region sweep distills one row per
-// station into market_station_leaderboard (market_region_stats.go);
-// this page only reads those rows and sorts them. "?sort=orders" ranks
-// by open-order count; the default "value" ranks by ISK on orders.
-// "?region=<id>" filters to one hub region; 0 or absent covers all
-// five.
+// station into market_station_leaderboard (market_region_stats.go),
+// counting only orders inside each item's Low90 to High90 price band
+// toward open value. This page reads at most leaderboardRowCap rows in
+// SQL with ORDER BY and LIMIT. "?sort=orders" ranks by open-order
+// count; the default "value" ranks by ISK on orders. "?region=<id>"
+// filters to one hub region; 0 or absent covers all five.
 
 import (
 	"context"
@@ -13,11 +14,11 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"time"
 
 	"evesynapse/internal/app/module"
+	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 )
@@ -35,7 +36,6 @@ type leaderboardRow struct {
 	Orders     string // esi.FormatInt
 	OpenValue  string // esi.FormatISK
 	SharePct   string // the ranked figure against the top station's, 0 to 100
-	locationID int64
 	ordersRaw  int64
 	valueRaw   float64
 }
@@ -93,7 +93,28 @@ func (app *page) buildLeaderboardView(ctx context.Context, q url.Values) *leader
 	}
 	view.Regions = regions
 
-	rows, err := app.queries.ListMarketStationLeaderboard(ctx, view.RegionID)
+	var regionIDs []int64
+	if view.RegionID != 0 {
+		regionIDs = []int64{view.RegionID}
+	} else {
+		for _, region := range app.deps.MarketRegions() {
+			regionIDs = append(regionIDs, region.ID)
+		}
+	}
+
+	var rows []db.MarketStationLeaderboard
+	var err error
+	if view.Sort == "orders" {
+		rows, err = app.queries.ListMarketStationLeaderboardByOrders(ctx, db.ListMarketStationLeaderboardByOrdersParams{
+			RegionIds: regionIDs,
+			RowLimit:  leaderboardRowCap,
+		})
+	} else {
+		rows, err = app.queries.ListMarketStationLeaderboardByValue(ctx, db.ListMarketStationLeaderboardByValueParams{
+			RegionIds: regionIDs,
+			RowLimit:  leaderboardRowCap,
+		})
+	}
 	if err != nil {
 		logging.Errorf("leaderboard: list rows for region %d: %v", view.RegionID, err)
 		return view
@@ -108,45 +129,22 @@ func (app *page) buildLeaderboardView(ctx context.Context, q url.Values) *leader
 			Station:    app.deps.StationRef(ctx, stationMemo, row.LocationID),
 			RegionID:   row.RegionID,
 			RegionName: regionName,
-			Orders:     esi.FormatInt(row.SellOrders + row.BuyOrders),
-			OpenValue:  esi.FormatISK(row.SellValue + row.BuyValue),
-			locationID: row.LocationID,
-			ordersRaw:  row.SellOrders + row.BuyOrders,
-			valueRaw:   row.SellValue + row.BuyValue,
+			Orders:     esi.FormatInt(row.OpenOrders),
+			OpenValue:  esi.FormatISK(row.OpenValue),
+			ordersRaw:  row.OpenOrders,
+			valueRaw:   row.OpenValue,
 		})
 	}
 	if len(view.Rows) == 0 {
 		return view
 	}
-	stamp, err := app.queries.GetMarketStationLeaderboardStamp(ctx, view.RegionID)
+	stamp, err := app.queries.GetMarketStationLeaderboardStamp(ctx, regionIDs)
 	if err != nil {
 		logging.Errorf("leaderboard: stamp for region %d: %v", view.RegionID, err)
 	} else if at, ok := stamp.(time.Time); ok {
 		view.AsOf = "Figures last gathered " + at.UTC().Format("Jan 2, 3:04 PM")
 	}
 	view.HasData = true
-	sort.Slice(view.Rows, func(i, j int) bool {
-		a, b := view.Rows[i], view.Rows[j]
-		if view.Sort == "orders" {
-			if a.ordersRaw != b.ordersRaw {
-				return a.ordersRaw > b.ordersRaw
-			}
-			if a.valueRaw != b.valueRaw {
-				return a.valueRaw > b.valueRaw
-			}
-		} else {
-			if a.valueRaw != b.valueRaw {
-				return a.valueRaw > b.valueRaw
-			}
-			if a.ordersRaw != b.ordersRaw {
-				return a.ordersRaw > b.ordersRaw
-			}
-		}
-		return a.locationID < b.locationID
-	})
-	if len(view.Rows) > leaderboardRowCap {
-		view.Rows = view.Rows[:leaderboardRowCap]
-	}
 	var top float64
 	if len(view.Rows) > 0 {
 		top = view.Rows[0].valueRaw

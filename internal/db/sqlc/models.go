@@ -1868,6 +1868,8 @@ type MarketStationLeaderboard struct {
 	SellValue  float64   `json:"sell_value"`
 	BuyValue   float64   `json:"buy_value"`
 	UpdatedAt  time.Time `json:"updated_at"`
+	OpenOrders int64     `json:"open_orders"`
+	OpenValue  float64   `json:"open_value"`
 }
 
 type MarketStationStat struct {

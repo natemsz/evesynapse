@@ -1500,23 +1500,34 @@ ON CONFLICT (key) DO UPDATE SET
 DELETE FROM market_station_leaderboard
 WHERE region_id = $1;
 -- name: UpsertMarketStationLeaderboard :exec
-INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, open_orders, open_value, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $3::bigint + $4::bigint, $5::double precision + $6::double precision, $7)
 ON CONFLICT (region_id, location_id) DO UPDATE SET
     sell_orders = excluded.sell_orders,
     buy_orders  = excluded.buy_orders,
     sell_value  = excluded.sell_value,
     buy_value   = excluded.buy_value,
+    open_orders = excluded.open_orders,
+    open_value  = excluded.open_value,
     updated_at  = excluded.updated_at;
--- name: ListMarketStationLeaderboard :many
-SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at
+-- name: ListMarketStationLeaderboardByValue :many
+-- Top stations ranked by band-filtered open ISK value in SQL with LIMIT.
+SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at, open_orders, open_value
 FROM market_station_leaderboard
-WHERE ($1::bigint = 0 OR region_id = $1::bigint)
-ORDER BY region_id, location_id;
+WHERE region_id = ANY(sqlc.arg(region_ids)::bigint[])
+ORDER BY open_value DESC, open_orders DESC, location_id ASC
+LIMIT sqlc.arg(row_limit)::bigint;
+-- name: ListMarketStationLeaderboardByOrders :many
+-- Top stations ranked by open-order count in SQL with LIMIT.
+SELECT region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at, open_orders, open_value
+FROM market_station_leaderboard
+WHERE region_id = ANY(sqlc.arg(region_ids)::bigint[])
+ORDER BY open_orders DESC, open_value DESC, location_id ASC
+LIMIT sqlc.arg(row_limit)::bigint;
 -- name: GetMarketStationLeaderboardStamp :one
 SELECT MAX(updated_at) AS stamp
 FROM market_station_leaderboard
-WHERE ($1::bigint = 0 OR region_id = $1::bigint);
+WHERE region_id = ANY(sqlc.arg(region_ids)::bigint[]);
 
 -- Per-type market price TTL cache. The worker refreshes
 -- only rows older than the TTL; pages read cache-only.

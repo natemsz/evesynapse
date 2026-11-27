@@ -460,6 +460,8 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	// Station leaderboard figures (P5), from the whole book: one row
 	// per station with the open-order count and the open ISK value
 	// per side, so the leaderboard page never aggregates at render.
+	// Only orders priced inside each item's Low90 to High90 band count
+	// toward open value so outlier listings cannot distort rankings.
 	type stationLeaderAccum struct {
 		sellOrders, buyOrders int64
 		sellValue, buyValue   float64
@@ -467,6 +469,10 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	leaderAcc := make(map[int64]*stationLeaderAccum)
 	for _, tb := range nb.types {
 		for _, side := range [][]bookOrder{tb.sells, tb.buys} {
+			if len(side) == 0 {
+				continue
+			}
+			low90, high90 := bookSideBand90(side)
 			for _, o := range side {
 				if o.LocationID <= 0 {
 					continue
@@ -476,12 +482,17 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 					acc = &stationLeaderAccum{}
 					leaderAcc[o.LocationID] = acc
 				}
+				inBand := o.Price >= low90 && o.Price <= high90
 				if o.IsBuy {
 					acc.buyOrders++
-					acc.buyValue += o.Price * float64(o.VolumeRemain)
+					if inBand {
+						acc.buyValue += o.Price * float64(o.VolumeRemain)
+					}
 				} else {
 					acc.sellOrders++
-					acc.sellValue += o.Price * float64(o.VolumeRemain)
+					if inBand {
+						acc.sellValue += o.Price * float64(o.VolumeRemain)
+					}
 				}
 			}
 		}
@@ -876,6 +887,8 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 		buyOrds := make([]int64, n)
 		sellVals := make([]float64, n)
 		buyVals := make([]float64, n)
+		openOrds := make([]int64, n)
+		openVals := make([]float64, n)
 		for i, loc := range chunk {
 			acc := leaderAcc[loc]
 			locIDs[i] = loc
@@ -883,18 +896,22 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 			buyOrds[i] = acc.buyOrders
 			sellVals[i] = acc.sellValue
 			buyVals[i] = acc.buyValue
+			openOrds[i] = acc.sellOrders + acc.buyOrders
+			openVals[i] = acc.sellValue + acc.buyValue
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, updated_at)
-			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::bigint[]), unnest($5::float8[]), unnest($6::float8[]), $7
+			INSERT INTO market_station_leaderboard (region_id, location_id, sell_orders, buy_orders, sell_value, buy_value, open_orders, open_value, updated_at)
+			SELECT $1, unnest($2::bigint[]), unnest($3::bigint[]), unnest($4::bigint[]), unnest($5::float8[]), unnest($6::float8[]), unnest($7::bigint[]), unnest($8::float8[]), $9
 			ON CONFLICT (region_id, location_id) DO UPDATE SET
 				sell_orders = excluded.sell_orders,
 				buy_orders  = excluded.buy_orders,
 				sell_value  = excluded.sell_value,
 				buy_value   = excluded.buy_value,
+				open_orders = excluded.open_orders,
+				open_value  = excluded.open_value,
 				updated_at  = excluded.updated_at
 		`, regionID, locIDs, sellOrds, buyOrds,
-			sellVals, buyVals, now); err != nil {
+			sellVals, buyVals, openOrds, openVals, now); err != nil {
 			return res, err
 		}
 	}

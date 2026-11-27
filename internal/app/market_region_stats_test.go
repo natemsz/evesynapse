@@ -546,35 +546,49 @@ func TestRegionSweepStoresStationLeaderboard(t *testing.T) {
 			markRegionFresh(t, q, region.ID)
 		}
 	}
-	transport.books[10000002] = [][]esi.MarketOrder{
-		{
-			{OrderID: 1, TypeID: 34, LocationID: 60003760, IsBuyOrder: false, Price: 5.0, VolumeRemain: 100},
-			{OrderID: 2, TypeID: 34, LocationID: 60003760, IsBuyOrder: true, Price: 4.0, VolumeRemain: 50},
-			{OrderID: 3, TypeID: 34, LocationID: 60003761, IsBuyOrder: false, Price: 6.0, VolumeRemain: 10},
-			{OrderID: 4, TypeID: 35, LocationID: 60003761, IsBuyOrder: false, Price: 100.0, VolumeRemain: 2},
-		},
+	orders := []esi.MarketOrder{
+		{OrderID: 1, TypeID: 34, LocationID: 60003760, IsBuyOrder: false, Price: 5.0, VolumeRemain: 100},
+		{OrderID: 2, TypeID: 34, LocationID: 60003760, IsBuyOrder: true, Price: 4.0, VolumeRemain: 50},
+		{OrderID: 3, TypeID: 34, LocationID: 60003761, IsBuyOrder: false, Price: 6.0, VolumeRemain: 10},
+		{OrderID: 4, TypeID: 35, LocationID: 60003761, IsBuyOrder: false, Price: 100.0, VolumeRemain: 2},
+		// Type 36: 10 normal sells at 100 ISK (station 60003760), plus one
+		// low outlier (1 ISK) and one joke sell (1B ISK x 100 = 100B ISK)
+		// at 60003761. Low90 and High90 are both 100, so both outliers
+		// count as open orders on 60003761 but add 0 to its open value.
+		{OrderID: 101, TypeID: 36, LocationID: 60003761, IsBuyOrder: false, Price: 1.0, VolumeRemain: 50},
+		{OrderID: 112, TypeID: 36, LocationID: 60003761, IsBuyOrder: false, Price: 1_000_000_000.0, VolumeRemain: 100},
 	}
+	for i := int64(0); i < 10; i++ {
+		orders = append(orders, esi.MarketOrder{
+			OrderID: 102 + i, TypeID: 36, LocationID: 60003760, IsBuyOrder: false, Price: 100.0, VolumeRemain: 1,
+		})
+	}
+	transport.books[10000002] = [][]esi.MarketOrder{orders}
 
 	sweepUntilIdle(t, app)
 
-	rows, err := q.ListMarketStationLeaderboard(ctx, 10000002)
+	rows, err := q.ListMarketStationLeaderboardByValue(ctx, db.ListMarketStationLeaderboardByValueParams{
+		RegionIds: []int64{10000002},
+		RowLimit:  100,
+	})
 	if err != nil {
 		t.Fatalf("list leaderboard: %v", err)
 	}
 	if len(rows) != 2 {
 		t.Fatalf("leaderboard rows = %+v, want one per location", rows)
 	}
-	byLoc := map[int64]db.MarketStationLeaderboard{}
-	for _, r := range rows {
-		byLoc[r.LocationID] = r
+	// Value-descending order puts Jita (1700 ISK) ahead of 60003761 (260 ISK)
+	// because the 100B joke order at 60003761 sits outside Low90..High90.
+	if rows[0].LocationID != 60003760 || rows[1].LocationID != 60003761 {
+		t.Fatalf("leaderboard order = [%d, %d], want [60003760, 60003761]", rows[0].LocationID, rows[1].LocationID)
 	}
-	jita := byLoc[60003760]
-	if jita.SellOrders != 1 || jita.BuyOrders != 1 || jita.SellValue != 500 || jita.BuyValue != 200 {
-		t.Errorf("station 60003760 = %+v, want 1 sell / 1 buy, 500 / 200 open", jita)
+	jita := rows[0]
+	if jita.SellOrders != 11 || jita.BuyOrders != 1 || jita.OpenOrders != 12 || jita.SellValue != 1500 || jita.BuyValue != 200 || jita.OpenValue != 1700 {
+		t.Errorf("station 60003760 = %+v, want 11 sell / 1 buy (12 open), 1500 / 200 (1700 open)", jita)
 	}
-	other := byLoc[60003761]
-	if other.SellOrders != 2 || other.BuyOrders != 0 || other.SellValue != 260 || other.BuyValue != 0 {
-		t.Errorf("station 60003761 = %+v, want 2 sells / 0 buys, 260 / 0 open", other)
+	other := rows[1]
+	if other.SellOrders != 4 || other.BuyOrders != 0 || other.OpenOrders != 4 || other.SellValue != 260 || other.BuyValue != 0 || other.OpenValue != 260 {
+		t.Errorf("station 60003761 = %+v, want 4 sells / 0 buys (4 open), 260 / 0 (260 open; out-of-band orders excluded from value)", other)
 	}
 }
 

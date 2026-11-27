@@ -1111,6 +1111,11 @@ var pgDoctrineFitSearchSchema string
 //go:embed schema_pg/187_scan_dscan_rows.sql
 var pgScanDScanRowsSchema string
 
+// Step 191: station leaderboard band-filtered totals and ranking indexes.
+//
+//go:embed schema_pg/191_station_leaderboard_band.sql
+var pgStationLeaderboardBandSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1326,6 +1331,7 @@ func schemaSteps() []schemaStep {
 		{185, "customize_prompt_seen", pgCustomizePromptSeenSchema, ""},
 		{186, "doctrine_fit_search", pgDoctrineFitSearchSchema, ""},
 		{187, "scan_dscan_rows", pgScanDScanRowsSchema, ""},
+		{191, "station_leaderboard_band", pgStationLeaderboardBandSchema, ""},
 	}
 }
 

@@ -241,16 +241,29 @@ func medianPrice(sorted []float64) float64 {
 	return (sorted[n/2-1] + sorted[n/2]) / 2
 }
 
+// percentileIndexNR returns the nearest-rank index for the p-th
+// percentile of a non-empty ascending slice of length n.
+func percentileIndexNR(n int, p float64) int {
+	idx := int(math.Ceil(p/100*float64(n))) - 1
+	if idx < 0 {
+		return 0
+	}
+	if idx >= n {
+		return n - 1
+	}
+	return idx
+}
+
 // pricePercentileNR returns the nearest-rank p-th percentile of
 // ascending prices: the smallest price at least p% of orders are
 // at or below, so a "9 in 10 orders" label is exactly true.
 func pricePercentileNR(sorted []float64, p float64) float64 {
-	idx := int(math.Ceil(p/100*float64(len(sorted)))) - 1
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= len(sorted) {
-		idx = len(sorted) - 1
-	}
-	return sorted[idx]
+	return sorted[percentileIndexNR(len(sorted), p)]
+}
+
+// bookSideBand90 returns the Low90 and High90 price bounds for a
+// non-empty price-ascending slice of bookOrder, using the exact same
+// nearest-rank percentiles as summarizePrices.
+func bookSideBand90(side []bookOrder) (low90, high90 float64) {
+	return side[percentileIndexNR(len(side), 10)].Price, side[percentileIndexNR(len(side), 90)].Price
 }

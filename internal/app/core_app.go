@@ -264,6 +264,20 @@ type Application struct {
 	// each other's committed stats without lock-ordering conflicts.
 	hubConfirmMu sync.Mutex
 
+	// abyssalModelsMu guards abyssalModels, the per-family cached
+	// learned correction models reused across scoring passes while
+	// each family's corpus fingerprint is unchanged or within the
+	// hourly refit window (abyssal.go).
+	abyssalModelsMu sync.Mutex
+	abyssalModels   map[string]abyssalCachedModel
+
+	// lpFullRefreshedMu guards lpFullRefreshed, tracking which hub
+	// regions have completed one full lp_offer_values sync since
+	// process start so subsequent sweeps can refresh incrementally
+	// (market_lp.go, market_region_stats.go).
+	lpFullRefreshedMu sync.Mutex
+	lpFullRefreshed   map[int64]bool
+
 	// esiExpires holds, per fetch kind, the Expires ESI gave the
 	// last answer (string -> time.Time), for the passes that wait
 	// out ESI's own cache window instead of a fixed gate.

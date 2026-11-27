@@ -250,10 +250,13 @@ func (app *Application) totalKillLeaders(ctx context.Context, day, since, until 
 	if err != nil {
 		return 0, err
 	}
+	if _, err := tx.Exec(ctx, "ANALYZE kill_leaders_win"); err != nil {
+		return 0, err
+	}
 	if err := q.FillKillLeadersAtt(ctx); err != nil {
 		return 0, err
 	}
-	if _, err := tx.Exec(ctx, "ANALYZE kill_leaders_win, kill_leaders_att"); err != nil {
+	if _, err := tx.Exec(ctx, "ANALYZE kill_leaders_att"); err != nil {
 		return 0, err
 	}
 	if err := q.DeleteKillLeadersDay(ctx, day); err != nil {

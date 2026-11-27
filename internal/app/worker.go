@@ -920,6 +920,7 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	c.pass("scoring abyssal items", func() (int, bool) {
 		return app.scoreAbyssalItems(ctx), false
 	})
+	clock.mark("abyssal scoring", time.Now())
 
 	// Blueprint copy medians (schema 061): the stored per-
 	// (type, runs) median ask of single-copy contracts, the
@@ -929,6 +930,7 @@ func (c *cycleState) refreshPublicData(ctx context.Context, characters []db.Char
 	c.pass("computing blueprint copy medians", func() (int, bool) {
 		return app.refreshBlueprintCopyMedians(ctx), false
 	})
+	clock.mark("blueprint medians", time.Now())
 
 	// Contract appraisal (schema 056): prices the due slice of
 	// stored contract lines from stored pricing inputs alone

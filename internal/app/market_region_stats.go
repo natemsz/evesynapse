@@ -731,17 +731,29 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	}
 	// LP offer values (schema 102) read the stat pack just written,
 	// behind a savepoint: the LP rebuild is a secondary surface, and
-	// its failure must not roll back the region's whole sweep.
+	// its failure must not roll back the region's whole sweep. Reconcile
+	// the whole region on a full sweep or the first sweep since start,
+	// then update only offers affected by moved types.
+	needFullLP := res.full || !app.lpRegionRefreshed(regionID)
+	lpRefreshedOK := false
 	if _, err := tx.Exec(ctx, "SAVEPOINT lp_values"); err != nil {
 		return res, err
 	}
-	if err := app.refreshLPOfferValues(ctx, qtx, regionID, now); err != nil {
-		logging.Errorf("worker: lp offer values in sweep of %s: %v", marketRegionLabel(regionID), err)
+	var lpErr error
+	if needFullLP {
+		lpErr = app.refreshLPOfferValues(ctx, qtx, regionID, now)
+	} else {
+		lpErr = app.refreshLPOfferValuesForTypes(ctx, qtx, regionID, touched, now)
+	}
+	if lpErr != nil {
+		logging.Errorf("worker: lp offer values in sweep of %s: %v", marketRegionLabel(regionID), lpErr)
 		if _, err := tx.Exec(ctx, "ROLLBACK TO SAVEPOINT lp_values"); err != nil {
 			return res, fmt.Errorf("lp offer values: %w", err)
 		}
 	} else if _, err := tx.Exec(ctx, "RELEASE SAVEPOINT lp_values"); err != nil {
 		return res, err
+	} else {
+		lpRefreshedOK = true
 	}
 	// Basket values (schema 103): today's value of every basket
 	// priced in this region, from the same rows.
@@ -936,6 +948,9 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return res, err
+	}
+	if needFullLP && lpRefreshedOK {
+		app.markLPRegionRefreshed(regionID)
 	}
 	// Cross-hub confirmation (schema 188) runs post-commit under a
 	// short mutex so concurrent hub sweeps see each other's committed

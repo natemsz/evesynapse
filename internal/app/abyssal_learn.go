@@ -34,7 +34,9 @@ package app
 // ---------------------------------------------------------------------
 
 import (
+	"cmp"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -280,7 +282,8 @@ func (m *abyssalGBM) filled(x []float64) []float64 {
 }
 
 func fitAbyssalGBM(rows []abyssalLearnRow, p abyssalGBMParams) *abyssalGBM {
-	if len(rows) == 0 {
+	n := len(rows)
+	if n == 0 {
 		return nil
 	}
 	nf := len(rows[0].X)
@@ -297,32 +300,66 @@ func fitAbyssalGBM(rows []abyssalLearnRow, p abyssalGBMParams) *abyssalGBM {
 			m.Fill[j] = col[len(col)/2]
 		}
 	}
-	X := make([][]float64, len(rows))
-	w := make([]float64, len(rows))
+	X := make([][]float64, n)
+	cols := make([][]float64, nf)
+	for j := 0; j < nf; j++ {
+		cols[j] = make([]float64, n)
+	}
+	w := make([]float64, n)
 	sw := 0.0
 	for i, r := range rows {
-		X[i] = m.filled(r.X)
+		xf := m.filled(r.X)
+		X[i] = xf
+		for j := 0; j < nf; j++ {
+			cols[j][i] = xf[j]
+		}
 		sw += r.W
 	}
 	for i, r := range rows {
-		w[i] = r.W * float64(len(rows)) / sw // mean weight 1
+		w[i] = r.W * float64(n) / sw // mean weight 1
 	}
+	// Pre-sort each feature's row indices once for all rounds and tree
+	// levels, preserving exact split selection without per-node sorting.
+	rootSorted := make([][]int, nf)
+	for j := 0; j < nf; j++ {
+		col := cols[j]
+		ord := make([]int, n)
+		for i := range ord {
+			ord[i] = i
+		}
+		slices.SortFunc(ord, func(a, b int) int {
+			if c := cmp.Compare(col[a], col[b]); c != 0 {
+				return c
+			}
+			return cmp.Compare(a, b)
+		})
+		rootSorted[j] = ord
+	}
+	var rootIdx []int
+	if nf == 0 {
+		rootIdx = make([]int, n)
+		for i := range rootIdx {
+			rootIdx[i] = i
+		}
+	}
+	scratch := make([][]int, p.Depth)
+	for d := range scratch {
+		scratch[d] = make([]int, nf*n)
+	}
+	goLeft := make([]bool, n)
+
 	m.Base = abyssalWeightedQuantile(learnTargets(rows), 0.5)
-	pred := make([]float64, len(rows))
+	pred := make([]float64, n)
 	for i := range pred {
 		pred[i] = m.Base
 	}
-	res := make([]float64, len(rows))
-	idx := make([]int, len(rows))
-	for i := range idx {
-		idx[i] = i
-	}
+	g := make([]float64, n)
 	for round := 0; round < p.Rounds; round++ {
 		for i, r := range rows {
-			res[i] = r.Y - pred[i]
+			g[i] = w[i] * (r.Y - pred[i])
 		}
 		var t abyssalGBMTree
-		abyssalGrow(&t, X, res, w, idx, p.Depth, math.Inf(-1), math.Inf(1), p)
+		abyssalGrow(&t, cols, g, w, rootIdx, rootSorted, scratch, goLeft, n, p.Depth, math.Inf(-1), math.Inf(1), p)
 		if len(t) == 1 && t[0].Val == 0 {
 			break // nothing left to learn
 		}
@@ -334,46 +371,73 @@ func fitAbyssalGBM(rows []abyssalLearnRow, p abyssalGBMParams) *abyssalGBM {
 	return m
 }
 
-// abyssalGrow grows one node over rows idx and returns its index.
-// lo and hi bound the node's values (the monotone envelope).
-func abyssalGrow(t *abyssalGBMTree, X [][]float64, r, w []float64, idx []int, depth int, lo, hi float64, p abyssalGBMParams) int {
+// abyssalGrow grows one node over rows in sorted (or idx when nf == 0)
+// and returns its index. lo and hi bound the node's values (the monotone
+// envelope).
+func abyssalGrow(t *abyssalGBMTree, cols [][]float64, g, w []float64, idx []int, sorted [][]int, scratch [][]int, goLeft []bool, n, depth int, lo, hi float64, p abyssalGBMParams) int {
+	nf := len(cols)
+	var nodeIdx []int
+	if nf > 0 {
+		nodeIdx = sorted[0]
+	} else {
+		nodeIdx = idx
+	}
 	G, H := 0.0, 0.0
-	for _, i := range idx {
-		G += w[i] * r[i]
+	for _, i := range nodeIdx {
+		G += g[i]
 		H += w[i]
 	}
-	clampV := func(v float64) float64 { return math.Min(math.Max(v, lo), hi) }
+	val := G / (H + p.Lambda)
+	if val < lo {
+		val = lo
+	} else if val > hi {
+		val = hi
+	}
 	id := len(*t)
-	*t = append(*t, abyssalGBMNode{Leaf: true, Val: clampV(G / (H + p.Lambda))})
-	if depth == 0 || H < 2*p.MinLeafW || len(X) == 0 {
+	*t = append(*t, abyssalGBMNode{Leaf: true, Val: val})
+	if depth == 0 || H < 2*p.MinLeafW || nf == 0 || len(nodeIdx) < 2 {
 		return id
 	}
 	parent := G * G / (H + p.Lambda)
 	bestGain, bestFeat, bestThr := 1e-9, -1, 0.0
 	var bestL, bestR float64
-	order := append([]int(nil), idx...)
-	for j := range X[0] {
-		sort.Slice(order, func(a, b int) bool { return X[order[a]][j] < X[order[b]][j] })
+	for j := 0; j < nf; j++ {
+		order := sorted[j]
+		col := cols[j]
 		gl, hl := 0.0, 0.0
-		for k := 0; k < len(order)-1; k++ {
+		limit := len(order) - 1
+		for k := 0; k < limit; k++ {
 			i := order[k]
-			gl += w[i] * r[i]
+			gl += g[i]
 			hl += w[i]
-			if X[order[k+1]][j] == X[i][j] {
+			xi := col[i]
+			xnext := col[order[k+1]]
+			if xnext == xi {
 				continue // no threshold between equal values
 			}
 			gr, hr := G-gl, H-hl
 			if hl < p.MinLeafW || hr < p.MinLeafW {
 				continue
 			}
-			vl, vr := clampV(gl/(hl+p.Lambda)), clampV(gr/(hr+p.Lambda))
+			vl := gl / (hl + p.Lambda)
+			if vl < lo {
+				vl = lo
+			} else if vl > hi {
+				vl = hi
+			}
+			vr := gr / (hr + p.Lambda)
+			if vr < lo {
+				vr = lo
+			} else if vr > hi {
+				vr = hi
+			}
 			if vl > vr {
 				continue // a better roll may never earn less
 			}
 			gain := gl*gl/(hl+p.Lambda) + gr*gr/(hr+p.Lambda) - parent
 			if gain > bestGain {
 				bestGain, bestFeat = gain, j
-				bestThr = (X[i][j] + X[order[k+1]][j]) / 2
+				bestThr = (xi + xnext) / 2
 				bestL, bestR = vl, vr
 			}
 		}
@@ -381,17 +445,44 @@ func abyssalGrow(t *abyssalGBMTree, X [][]float64, r, w []float64, idx []int, de
 	if bestFeat < 0 {
 		return id
 	}
-	var li, ri []int
-	for _, i := range idx {
-		if X[i][bestFeat] <= bestThr {
-			li = append(li, i)
+	bestOrd := sorted[bestFeat]
+	bestCol := cols[bestFeat]
+	nLeft := 0
+	for _, i := range bestOrd {
+		if bestCol[i] <= bestThr {
+			goLeft[i] = true
+			nLeft++
 		} else {
-			ri = append(ri, i)
+			goLeft[i] = false
 		}
 	}
+	m := len(bestOrd)
+	if nLeft == 0 || nLeft == m {
+		return id
+	}
+	buf := scratch[depth-1]
+	leftSorted := make([][]int, nf)
+	rightSorted := make([][]int, nf)
+	for j := 0; j < nf; j++ {
+		base := j * n
+		ls := buf[base : base+nLeft]
+		rs := buf[base+nLeft : base+m]
+		li, ri := 0, 0
+		for _, i := range sorted[j] {
+			if goLeft[i] {
+				ls[li] = i
+				li++
+			} else {
+				rs[ri] = i
+				ri++
+			}
+		}
+		leftSorted[j] = ls
+		rightSorted[j] = rs
+	}
 	mid := (bestL + bestR) / 2
-	left := abyssalGrow(t, X, r, w, li, depth-1, lo, mid, p)
-	right := abyssalGrow(t, X, r, w, ri, depth-1, mid, hi, p)
+	left := abyssalGrow(t, cols, g, w, nil, leftSorted, scratch, goLeft, n, depth-1, lo, mid, p)
+	right := abyssalGrow(t, cols, g, w, nil, rightSorted, scratch, goLeft, n, depth-1, mid, hi, p)
 	(*t)[id] = abyssalGBMNode{Feat: bestFeat, Thr: bestThr, Left: left, Right: right}
 	return id
 }

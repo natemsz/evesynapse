@@ -34,7 +34,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	json "github.com/goccy/go-json"
@@ -480,8 +479,8 @@ func completePublicContractRegionTx(ctx context.Context, q *db.Queries, regionID
 	}
 	// Attribution rides every sighting write (schema 069): what
 	// else shares each listing's contract, while it is stored.
-	if err := q.StampAbyssalSightingAttribution(ctx, db.StampAbyssalSightingAttributionParams{
-		RegionID: sql.NullInt64{Int64: regionID, Valid: true}, Cycle: sql.NullInt64{Int64: cycle, Valid: true},
+	if err := q.StampAbyssalSightingAttributionForRegionCycle(ctx, db.StampAbyssalSightingAttributionForRegionCycleParams{
+		RegionID: regionID, Cycle: cycle,
 	}); err != nil {
 		return fmt.Errorf("stamp sightings %d: %w", regionID, err)
 	}

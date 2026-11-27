@@ -386,10 +386,10 @@ ON CONFLICT (item_id, contract_id) DO UPDATE SET
 -- contract and who listed it, read from the stored contract and
 -- stamped onto the sighting, which outlives the contract rows.
 -- Run beside every sighting write: for one contract
--- (contract_id) or a region's completed sweep (region_id with
--- cycle). Line values are the appraisal pass's; an unpriced
--- other line is counted, so the corpus can refuse a residual it
--- cannot compute.
+-- (StampAbyssalSightingAttribution) or a region's completed sweep
+-- (StampAbyssalSightingAttributionForRegionCycle). Line values are
+-- the appraisal pass's; an unpriced other line is counted, so the
+-- corpus can refuse a residual it cannot compute.
 -- name: StampAbyssalSightingAttribution :exec
 UPDATE abyssal_sightings s SET
     issuer_id      = c.issuer_id,
@@ -411,9 +411,50 @@ LATERAL (
     WHERE i.contract_id = c.contract_id
 ) m
 WHERE c.contract_id = s.contract_id
-  AND (c.contract_id = sqlc.narg(contract_id)::bigint
-       OR (c.region_id = sqlc.narg(region_id)::bigint AND c.last_cycle = sqlc.narg(cycle)::bigint
-           AND c.departed_at IS NULL));
+  AND c.contract_id = sqlc.arg(contract_id)::bigint
+  AND (s.issuer_id IS DISTINCT FROM c.issuer_id
+       OR s.abyssal_lines IS DISTINCT FROM m.abyssal_lines
+       OR s.wanted_lines IS DISTINCT FROM m.wanted_lines
+       OR s.other_lines IS DISTINCT FROM m.other_lines
+       OR s.other_unpriced IS DISTINCT FROM m.other_unpriced
+       OR s.other_value IS DISTINCT FROM m.other_value);
+
+-- name: StampAbyssalSightingAttributionForRegionCycle :exec
+WITH target AS MATERIALIZED (
+    SELECT DISTINCT c.contract_id, c.issuer_id
+    FROM pub_contracts c
+    JOIN abyssal_sightings s ON s.contract_id = c.contract_id
+    WHERE c.region_id = sqlc.arg(region_id)::bigint
+      AND c.last_cycle = sqlc.arg(cycle)::bigint
+      AND c.departed_at IS NULL
+),
+metrics AS (
+    SELECT t.contract_id, t.issuer_id,
+           COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NOT NULL) AS abyssal_lines,
+           COUNT(*) FILTER (WHERE NOT i.is_included) AS wanted_lines,
+           COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NULL) AS other_lines,
+           COUNT(*) FILTER (WHERE i.is_included AND a.item_id IS NULL AND i.line_value IS NULL) AS other_unpriced,
+           COALESCE(SUM(i.line_value) FILTER (WHERE i.is_included AND a.item_id IS NULL), 0)::double precision AS other_value
+    FROM target t
+    LEFT JOIN pub_contract_items i ON i.contract_id = t.contract_id
+    LEFT JOIN abyssal_items a ON a.item_id = i.item_id
+    GROUP BY t.contract_id, t.issuer_id
+)
+UPDATE abyssal_sightings s SET
+    issuer_id      = m.issuer_id,
+    abyssal_lines  = m.abyssal_lines,
+    wanted_lines   = m.wanted_lines,
+    other_lines    = m.other_lines,
+    other_unpriced = m.other_unpriced,
+    other_value    = m.other_value
+FROM metrics m
+WHERE s.contract_id = m.contract_id
+  AND (s.issuer_id IS DISTINCT FROM m.issuer_id
+       OR s.abyssal_lines IS DISTINCT FROM m.abyssal_lines
+       OR s.wanted_lines IS DISTINCT FROM m.wanted_lines
+       OR s.other_lines IS DISTINCT FROM m.other_lines
+       OR s.other_unpriced IS DISTINCT FROM m.other_unpriced
+       OR s.other_value IS DISTINCT FROM m.other_value);
 
 -- name: StampAbyssalSightingsDeparted :exec
 UPDATE abyssal_sightings s
@@ -932,14 +973,40 @@ FROM abyssal_family_weights
 WHERE family = ANY(sqlc.arg(families)::text[])
 ORDER BY family, attribute_id;
 
--- The items whose score or estimate is due: never scored, or
--- scored before the caller's cutoff. Stalest first.
+-- The items whose score or estimate is due: never scored (new probes
+-- and API wants), or already scored before the caller's cutoff while
+-- still holding a live sighting. Departed items stay frozen until a
+-- new listing opens. Grouped by family so each batch touches few
+-- families and corpus lookups stay selective.
 -- name: ListAbyssalItemsDueScoring :many
+WITH unscored AS (
+    SELECT item_id, type_id, source_type_id, mutator_type_id, attributes,
+           0 AS prio, family, scored_at
+    FROM abyssal_items
+    WHERE scored_at IS NULL
+    ORDER BY item_id ASC
+    LIMIT sqlc.arg(max_rows)::bigint
+),
+live_due AS (
+    SELECT a.item_id, a.type_id, a.source_type_id, a.mutator_type_id, a.attributes,
+           1 AS prio, a.family, a.scored_at
+    FROM (
+        SELECT DISTINCT item_id
+        FROM abyssal_sightings
+        WHERE departed_at IS NULL
+    ) s
+    JOIN abyssal_items a ON a.item_id = s.item_id
+    WHERE a.scored_at < sqlc.arg(cutoff)::timestamptz
+    ORDER BY a.family ASC, a.scored_at ASC, a.item_id ASC
+    LIMIT sqlc.arg(max_rows)::bigint
+)
 SELECT item_id, type_id, source_type_id, mutator_type_id, attributes
-FROM abyssal_items
-WHERE scored_at IS NULL
-   OR scored_at < sqlc.arg(cutoff)::timestamptz
-ORDER BY scored_at ASC NULLS FIRST, item_id ASC
+FROM (
+    SELECT * FROM unscored
+    UNION ALL
+    SELECT * FROM live_due
+) d
+ORDER BY prio ASC, family ASC, scored_at ASC NULLS FIRST, item_id ASC
 LIMIT sqlc.arg(max_rows)::bigint;
 
 -- The calibration corpus for one family: every scored item of

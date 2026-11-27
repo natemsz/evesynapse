@@ -41,21 +41,26 @@ func (q *Queries) DeleteLPOfferRequirementsByCorp(ctx context.Context, corporati
 	return err
 }
 
-const deleteLPOfferValuesByRegion = `-- name: DeleteLPOfferValuesByRegion :exec
-DELETE FROM lp_offer_values WHERE region_id = $1
-`
-
-func (q *Queries) DeleteLPOfferValuesByRegion(ctx context.Context, regionID int64) error {
-	_, err := q.db.Exec(ctx, deleteLPOfferValuesByRegion, regionID)
-	return err
-}
-
 const deleteLPOffersByCorp = `-- name: DeleteLPOffersByCorp :exec
 DELETE FROM lp_offers WHERE corporation_id = $1
 `
 
 func (q *Queries) DeleteLPOffersByCorp(ctx context.Context, corporationID int64) error {
 	_, err := q.db.Exec(ctx, deleteLPOffersByCorp, corporationID)
+	return err
+}
+
+const deleteOrphanLPOfferValuesByRegion = `-- name: DeleteOrphanLPOfferValuesByRegion :exec
+DELETE FROM lp_offer_values v
+WHERE v.region_id = $1
+  AND NOT EXISTS (
+      SELECT 1 FROM lp_offers o
+      WHERE o.corporation_id = v.corporation_id AND o.offer_id = v.offer_id
+  )
+`
+
+func (q *Queries) DeleteOrphanLPOfferValuesByRegion(ctx context.Context, regionID int64) error {
+	_, err := q.db.Exec(ctx, deleteOrphanLPOfferValuesByRegion, regionID)
 	return err
 }
 
@@ -528,6 +533,36 @@ FROM (
         GROUP BY q.corporation_id, q.offer_id
     ) r ON r.corporation_id = o.corporation_id AND r.offer_id = o.offer_id
 ) v
+ON CONFLICT (region_id, corporation_id, offer_id) DO UPDATE SET
+    type_id         = EXCLUDED.type_id,
+    quantity        = EXCLUDED.quantity,
+    lp_cost         = EXCLUDED.lp_cost,
+    isk_cost        = EXCLUDED.isk_cost,
+    required_cost   = EXCLUDED.required_cost,
+    unit_sell       = EXCLUDED.unit_sell,
+    unit_buy        = EXCLUDED.unit_buy,
+    isk_per_lp_sell = EXCLUDED.isk_per_lp_sell,
+    isk_per_lp_buy  = EXCLUDED.isk_per_lp_buy,
+    unpriced_reason = EXCLUDED.unpriced_reason,
+    daily_volume    = EXCLUDED.daily_volume,
+    sell_chg_7d     = EXCLUDED.sell_chg_7d,
+    volatility_30d  = EXCLUDED.volatility_30d,
+    prices_at       = EXCLUDED.prices_at,
+    updated_at      = EXCLUDED.updated_at
+WHERE lp_offer_values.type_id         IS DISTINCT FROM EXCLUDED.type_id
+   OR lp_offer_values.quantity        IS DISTINCT FROM EXCLUDED.quantity
+   OR lp_offer_values.lp_cost         IS DISTINCT FROM EXCLUDED.lp_cost
+   OR lp_offer_values.isk_cost        IS DISTINCT FROM EXCLUDED.isk_cost
+   OR lp_offer_values.required_cost   IS DISTINCT FROM EXCLUDED.required_cost
+   OR lp_offer_values.unit_sell       IS DISTINCT FROM EXCLUDED.unit_sell
+   OR lp_offer_values.unit_buy        IS DISTINCT FROM EXCLUDED.unit_buy
+   OR lp_offer_values.isk_per_lp_sell IS DISTINCT FROM EXCLUDED.isk_per_lp_sell
+   OR lp_offer_values.isk_per_lp_buy  IS DISTINCT FROM EXCLUDED.isk_per_lp_buy
+   OR lp_offer_values.unpriced_reason IS DISTINCT FROM EXCLUDED.unpriced_reason
+   OR lp_offer_values.daily_volume    IS DISTINCT FROM EXCLUDED.daily_volume
+   OR lp_offer_values.sell_chg_7d     IS DISTINCT FROM EXCLUDED.sell_chg_7d
+   OR lp_offer_values.volatility_30d  IS DISTINCT FROM EXCLUDED.volatility_30d
+   OR lp_offer_values.prices_at       IS DISTINCT FROM EXCLUDED.prices_at
 `
 
 type RefreshLPOfferValuesParams struct {
@@ -538,19 +573,124 @@ type RefreshLPOfferValuesParams struct {
 }
 
 // Values every mirrored offer in one region from the stat pack's
-// stored rows. The product sells at its typical sell (into sell
-// orders, net of broker fee and sales tax via sell_net_factor) or its
-// typical buy (instant sale into buy orders, net of sales tax via
-// buy_net_factor); every required item is bought at its typical sell.
-// Unpriced when the product is a blueprint copy (its original's market
-// is not its price), when the product has no typical price, or when
-// any required item has none.
+// stored rows, upserting only rows whose computed figures changed.
+// The product sells at its typical sell (into sell orders, net of
+// broker fee and sales tax via sell_net_factor) or its typical buy
+// (instant sale into buy orders, net of sales tax via buy_net_factor);
+// every required item is bought at its typical sell. Unpriced when the
+// product is a blueprint copy (its original's market is not its price),
+// when the product has no typical price, or when any required item has
+// none.
 func (q *Queries) RefreshLPOfferValues(ctx context.Context, arg RefreshLPOfferValuesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, refreshLPOfferValues,
 		arg.RegionID,
 		arg.SellNetFactor,
 		arg.BuyNetFactor,
 		arg.Now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const refreshLPOfferValuesForTypes = `-- name: RefreshLPOfferValuesForTypes :execrows
+WITH affected AS (
+    SELECT o.corporation_id, o.offer_id
+    FROM lp_offers o
+    WHERE o.type_id = ANY($5::bigint[])
+    UNION
+    SELECT q.corporation_id, q.offer_id
+    FROM lp_offer_requirements q
+    WHERE q.type_id = ANY($5::bigint[])
+)
+INSERT INTO lp_offer_values (region_id, corporation_id, offer_id, type_id, quantity, lp_cost, isk_cost,
+    required_cost, unit_sell, unit_buy, isk_per_lp_sell, isk_per_lp_buy, unpriced_reason,
+    daily_volume, sell_chg_7d, volatility_30d, prices_at, updated_at)
+SELECT $1::bigint, v.corporation_id, v.offer_id, v.type_id, v.quantity, v.lp_cost, v.isk_cost,
+       v.required_cost, v.unit_sell, v.unit_buy,
+       CASE WHEN v.reason = '' AND v.lp_cost > 0 AND v.unit_sell > 0
+            THEN (v.quantity * v.unit_sell * $2::double precision - v.isk_cost - v.required_cost) / v.lp_cost END,
+       CASE WHEN v.reason = '' AND v.lp_cost > 0 AND v.unit_buy > 0
+            THEN (v.quantity * v.unit_buy * $3::double precision - v.isk_cost - v.required_cost) / v.lp_cost END,
+       v.reason, v.daily_volume, v.sell_chg_7d, v.volatility_30d, v.prices_at, $4::timestamptz
+FROM (
+    SELECT o.corporation_id, o.offer_id, o.type_id, o.quantity, o.lp_cost, o.isk_cost,
+           COALESCE(r.cost, 0) AS required_cost,
+           COALESCE(s.typical_sell, 0) AS unit_sell,
+           COALESCE(s.typical_buy, 0) AS unit_buy,
+           CASE
+               WHEN COALESCE(g.category_id, 0) = 9 THEN 'blueprint copy'
+               WHEN COALESCE(s.typical_sell, 0) <= 0 AND COALESCE(s.typical_buy, 0) <= 0 THEN 'no market for the item'
+               WHEN COALESCE(r.missing, 0) > 0 THEN 'a required item has no market'
+               ELSE ''
+           END AS reason,
+           COALESCE(s.avg_daily_volume, 0) AS daily_volume,
+           s.sell_chg_7d, s.volatility_30d, s.updated_at AS prices_at
+    FROM affected af
+    JOIN lp_offers o ON o.corporation_id = af.corporation_id AND o.offer_id = af.offer_id
+    LEFT JOIN market_region_stats s ON s.region_id = $1::bigint AND s.type_id = o.type_id
+    LEFT JOIN sde_types t ON t.type_id = o.type_id
+    LEFT JOIN sde_groups g ON g.group_id = t.group_id
+    LEFT JOIN (
+        SELECT q.corporation_id, q.offer_id,
+               SUM(q.quantity * COALESCE(rs.typical_sell, 0)) AS cost,
+               COUNT(*) FILTER (WHERE COALESCE(rs.typical_sell, 0) <= 0) AS missing
+        FROM affected af2
+        JOIN lp_offer_requirements q ON q.corporation_id = af2.corporation_id AND q.offer_id = af2.offer_id
+        LEFT JOIN market_region_stats rs ON rs.region_id = $1::bigint AND rs.type_id = q.type_id
+        GROUP BY q.corporation_id, q.offer_id
+    ) r ON r.corporation_id = o.corporation_id AND r.offer_id = o.offer_id
+) v
+ON CONFLICT (region_id, corporation_id, offer_id) DO UPDATE SET
+    type_id         = EXCLUDED.type_id,
+    quantity        = EXCLUDED.quantity,
+    lp_cost         = EXCLUDED.lp_cost,
+    isk_cost        = EXCLUDED.isk_cost,
+    required_cost   = EXCLUDED.required_cost,
+    unit_sell       = EXCLUDED.unit_sell,
+    unit_buy        = EXCLUDED.unit_buy,
+    isk_per_lp_sell = EXCLUDED.isk_per_lp_sell,
+    isk_per_lp_buy  = EXCLUDED.isk_per_lp_buy,
+    unpriced_reason = EXCLUDED.unpriced_reason,
+    daily_volume    = EXCLUDED.daily_volume,
+    sell_chg_7d     = EXCLUDED.sell_chg_7d,
+    volatility_30d  = EXCLUDED.volatility_30d,
+    prices_at       = EXCLUDED.prices_at,
+    updated_at      = EXCLUDED.updated_at
+WHERE lp_offer_values.type_id         IS DISTINCT FROM EXCLUDED.type_id
+   OR lp_offer_values.quantity        IS DISTINCT FROM EXCLUDED.quantity
+   OR lp_offer_values.lp_cost         IS DISTINCT FROM EXCLUDED.lp_cost
+   OR lp_offer_values.isk_cost        IS DISTINCT FROM EXCLUDED.isk_cost
+   OR lp_offer_values.required_cost   IS DISTINCT FROM EXCLUDED.required_cost
+   OR lp_offer_values.unit_sell       IS DISTINCT FROM EXCLUDED.unit_sell
+   OR lp_offer_values.unit_buy        IS DISTINCT FROM EXCLUDED.unit_buy
+   OR lp_offer_values.isk_per_lp_sell IS DISTINCT FROM EXCLUDED.isk_per_lp_sell
+   OR lp_offer_values.isk_per_lp_buy  IS DISTINCT FROM EXCLUDED.isk_per_lp_buy
+   OR lp_offer_values.unpriced_reason IS DISTINCT FROM EXCLUDED.unpriced_reason
+   OR lp_offer_values.daily_volume    IS DISTINCT FROM EXCLUDED.daily_volume
+   OR lp_offer_values.sell_chg_7d     IS DISTINCT FROM EXCLUDED.sell_chg_7d
+   OR lp_offer_values.volatility_30d  IS DISTINCT FROM EXCLUDED.volatility_30d
+   OR lp_offer_values.prices_at       IS DISTINCT FROM EXCLUDED.prices_at
+`
+
+type RefreshLPOfferValuesForTypesParams struct {
+	RegionID      int64     `json:"region_id"`
+	SellNetFactor float64   `json:"sell_net_factor"`
+	BuyNetFactor  float64   `json:"buy_net_factor"`
+	Now           time.Time `json:"now"`
+	TypeIds       []int64   `json:"type_ids"`
+}
+
+// Revalues only the offers whose product or a required item moved in
+// the sweep, skipping rows whose computed figures did not change.
+func (q *Queries) RefreshLPOfferValuesForTypes(ctx context.Context, arg RefreshLPOfferValuesForTypesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, refreshLPOfferValuesForTypes,
+		arg.RegionID,
+		arg.SellNetFactor,
+		arg.BuyNetFactor,
+		arg.Now,
+		arg.TypeIds,
 	)
 	if err != nil {
 		return 0, err

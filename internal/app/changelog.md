@@ -38,13 +38,6 @@ If this is your first install, use the [EveSynapse Installer](https://natems.dev
 * Upgrade ranvia.io/go to v0.6.0 by @natemsz in #635
 * Share ISK formatting, passkey refusals, token pairs and the snapshot fetch by @natemsz in #630
 
-### Other Changes
-* Update changelog for v1.0.2.14 by @natemsz in #634
-* Update changelog for v1.0.2.13 by @natemsz in #632
-* Update changelog for v1.0.2.12 by @natemsz in #624
-* Update changelog for v1.0.2.11 by @natemsz in #621
-* Update changelog for v1.0.2.10 by @natemsz in #619
-
 ## [v1.0.2.14]
 
 Automated build of EveSynapse v1.0.2.14. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -63,9 +56,6 @@ If this is your first install, use the [EveSynapse Installer](https://natems.dev
 * Hold tests to the project's test rules and cover two swarm gaps by @natemsz in #629
 * Import SDE uploads as JSON Lines only and test the JSON Lines parser by @natemsz in #628
 * Remove dead code: unused exports and queries, the light theme, and unused CSS by @natemsz in #627
-
-### Other Changes
-* Update changelog for v1.0.2.9 by @natemsz in #617
 
 ## [v1.0.2.13]
 
@@ -118,9 +108,6 @@ If this is your first install, use the [EveSynapse Installer](https://natems.dev
 ### 🚀 Features
 * Show a one-time hint under the Customize button by @natemsz in #616
 
-### Other Changes
-* Update changelog for v1.0.2.8 by @natemsz in #615
-
 ## [v1.0.2.8]
 
 Automated build of EveSynapse v1.0.2.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -130,9 +117,6 @@ If this is your first install, use the [EveSynapse Installer](https://natems.dev
 
 ### 🐛 Bug Fixes
 * Hide add-a-widget notes for modules not on the home by @natemsz in #614
-
-### Other Changes
-* Update changelog for v1.0.2.7 by @natemsz in #613
 
 ## [v1.0.2.7]
 
@@ -144,9 +128,6 @@ If this is your first install, use the [EveSynapse Installer](https://natems.dev
 ### 🚀 Features
 * Read the sweep verification stamp for own-row freshness by @natemsz in #612
 
-### Other Changes
-* Update changelog for v1.0.2.6 by @natemsz in #611
-
 ## [v1.0.2.6]
 
 Automated build of EveSynapse v1.0.2.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -156,9 +137,6 @@ If this is your first install, use the [EveSynapse Installer](https://natems.dev
 
 ### 🐛 Bug Fixes
 * Give Training Horizon's level pips their own column on wide cards, and document how to define a home widget by @natemsz in #610
-
-### Other Changes
-* Update changelog for v1.0.2.5 by @natemsz in #609
 
 ## [v1.0.2.5]
 
@@ -172,9 +150,6 @@ If this is your first install, use the [EveSynapse Installer](https://natems.dev
 
 ### 🐛 Bug Fixes
 * Let the Briefing band grow with its alert cards so no card is cut off by @natemsz in #608
-
-### Other Changes
-* Update changelog for v1.0.2.4 by @natemsz in #606
 
 ## [v1.0.2.4]
 
@@ -216,7 +191,6 @@ If this is your first install, use the [EveSynapse Installer](https://natems.dev
 * Keep character Save buttons on a single line by @natemsz in #580
 * Move live highlight bar onto contract cards on narrow screens by @natemsz in #579
 * Expand killboard search bar to full width on narrow screens by @natemsz in #578
-* Update changelog for v1.0.2.1 by @natemsz in #576
 
 ## [v1.0.2.1]
 
@@ -635,7 +609,6 @@ Automated build of EveSynapse v0.8.7.6. Update with: evesynapse -update -arm64 (
 * Bot guard: Ranvia loader 0.3.1 by @natemsz in #474
 * Brand: bespoke synapse wordmark by @natemsz in #473
 
-
 ## [v0.8.7.5]
 
 Automated build of EveSynapse v0.8.7.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -644,7 +617,6 @@ Automated build of EveSynapse v0.8.7.5. Update with: evesynapse -update -arm64 (
 
 ### 🚀 Features
 * Landing gallery: add the map layers video by @miko in #470
-
 
 ## [v0.8.7.4]
 
@@ -655,7 +627,6 @@ Automated build of EveSynapse v0.8.7.4. Update with: evesynapse -update -arm64 (
 ### 🧰 Maintenance & Dependencies
 * Bot guard: Ranvia loader 0.3.0 by @natemsz in #469
 
-
 ## [v0.8.7.3]
 
 Automated build of EveSynapse v0.8.7.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -664,7 +635,6 @@ Automated build of EveSynapse v0.8.7.3. Update with: evesynapse -update -arm64 (
 
 ### Other Changes
 * Share dialog: stabilize top-layer rendering, desktop share, and Samsung controls by @natemsz in #468
-
 
 ## [v0.8.7.2]
 
@@ -678,7 +648,6 @@ Automated build of EveSynapse v0.8.7.2. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Share dialog: stabilize modal controls and theme pilot cards by @natemsz in #466
 
-
 ## [v0.8.7.1]
 
 Automated build of EveSynapse v0.8.7.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -690,7 +659,6 @@ Automated build of EveSynapse v0.8.7.1. Update with: evesynapse -update -arm64 (
 * Share dialog: give the shared card file a plain name with no spaces by @miko in #464
 * Changelog: truncate list so its not one large list by @miko in #463
 
-
 ## [v0.8.7.0]
 
 Automated build of EveSynapse v0.8.7.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -699,7 +667,6 @@ Automated build of EveSynapse v0.8.7.0. Update with: evesynapse -update -arm64 (
 
 ### 🐛 Bug Fixes
 * Share dialog: hand phones a ready image for Copy image and Share by @natemsz in #462
-
 
 ## [v0.8.6.9]
 
@@ -712,7 +679,6 @@ Automated build of EveSynapse v0.8.6.9. Update with: evesynapse -update -arm64 (
 
 ### 🐛 Bug Fixes
 * Map 3D: follow new kills keeps the kill centred by @natemsz in #461
-
 
 ## [v0.8.6.8]
 
@@ -738,7 +704,6 @@ Automated build of EveSynapse v0.8.6.8. Update with: evesynapse -update -arm64 (
 * Map: Ansiblex zones shaded in both 2D frames; alliance bridges drawn by @natemsz in #452
 * Fitter: the implant solver combines implants across slots by @natemsz in #448
 
-
 ## [v0.8.6.7]
 
 Automated build of EveSynapse v0.8.6.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -754,7 +719,6 @@ Automated build of EveSynapse v0.8.6.7. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Fitter: load a charge only where it fits by @natemsz in #443
 
-
 ## [v0.8.6.6]
 
 Automated build of EveSynapse v0.8.6.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -767,7 +731,6 @@ Automated build of EveSynapse v0.8.6.6. Update with: evesynapse -update -arm64 (
 
 ### 🐛 Bug Fixes
 * Fitter: model charges in ancillary repairers, boosters and every charge-taking module by @natemsz in #437
-
 
 ## [v0.8.6.5]
 
@@ -789,7 +752,6 @@ Automated build of EveSynapse v0.8.6.5. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Pilot activity: fold every profiled pilot on a kill, and mend the kills profiles missed by @natemsz in #435
 
-
 ## [v0.8.6.4]
 
 Automated build of EveSynapse v0.8.6.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -800,7 +762,6 @@ Automated build of EveSynapse v0.8.6.4. Update with: evesynapse -update -arm64 (
 * Map mini icon: sit right of the security chip and cover kill, workbench, scan and character system links by @miko in #424
 * Map Zones layer: Ansiblex cost zones around an alliance capital by @natemsz in #423
 
-
 ## [v0.8.6.3]
 
 Automated build of EveSynapse v0.8.6.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -810,7 +771,6 @@ Automated build of EveSynapse v0.8.6.3. Update with: evesynapse -update -arm64 (
 ### 🚀 Features
 * Summary cards for fits, items, market, organizations, battle reports and sovereignty by @natemsz in #422
 * Summary cards for system, region and map pages by @natemsz in #421
-
 
 ## [v0.8.6.2]
 
@@ -826,7 +786,6 @@ Automated build of EveSynapse v0.8.6.2. Update with: evesynapse -update -arm64 (
 * Landing gallery: sovereignty tracker video by @miko in #414
 * CI: run the heavy gates on branch pushes only, not on release tags by @miko in #413
 
-
 ## [v0.8.6.1]
 
 Automated build of EveSynapse v0.8.6.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -835,7 +794,6 @@ Automated build of EveSynapse v0.8.6.1. Update with: evesynapse -update -arm64 (
 
 ### 🚀 Features
 * Sidebar: render the Intel section groups with group glyphs by @miko in #412
-
 
 ## [v0.8.6.0]
 
@@ -850,7 +808,6 @@ Automated build of EveSynapse v0.8.6.0. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Put the pilot, corporation and alliance pages on the layout framework and read EVE bio markup by @natemsz in #409
 
-
 ## [v0.8.5.0]
 
 Automated build of EveSynapse v0.8.5.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -863,7 +820,6 @@ Automated build of EveSynapse v0.8.5.0. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Keep the landing Tools menu in the viewport, list every public tool on the landing page and in the sitemap, and gate the intel channel list by @natemsz in #408
 
-
 ## [v0.8.4.9]
 
 Automated build of EveSynapse v0.8.4.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -872,7 +828,6 @@ Automated build of EveSynapse v0.8.4.9. Update with: evesynapse -update -arm64 (
 
 ### 🐛 Bug Fixes
 * Restore missing attacker counts from the daily killmail archives by @natemsz in #406
-
 
 ## [v0.8.4.8]
 
@@ -887,7 +842,6 @@ Automated build of EveSynapse v0.8.4.8. Update with: evesynapse -update -arm64 (
 * Keep the killmail chart labels in their panel and stop the PI planner row overlapping by @natemsz in #405
 * Run the kill stats rebuild now instead of after the attacker restore by @natemsz in #404
 
-
 ## [v0.8.4.7]
 
 Automated build of EveSynapse v0.8.4.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -899,7 +853,6 @@ Automated build of EveSynapse v0.8.4.7. Update with: evesynapse -update -arm64 (
 
 ### Other Changes
 * Clear gopls hints and apply go fix modernizers by @natemsz in #402
-
 
 ## [v0.8.4.6]
 
@@ -913,7 +866,6 @@ Automated build of EveSynapse v0.8.4.6. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * PI planner: buy what only full planets supply; readable ice links; reachable colony tools by @natemsz in #400
 
-
 ## [v0.8.4.5]
 
 Automated build of EveSynapse v0.8.4.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -926,7 +878,6 @@ Automated build of EveSynapse v0.8.4.5. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Comments: eliminate schizophrenic comments for clarity. by @natemsz in #397
 
-
 ## [v0.8.4.4]
 
 Automated build of EveSynapse v0.8.4.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -937,7 +888,6 @@ Automated build of EveSynapse v0.8.4.4. Update with: evesynapse -update -arm64 (
 * PI planner: whole-number cuts and confirmed range narrowing in the solver by @natemsz in #396
 * PI planner: reliable solver, layout optimizer, pinch zoom, visible buy options by @natemsz in #395
 
-
 ## [v0.8.4.3]
 
 Automated build of EveSynapse v0.8.4.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -947,7 +897,6 @@ Automated build of EveSynapse v0.8.4.3. Update with: evesynapse -update -arm64 (
 ### 🚀 Features
 * Release mirror: run when the release exists, install the AWS CLI with sudo by @miko in #394
 
-
 ## [v0.8.4.2]
 
 Automated build of EveSynapse v0.8.4.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -956,7 +905,6 @@ Automated build of EveSynapse v0.8.4.2. Update with: evesynapse -update -arm64 (
 
 ### 🚀 Features
 * Landing gallery: new fitting workbench video, add the PI planner video by @miko in #393
-
 
 ## [v0.8.4.1]
 
@@ -971,7 +919,6 @@ Automated build of EveSynapse v0.8.4.1. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * PI planner: changed colonies fit without their removed structures; new colonies sized per pilot skill by @natemsz in #391
 
-
 ## [v0.8.4.0]
 
 Automated build of EveSynapse v0.8.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -981,7 +928,6 @@ Automated build of EveSynapse v0.8.4.0. Update with: evesynapse -update -arm64 (
 ### 🚀 Features
 * PI planner: colony optimizer, colony view and game templates by @natemsz in #389
 * Price at build cost when nothing else can, asterisked by @miko in #388
-
 
 ## [v0.8.3.2]
 
@@ -1001,7 +947,6 @@ Automated build of EveSynapse v0.8.3.2. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Fitting: targeted modules can be active and overheated by @natemsz in #386
 * Demo: keep the theme in the browser by @natemsz in #380
-
 
 ## [v0.8.3.1]
 
@@ -1027,7 +972,6 @@ Automated build of EveSynapse v0.8.3.1. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Tests: drop TestFittingPhoneViews by @natemsz in #372
 * Killboard: bounded alliance board and list backfill reads by @natemsz in #369
-
 
 ## [v0.8.3.0]
 
@@ -1061,7 +1005,6 @@ Automated build of EveSynapse v0.8.3.0. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Drop the killboard indexes no query reads by @natemsz in #362
 
-
 ## [v0.8.2.0]
 
 Automated build of EveSynapse v0.8.2.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -1082,7 +1025,6 @@ Automated build of EveSynapse v0.8.2.0. Update with: evesynapse -update -arm64 (
 * Take test-only code out of the release binaries by @natemsz in #342
 * Drop absence pins and one-off CSS pins from the tests by @natemsz in #341
 
-
 ## [v0.8.1.2]
 
 Automated build of EveSynapse v0.8.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -1099,7 +1041,6 @@ Automated build of EveSynapse v0.8.1.2. Update with: evesynapse -update -arm64 (
 
 ### 🐛 Bug Fixes
 * Limit subsystems to one per kind and refuse hull-restricted modules before they land by @natemsz in #333
-
 
 ## [v0.8.1.1]
 
@@ -1123,7 +1064,6 @@ Automated build of EveSynapse v0.8.1.1. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Style and readability audit of copy, comments and docs by @natemsz in #324
 
-
 ## [v0.8.1.0]
 
 Automated build of EveSynapse v0.8.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -1142,7 +1082,6 @@ Automated build of EveSynapse v0.8.1.0. Update with: evesynapse -update -arm64 (
 * Apply hull and skill bonuses to missiles and drone damage skills by @natemsz in #314
 * Fix chart labels and leftover type inconsistencies by @natemsz in #313
 * Stack the Character and Corporation detail cards on narrow pages by @natemsz in #311
-
 
 ## [v0.8.0.9]
 
@@ -1163,7 +1102,6 @@ Automated build of EveSynapse v0.8.0.9. Update with: evesynapse -update -arm64 (
 * Update Node.js to v26 by @renovate in #281
 * Update Go modules by @renovate in #280
 
-
 ## [v0.8.0.8]
 
 Automated build of EveSynapse v0.8.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -1178,7 +1116,6 @@ Automated build of EveSynapse v0.8.0.8. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Value SRP losses and Foresight hangars at our own prices by @natemsz in #301
 * Keep CCP's published prices out of true-value evidence by @natemsz in #300
-
 
 ## [v0.8.0.7]
 
@@ -1204,7 +1141,6 @@ Automated build of EveSynapse v0.8.0.7. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Read every freshness surface from one cadence table by @natemsz in #292
 
-
 ## [v0.8.0.5]
 
 Automated build of EveSynapse v0.8.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -1213,7 +1149,6 @@ Automated build of EveSynapse v0.8.0.5. Update with: evesynapse -update -arm64 (
 
 ### 🚀 Features
 * Label the killboard columns, widen the asset scope, simplify the top search by @natemsz in #282
-
 
 ## [v0.8.0.4]
 
@@ -1224,7 +1159,6 @@ Automated build of EveSynapse v0.8.0.4. Update with: evesynapse -update -arm64 (
 ### 🚀 Features
 * Refine layout headers, topbar character switcher, connected page column, and UI bug fixes by @natemsz in #279
 
-
 ## [v0.8.0.3]
 
 Automated build of EveSynapse v0.8.0.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
@@ -1233,7 +1167,6 @@ Automated build of EveSynapse v0.8.0.3. Update with: evesynapse -update -arm64 (
 
 ### Other Changes
 * Use FindCtx for session stores that require a context by @natemsz in #278
-
 
 ## [v0.8.0.2]
 
@@ -1255,7 +1188,6 @@ Automated build of EveSynapse v0.8.0.2. Update with: evesynapse -update -arm64 (
 
 ### Other Changes
 * Document the pgx, compression, JSON and PostgreSQL changes by @natemsz in #275
-
 
 ## [v0.8.0.1]
 
@@ -2076,7 +2008,6 @@ Automated build of EveSynapse v0.7.0.6. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.7.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Add market groups to the basket editor search with bulk add
@@ -2094,14 +2025,11 @@ Automated build of EveSynapse v0.7.0.5. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.7.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Drop the stale fresh-assertion flag from the API key creation form by @natemsz in https://github.com/natemsz/evesynapse/pull/821
 ### Other Changes
 * Profit charts polish: LP income in the activity list, a margin line that shows covered sales, phone heights by @natemsz in https://github.com/natemsz/evesynapse/pull/822
-* docs(changelog): review changelog for v0.7.0.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/820
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.3...v0.7.0.4
 
@@ -2109,24 +2037,20 @@ Automated build of EveSynapse v0.7.0.4. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.7.0.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Add the order book chart set behind the book_depth visualization switch by @natemsz in https://github.com/natemsz/evesynapse/pull/817
 ### Other Changes
-* docs(changelog): review changelog for v0.7.0.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/815
 * Profit per blueprint: realized, at the time, and at today's prices by @natemsz in https://github.com/natemsz/evesynapse/pull/814
 * Profit from LP stores: inferred purchases with confidence tiers, LP income and net LP beside ISK by @natemsz in https://github.com/natemsz/evesynapse/pull/816
 * Profit page charts: daily net, activity split, fees, per character, rolling margin by @natemsz in https://github.com/natemsz/evesynapse/pull/818
 * Intel reader: stop reading scouts' words as pilots by @natemsz in https://github.com/natemsz/evesynapse/pull/819
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.2...v0.7.0.3
 
 ## [v0.7.0.2]
 
 Automated build of EveSynapse v0.7.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2142,12 +2066,7 @@ Automated build of EveSynapse v0.7.0.2. Update with: evesynapse -update -arm64 (
 * API key creation no longer asks for a fresh security-key assertion by @natemsz in https://github.com/natemsz/evesynapse/pull/807
 * Solid heading text; gradient text only on the landing hero by @natemsz in https://github.com/natemsz/evesynapse/pull/811
 ### Other Changes
-* docs(changelog): review changelog for v0.6.1.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/782
-* docs(changelog): review changelog for v0.6.1.8 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/784
-* docs(changelog): review changelog for v0.6.1.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/789
-* docs(changelog): review changelog for v0.7.0.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/802
 * Profit per item: pooled trading P&L with paired tax, tied broker fees and typed gaps by @natemsz in https://github.com/natemsz/evesynapse/pull/813
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.7.0.1...v0.7.0.2
 
@@ -2161,17 +2080,14 @@ Automated build of EveSynapse v0.6.1.9. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.6.1.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
 * Stops the abyssal scoring pass on shutdown instead of logging every item by @natemsz in https://github.com/natemsz/evesynapse/pull/783
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.6...v0.6.1.8
 ## [v0.6.1.7]
 
 Automated build of EveSynapse v0.6.1.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2182,20 +2098,17 @@ Automated build of EveSynapse v0.6.1.7. Update with: evesynapse -update -arm64 (
 ### 🧰 Maintenance & Dependencies
 * Bumps version to 0.7.0.0 by @natemsz in https://github.com/natemsz/evesynapse/pull/796
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.9...v0.7.0.1
 * Make nav group labels read as headings in nav menus by @natemsz in https://github.com/natemsz/evesynapse/pull/786
 ### Other Changes
 * Reads a system typed into a local list as the system, and files an Axon paste as the pilot at the keyboard by @natemsz in https://github.com/natemsz/evesynapse/pull/785
 * Search: names resolve as you stop typing, Enter opens every kind of result with filters by @natemsz in https://github.com/natemsz/evesynapse/pull/787
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.8...v0.6.1.9
 * Add swipe stepping to the landing gallery by @natemsz in https://github.com/natemsz/evesynapse/pull/768
 * Sizes nav glyphs in rem with explicit dimensions and shortens the swap transition by @natemsz in https://github.com/natemsz/evesynapse/pull/774
 * Bakes the muted backdrop grade into muted twins of the wallpaper tiers by @natemsz in https://github.com/natemsz/evesynapse/pull/775
 ### Other Changes
-* docs(changelog): review changelog for v0.6.1.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/767
 * Settles a 403 on a contract exit probe instead of asking again every cycle by @natemsz in https://github.com/natemsz/evesynapse/pull/769
 * Settles 403 and 422 as dead in the shared market fetch classifier by @natemsz in https://github.com/natemsz/evesynapse/pull/770
 * Splits a rejected corp asset-names batch down to the bad item by @natemsz in https://github.com/natemsz/evesynapse/pull/771
@@ -2207,40 +2120,26 @@ Automated build of EveSynapse v0.6.1.7. Update with: evesynapse -update -arm64 (
 * Has the urgent drain serve only history wants from a page open now by @natemsz in https://github.com/natemsz/evesynapse/pull/779
 * Refetches market history once ESI has published a new day by @natemsz in https://github.com/natemsz/evesynapse/pull/780
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.5...v0.6.1.7
 
 ## [v0.6.1.5]
 
 Automated build of EveSynapse v0.6.1.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Give the two factor page a centered prompt layout by @natemsz in https://github.com/natemsz/evesynapse/pull/765
 ### 🐛 Bug Fixes
 * Settle bids for no longer public contracts as dead by @natemsz in https://github.com/natemsz/evesynapse/pull/764
-### Other Changes
-* docs(changelog): review changelog for v0.6.1.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/760
-* docs(changelog): review changelog for v0.6.1.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/761
-* docs(changelog): review changelog for v0.6.1.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/763
-* docs(changelog): review changelog for v0.6.1.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/766
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.4...v0.6.1.5
 
 ## [v0.6.1.4]
 
 Automated build of EveSynapse v0.6.1.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Fail shut when the second-factor arming reads fail by @natemsz in https://github.com/natemsz/evesynapse/pull/762
-### Other Changes
-* docs(changelog): review changelog for v0.6.1.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/754
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.3...v0.6.1.4
 
 ## [v0.6.1.3]
@@ -2250,13 +2149,11 @@ Automated build of EveSynapse v0.6.1.3. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.6.1.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Add the landing gallery by @natemsz in https://github.com/natemsz/evesynapse/pull/758
 ### 🐛 Bug Fixes
 * Fix the briefing filter spacing on narrow screens by @natemsz in https://github.com/natemsz/evesynapse/pull/759
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.2...v0.6.1.3
 * Moves the Sync page into the Admin page as a tab by @natemsz in https://github.com/natemsz/evesynapse/pull/755
@@ -2264,25 +2161,17 @@ Automated build of EveSynapse v0.6.1.2. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Fix the market history freshness read in admin analytics by @natemsz in https://github.com/natemsz/evesynapse/pull/756
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.1...v0.6.1.2
 * Add the admin analytics page by @natemsz in https://github.com/natemsz/evesynapse/pull/753
-### Other Changes
-* docs(changelog): review changelog for v0.6.1.0 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/752
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.1.0...v0.6.1.1
 
 ## [v0.6.1.0]
 
 Automated build of EveSynapse v0.6.1.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.6.0.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/750
 * Axon site panel: window controls in the site's top bar, in the active theme by @natemsz in https://github.com/natemsz/evesynapse/pull/751
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.9...v0.6.1.0
 
@@ -2290,14 +2179,11 @@ Automated build of EveSynapse v0.6.1.0. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.6.0.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.6.0.8 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/746
 * Workbench map: zoom to the open thread, improved projection, every thread marked by @natemsz in https://github.com/natemsz/evesynapse/pull/747
 * Return to the page asked for after sign-in by @natemsz in https://github.com/natemsz/evesynapse/pull/748
 * Axon intel API: threads, feed, and report breakdown for Axon's own windows by @natemsz in https://github.com/natemsz/evesynapse/pull/749
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.8...v0.6.0.9
 
@@ -2305,48 +2191,34 @@ Automated build of EveSynapse v0.6.0.9. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.6.0.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Re-wire the intel workbench on swapped-in pages by @natemsz in https://github.com/natemsz/evesynapse/pull/745
-### Other Changes
-* docs(changelog): review changelog for v0.6.0.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/744
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.7...v0.6.0.8
 
 ## [v0.6.0.7]
 
 Automated build of EveSynapse v0.6.0.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
-### Other Changes
-* docs(changelog): review changelog for v0.6.0.6 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/743
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.6...v0.6.0.7
 
 ## [v0.6.0.6]
 
 Automated build of EveSynapse v0.6.0.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Restores the first page with its modals when a swap returns to it by @natemsz in https://github.com/natemsz/evesynapse/pull/742
 ### Other Changes
 * Finds a type's corpus contracts from the item type index before sorting them by @natemsz in https://github.com/natemsz/evesynapse/pull/739
-* docs(changelog): review changelog for v0.6.0.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/740
 * Keep departed public contracts on record (schema 096) by @natemsz in https://github.com/natemsz/evesynapse/pull/741
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.5...v0.6.0.6
 
 ## [v0.6.0.5]
 
 Automated build of EveSynapse v0.6.0.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🐛 Bug Fixes
@@ -2357,8 +2229,6 @@ Automated build of EveSynapse v0.6.0.5. Update with: evesynapse -update -arm64 (
 * Reads region book pages a window at a time by @natemsz in https://github.com/natemsz/evesynapse/pull/734
 * Reads contract items and bids a window at a time, stores list pages in one statement by @natemsz in https://github.com/natemsz/evesynapse/pull/735
 * Reads and writes the order lifecycle ledger in one statement each by @natemsz in https://github.com/natemsz/evesynapse/pull/738
-* docs(changelog): review changelog for v0.6.0.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/732
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.4...v0.6.0.5
 
@@ -2366,20 +2236,17 @@ Automated build of EveSynapse v0.6.0.5. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.6.0.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Sign-up theme step and Axon offer, landing frost on the header flyouts, Customize Theme modal by @natemsz in https://github.com/natemsz/evesynapse/pull/728
 ### 🐛 Bug Fixes
 * Themes the wordmark for the Servant Sisters of EVE scheme by @natemsz in https://github.com/natemsz/evesynapse/pull/727
 ### Other Changes
-* docs(changelog): review changelog for v0.6.0.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/722
 * Keep chat shorthand and place words out of pilot readings; ask the model about doubtful ones by @natemsz in https://github.com/natemsz/evesynapse/pull/723
 * Axon preview endpoint and send overrides for kind and system by @natemsz in https://github.com/natemsz/evesynapse/pull/724
 * Intel threads: link report groups across neighbouring systems by @natemsz in https://github.com/natemsz/evesynapse/pull/725
 * Gives every flyout the bell's glass, tinted by the colour scheme by @natemsz in https://github.com/natemsz/evesynapse/pull/730
 * Moves the theme and Axon steps to after the first character is added by @natemsz in https://github.com/natemsz/evesynapse/pull/731
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.2...v0.6.0.4
 
@@ -2387,36 +2254,25 @@ Automated build of EveSynapse v0.6.0.4. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.6.0.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Files a d-scan under its celestials' system when the named system is only a gate destination by @natemsz in https://github.com/natemsz/evesynapse/pull/720
-### Other Changes
-* docs(changelog): review changelog for v0.6.0.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/719
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.1...v0.6.0.2
 
 ## [v0.6.0.1]
 
 Automated build of EveSynapse v0.6.0.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Adds the Servant Sisters of EVE colour scheme by @natemsz in https://github.com/natemsz/evesynapse/pull/718
 ### 🐛 Bug Fixes
 * Brightens the Triglavian core red and separates the Caldari and Triglavian glows by @natemsz in https://github.com/natemsz/evesynapse/pull/717
-### Other Changes
-* docs(changelog): review changelog for v0.6.0.0 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/716
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.6.0.0...v0.6.0.1
 
 ## [v0.6.0.0]
 
 Automated build of EveSynapse v0.6.0.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2437,32 +2293,22 @@ Automated build of EveSynapse v0.6.0.0. Update with: evesynapse -update -arm64 (
 * Sorts and bounds the workbench dossier read in SQL by @natemsz in https://github.com/natemsz/evesynapse/pull/713
 * Batches the demo seed type resolution and multi-row inserts by @natemsz in https://github.com/natemsz/evesynapse/pull/714
 * Remembers war detail state between cycles instead of re-reading every payload by @natemsz in https://github.com/natemsz/evesynapse/pull/702
-### Other Changes
-* docs(changelog): review changelog for v0.5.9.11 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/699
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.11...v0.6.0.0
 
 ## [v0.5.9.11]
 
 Automated build of EveSynapse v0.5.9.11. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Checks for a pilot profile before opening the fold transaction by @natemsz in https://github.com/natemsz/evesynapse/pull/697
 * Retries a kill whose ingest fails instead of skipping it, and coalesces the killfeed cursor write by @natemsz in https://github.com/natemsz/evesynapse/pull/695
 * Compares the map layers fingerprint before building the layers by @natemsz in https://github.com/natemsz/evesynapse/pull/698
-### Other Changes
-* docs(changelog): review changelog for v0.5.9.10 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/696
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.10...v0.5.9.11
 
 ## [v0.5.9.10]
 
 Automated build of EveSynapse v0.5.9.10. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2476,23 +2322,16 @@ Automated build of EveSynapse v0.5.9.10. Update with: evesynapse -update -arm64 
 * Keeps intel reports pending when a bulk lookup fails transiently by @natemsz in https://github.com/natemsz/evesynapse/pull/694
 ### 🧰 Maintenance & Dependencies
 * Bump github.com/tdewolff/minify/v2 from 2.24.22 to 2.24.23 by @dependabot[bot] in https://github.com/natemsz/evesynapse/pull/692
-### Other Changes
-* docs(changelog): review changelog for v0.5.9.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/687
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.9...v0.5.9.10
 
 ## [v0.5.9.9]
 
 Automated build of EveSynapse v0.5.9.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.5.9.8 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/683
 * Anchor the backdrop glow at the top-right corner and size it off the viewport by @natemsz in https://github.com/natemsz/evesynapse/pull/685
 * Replace the theme directions with a single saved-preferences note by @natemsz in https://github.com/natemsz/evesynapse/pull/686
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.8...v0.5.9.9
 
@@ -2500,20 +2339,14 @@ Automated build of EveSynapse v0.5.9.9. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.9.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Restore the backdrop glow, put chrome borders and card links on the scheme colour, re-hue the map glow, unbar the killboard labels, and make the Settings gear navigate by @natemsz in https://github.com/natemsz/evesynapse/pull/682
-### Other Changes
-* docs(changelog): review changelog for v0.5.9.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/681
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.7...v0.5.9.8
 
 ## [v0.5.9.7]
 
 Automated build of EveSynapse v0.5.9.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2521,9 +2354,6 @@ Automated build of EveSynapse v0.5.9.7. Update with: evesynapse -update -arm64 (
 * Theme is an account setting, rendered on signed-in loads by @natemsz in https://github.com/natemsz/evesynapse/pull/680
 ### Other Changes
 * Plan fetches by per-kind scope and settle ESI refusals once per character and kind by @natemsz in https://github.com/natemsz/evesynapse/pull/678
-* docs(changelog): review changelog for v0.5.9.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/675
-* docs(changelog): review changelog for v0.5.9.6 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/677
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.6...v0.5.9.7
 
@@ -2531,48 +2361,35 @@ Automated build of EveSynapse v0.5.9.7. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.9.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
 * Schemes repaint borders, the wordmark, glyphs and charts; Settings tabs survive history navigation by @natemsz in https://github.com/natemsz/evesynapse/pull/676
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.5...v0.5.9.6
 ## [v0.5.9.5]
 
 Automated build of EveSynapse v0.5.9.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Add the tabbed Settings page with colour schemes by @natemsz in https://github.com/natemsz/evesynapse/pull/674
 ### 🐛 Bug Fixes
 * Honor the Axon lines API's batch speaker by @natemsz in https://github.com/natemsz/evesynapse/pull/673
-### Other Changes
-* docs(changelog): review changelog for v0.5.9.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/672
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.4...v0.5.9.5
 
 ## [v0.5.9.4]
 
 Automated build of EveSynapse v0.5.9.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Read near-miss system names as locations wherever a line speaks of a place by @natemsz in https://github.com/natemsz/evesynapse/pull/670
 * Store no-system roster lines on the pilots EVE verifies by @natemsz in https://github.com/natemsz/evesynapse/pull/671
-### Other Changes
-* docs(changelog): review changelog for v0.5.9.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/669
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.3...v0.5.9.4
 
 ## [v0.5.9.3]
 
 Automated build of EveSynapse v0.5.9.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2581,8 +2398,6 @@ Automated build of EveSynapse v0.5.9.3. Update with: evesynapse -update -arm64 (
 * File gate readings under both systems and read loose gate phrasings by @natemsz in https://github.com/natemsz/evesynapse/pull/667
 ### Other Changes
 * Resolve a name-less channel line's system from its speaker first; link workbench pilot names to their pilot pages by @natemsz in https://github.com/natemsz/evesynapse/pull/666
-* docs(changelog): review changelog for v0.5.9.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/665
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.2...v0.5.9.3
 
@@ -2590,12 +2405,9 @@ Automated build of EveSynapse v0.5.9.3. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.9.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.5.9.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/663
 * Cycle the page backdrop from the Theme button: Nebula, Muted, Ember glow by @natemsz in https://github.com/natemsz/evesynapse/pull/664
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.1...v0.5.9.2
 
@@ -2603,12 +2415,9 @@ Automated build of EveSynapse v0.5.9.2. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.9.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.5.9.0 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/660
 * Restore the landing bar glass, hoist the Tools panel, glass the hero buttons, sweep the residue backlog by @natemsz in https://github.com/natemsz/evesynapse/pull/662
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.9.0...v0.5.9.1
 
@@ -2616,14 +2425,11 @@ Automated build of EveSynapse v0.5.9.1. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.9.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Intel: residue step reads the leftover spans of settled reports with a local reader by @natemsz in https://github.com/natemsz/evesynapse/pull/658
 ### Other Changes
-* docs(changelog): review changelog for v0.5.8.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/657
 * Landing menu: frost on its own backdrop-filter, bar glass on its own layer, thinner panel edge by @natemsz in https://github.com/natemsz/evesynapse/pull/659
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.3...v0.5.9.0
 
@@ -2631,17 +2437,14 @@ Automated build of EveSynapse v0.5.9.0. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.8.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Intel analyzer: read scan-shaped text as rows, set name columns aside by @natemsz in https://github.com/natemsz/evesynapse/pull/655
 * Warming: stop junk ESI calls, settle definitive 404s as dead by @natemsz in https://github.com/natemsz/evesynapse/pull/656
 ### Other Changes
-* docs(changelog): review changelog for v0.5.8.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/650
 * Landing nav: headline tools as direct links by @natemsz in https://github.com/natemsz/evesynapse/pull/651
 * Gate camps name their gate: celestial attribution and recurring crew by @natemsz in https://github.com/natemsz/evesynapse/pull/652
 * Landing: categorized Tools dropdown and full-width top bar by @natemsz in https://github.com/natemsz/evesynapse/pull/654
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.2...v0.5.8.3
 
@@ -2649,16 +2452,13 @@ Automated build of EveSynapse v0.5.8.3. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.8.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Pilot activity profiles from kill data by @natemsz in https://github.com/natemsz/evesynapse/pull/648
 ### Other Changes
-* docs(changelog): review changelog for v0.5.8.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/645
 * Intel channels: report groups, stored composites, residue capture by @natemsz in https://github.com/natemsz/evesynapse/pull/646
 * Landing: hero lowered toward the planet, Tools opens public tools, top bar wears the liquid glass (demo) by @natemsz in https://github.com/natemsz/evesynapse/pull/647
 * Intel fusion P2: tracked gangs, confidence decay, likely ships from profiles by @natemsz in https://github.com/natemsz/evesynapse/pull/649
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.1...v0.5.8.2
 
@@ -2666,12 +2466,9 @@ Automated build of EveSynapse v0.5.8.2. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.8.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.5.8.0 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/643
 * Workbench: fix snapshot head floating over the page, widen box spacing by @natemsz in https://github.com/natemsz/evesynapse/pull/644
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.8.0...v0.5.8.1
 
@@ -2679,37 +2476,26 @@ Automated build of EveSynapse v0.5.8.1. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.8.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Intel Workbench: the per-report page (scan door built, inactive) by @natemsz in https://github.com/natemsz/evesynapse/pull/642
 ### 🐛 Bug Fixes
 * Landing: restore hero geometry after the companion block move by @natemsz in https://github.com/natemsz/evesynapse/pull/640
 * Intel: rescue fused rosters on the chat-lines path, backfill stored reports by @natemsz in https://github.com/natemsz/evesynapse/pull/641
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/639
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.9...v0.5.8.0
 
 ## [v0.5.7.9]
 
 Automated build of EveSynapse v0.5.7.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Landing: move the companion block to the top of the hero by @natemsz in https://github.com/natemsz/evesynapse/pull/638
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.8 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/637
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.8...v0.5.7.9
 
 ## [v0.5.7.8]
 
 Automated build of EveSynapse v0.5.7.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2718,32 +2504,22 @@ Automated build of EveSynapse v0.5.7.8. Update with: evesynapse -update -arm64 (
 * Landing: adopt the owner's reference copy; restore his apart, trust and playstyles wording by @natemsz in https://github.com/natemsz/evesynapse/pull/634
 * Landing: remove the What sets us apart section by @natemsz in https://github.com/natemsz/evesynapse/pull/635
 * Intel: read fused and spaced local rosters as rosters; dedupe by pilot set; poster-location system fallback; scan page head fix by @natemsz in https://github.com/natemsz/evesynapse/pull/636
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/632
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.7...v0.5.7.8
 
 ## [v0.5.7.7]
 
 Automated build of EveSynapse v0.5.7.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * D-scan parity step 3: groups, compare, OG previews, system correction, hull pricing by @natemsz in https://github.com/natemsz/evesynapse/pull/631
 ### 🐛 Bug Fixes
 * Intel parser: things are not pilots; scan pastes classified; report headlines synthesized by @natemsz in https://github.com/natemsz/evesynapse/pull/630
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.6 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/629
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.6...v0.5.7.7
 
 ## [v0.5.7.6]
 
 Automated build of EveSynapse v0.5.7.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2751,16 +2527,11 @@ Automated build of EveSynapse v0.5.7.6. Update with: evesynapse -update -arm64 (
 * Landing page: simple structure, three doors, factual differentiators by @natemsz in https://github.com/natemsz/evesynapse/pull/625
 * D-scan parity step 1: the reading itself by @natemsz in https://github.com/natemsz/evesynapse/pull/626
 * Pilot page: intel section moves to a right rail when the pilot has intel by @natemsz in https://github.com/natemsz/evesynapse/pull/628
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/623
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.5...v0.5.7.6
 
 ## [v0.5.7.5]
 
 Automated build of EveSynapse v0.5.7.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2774,16 +2545,11 @@ Automated build of EveSynapse v0.5.7.5. Update with: evesynapse -update -arm64 (
 * Gate camps: ship kills only; composition counts distinct pilots by @natemsz in https://github.com/natemsz/evesynapse/pull/619
 * True values: price contract-only types from contract evidence, never from build cost by @natemsz in https://github.com/natemsz/evesynapse/pull/620
 * Landing hero: headline alone beside the planet, support copy drops to the dark band by @natemsz in https://github.com/natemsz/evesynapse/pull/621
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/613
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.4...v0.5.7.5
 
 ## [v0.5.7.4]
 
 Automated build of EveSynapse v0.5.7.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2791,16 +2557,11 @@ Automated build of EveSynapse v0.5.7.4. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Learn the swarm release library from GitHub releases by @natemsz in https://github.com/natemsz/evesynapse/pull/610
 * Landing: repin copy assertions to the current page text by @natemsz in https://github.com/natemsz/evesynapse/pull/612
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/611
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.3...v0.5.7.4
 
 ## [v0.5.7.3]
 
 Automated build of EveSynapse v0.5.7.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2808,72 +2569,49 @@ Automated build of EveSynapse v0.5.7.3. Update with: evesynapse -update -arm64 (
 * Landing: header pill flush to the top of the viewport by @natemsz in https://github.com/natemsz/evesynapse/pull/607
 ### 🐛 Bug Fixes
 * Map: zoom-tier label discipline for the tactical projection by @natemsz in https://github.com/natemsz/evesynapse/pull/606
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/604
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.2...v0.5.7.3
 
 ## [v0.5.7.2]
 
 Automated build of EveSynapse v0.5.7.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Landing follow-ups: smoother fade, shorter Intel and reference, white eyebrows, terser copy, new screenshots by @natemsz in https://github.com/natemsz/evesynapse/pull/603
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/602
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.1...v0.5.7.2
 
 ## [v0.5.7.1]
 
 Automated build of EveSynapse v0.5.7.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Landing: ember redesign (planet band, floating header, gradient headlines, public tools modal) by @natemsz in https://github.com/natemsz/evesynapse/pull/601
-### Other Changes
-* docs(changelog): review changelog for v0.5.7.0 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/600
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.7.0...v0.5.7.1
 
 ## [v0.5.7.0]
 
 Automated build of EveSynapse v0.5.7.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * feat:Map: Improved Projection, a precomputed relaxed universe layout by @natemsz in https://github.com/natemsz/evesynapse/pull/599
-### Other Changes
-* docs(changelog): review changelog for v0.5.6.9 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/598
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.9...v0.5.7.0
 
 ## [v0.5.6.9]
 
 Automated build of EveSynapse v0.5.6.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.5.6.8 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/595
 * Map: names stop flickering while zooming by @natemsz in https://github.com/natemsz/evesynapse/pull/596
 * Map: smooth sov territory (painted once, moved as a picture) by @natemsz in https://github.com/natemsz/evesynapse/pull/597
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.8...v0.5.6.9
 
 ## [v0.5.6.8]
 
 Automated build of EveSynapse v0.5.6.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -2889,7 +2627,6 @@ Automated build of EveSynapse v0.5.6.8. Update with: evesynapse -update -arm64 (
 ### 🧰 Maintenance & Dependencies
 * Plainer wording across the app text by @natemsz in https://github.com/natemsz/evesynapse/pull/584
 ### Other Changes
-* docs(changelog): review changelog for v0.5.6.7 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/578
 * Map: no more blank map after going back or switching characters by @natemsz in https://github.com/natemsz/evesynapse/pull/583
 * Map: kills and gate camp reports on the system card by @natemsz in https://github.com/natemsz/evesynapse/pull/585
 * Map: crisp sov borders, contiguous holdings fill in, faster builds by @natemsz in https://github.com/natemsz/evesynapse/pull/586
@@ -2897,21 +2634,17 @@ Automated build of EveSynapse v0.5.6.8. Update with: evesynapse -update -arm64 (
 * Map: routes don't avoid systems just because of intel by @natemsz in https://github.com/natemsz/evesynapse/pull/589
 * Intel: understand each report (pilots, ships, gate, kind, friend or foe) by @natemsz in https://github.com/natemsz/evesynapse/pull/591
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.7...v0.5.6.8
 
 ## [v0.5.6.7]
 
 Automated build of EveSynapse v0.5.6.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Stacked page cards keep the standard section gap by @natemsz in https://github.com/natemsz/evesynapse/pull/576
 ### Other Changes
-* docs(changelog): review changelog for v0.5.6.6 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/575
 * Map: sov territory builds faster and never mid-gesture by @natemsz in https://github.com/natemsz/evesynapse/pull/577
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.6...v0.5.6.7
 
@@ -2919,15 +2652,12 @@ Automated build of EveSynapse v0.5.6.7. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.6.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Typography foundation: small-caps Rajdhani menus, Inter prose role, bold pass by @natemsz in https://github.com/natemsz/evesynapse/pull/572
 ### Other Changes
-* docs(changelog): review changelog for v0.5.6.5 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/571
 * Map: re-route visibly, fly to the route, pick the system with something on it by @natemsz in https://github.com/natemsz/evesynapse/pull/573
 * Map: merged territory, shareable views, flat buttons, clearer type by @natemsz in https://github.com/natemsz/evesynapse/pull/574
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.5...v0.5.6.6
 
@@ -2935,12 +2665,9 @@ Automated build of EveSynapse v0.5.6.6. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.6.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.5.6.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/569
 * Map: Data menu no longer cut off on the right by @natemsz in https://github.com/natemsz/evesynapse/pull/570
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.4...v0.5.6.5
 
@@ -2948,15 +2675,12 @@ Automated build of EveSynapse v0.5.6.5. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.6.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
-* docs(changelog): review changelog for v0.5.6.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/564
 * Map: Data menu no longer cut off, pins readable over any layer by @natemsz in https://github.com/natemsz/evesynapse/pull/565
 * Intel channels: clearer Axon setup, site styling, nav renames by @natemsz in https://github.com/natemsz/evesynapse/pull/566
 * Axon links open the app, not a browser page by @natemsz in https://github.com/natemsz/evesynapse/pull/567
 * Map: Intel off really looks off; heat layers give the map back by @natemsz in https://github.com/natemsz/evesynapse/pull/568
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.2...v0.5.6.4
 
@@ -2964,15 +2688,12 @@ Automated build of EveSynapse v0.5.6.4. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.6.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
 * Map: mousewheel zooms, never pans by @natemsz in https://github.com/natemsz/evesynapse/pull/559
-* docs(changelog): review changelog for v0.5.6.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/560
 * Link running Axon from Intel, rename Log watcher to EveSynapse Axon by @natemsz in https://github.com/natemsz/evesynapse/pull/561
 * Pilot watch: validate the return path with safeLocalNext by @natemsz in https://github.com/natemsz/evesynapse/pull/562
 * Axon: one-file installer downloads, no install scripts by @natemsz in https://github.com/natemsz/evesynapse/pull/563
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.1...v0.5.6.3
 
@@ -2980,17 +2701,14 @@ Automated build of EveSynapse v0.5.6.3. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.6.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Fix: gate the Sync page link to admins so testers don't hit a dead end by @natemsz in https://github.com/natemsz/evesynapse/pull/557
 ### Other Changes
-* docs(changelog): review changelog for v0.5.6.0 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/553
 * Map: full-screen brand watermark and a screenshot button by @natemsz in https://github.com/natemsz/evesynapse/pull/554
 * Map: Data layers (your pilots, fleet, clones, orders, industry, structures, assets, PvP, mining, posts) by @natemsz in https://github.com/natemsz/evesynapse/pull/555
 * Map: jump planner (SDE ranges, your skills, fatigue) and Ansiblex bridges in routing by @natemsz in https://github.com/natemsz/evesynapse/pull/556
 * Intel: hostile pilot tracking (pilot activity, known hostiles per channel, watched pilots on the map) by @natemsz in https://github.com/natemsz/evesynapse/pull/558
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.6.0...v0.5.6.1
 
@@ -2998,18 +2716,15 @@ Automated build of EveSynapse v0.5.6.1. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.6.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Demo account: shared test-drive pilot with seeded data and write safeguards by @natemsz in https://github.com/natemsz/evesynapse/pull/547
 ### Other Changes
-* docs(changelog): review changelog for v0.5.5.4 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/546
 * Fix: swapped pages keep their stylesheets and scripts; swap covers the remaining pages by @natemsz in https://github.com/natemsz/evesynapse/pull/548
 * Map: sov territory view, layer scale, full screen; popover and card agree by @natemsz in https://github.com/natemsz/evesynapse/pull/549
 * Intel: scan tool -- d-scan, local, fleet and probe pastes, on the map card by @natemsz in https://github.com/natemsz/evesynapse/pull/550
 * Intel channels: owned, granted streams of intel reports, on the map by @natemsz in https://github.com/natemsz/evesynapse/pull/551
 * Intel channels: posting tokens and API for the desktop log watcher by @natemsz in https://github.com/natemsz/evesynapse/pull/552
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.4...v0.5.6.0
 
@@ -3017,33 +2732,25 @@ Automated build of EveSynapse v0.5.6.0. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.5.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Place pages: our map links, activity stats and sovereignty by @natemsz in https://github.com/natemsz/evesynapse/pull/543
 * Landing: map, killboard and route planner join the showcase by @natemsz in https://github.com/natemsz/evesynapse/pull/544
 ### 🐛 Bug Fixes
 * Fix: abyssal roll sliders activate on family selection by @natemsz in https://github.com/natemsz/evesynapse/pull/545
-### Other Changes
-* docs(changelog): review changelog for v0.5.5.3 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/542
-
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.3...v0.5.5.4
 
 ## [v0.5.5.3]
 
 Automated build of EveSynapse v0.5.5.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Fix: footer sits 0.5px above the phone bottom bar by @natemsz in https://github.com/natemsz/evesynapse/pull/537
 ### Other Changes
-* docs(changelog): review changelog for v0.5.5.2 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/535
 * Map: steady labels while zooming; zoom in never exits a region by @natemsz in https://github.com/natemsz/evesynapse/pull/536
 * Killboard ingest: zKillboard R2Z2 stream + our characters' kills, priced by our appraisal by @natemsz in https://github.com/natemsz/evesynapse/pull/539
 * Map: threat layer + smart routing with ESI waypoint send by @natemsz in https://github.com/natemsz/evesynapse/pull/541
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.2...v0.5.5.3
 
@@ -3051,15 +2758,11 @@ Automated build of EveSynapse v0.5.5.3. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.5.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Feat: footer as dark black glass, star tile removed by @natemsz in https://github.com/natemsz/evesynapse/pull/534
 ### 🐛 Bug Fixes
 * Fix: restore glass blur on touch devices by @natemsz in https://github.com/natemsz/evesynapse/pull/533
-### Other Changes
-* docs(changelog): review changelog for v0.5.5.1 by @github-actions[bot] in https://github.com/natemsz/evesynapse/pull/532
-
 ## New Contributors
 * @github-actions[bot] made their first contribution in https://github.com/natemsz/evesynapse/pull/532
 
@@ -3068,7 +2771,6 @@ Automated build of EveSynapse v0.5.5.2. Update with: evesynapse -update -arm64 (
 ## [v0.5.5.1]
 
 Automated build of EveSynapse v0.5.5.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3079,13 +2781,11 @@ Automated build of EveSynapse v0.5.5.1. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Map: click a region name for tactical; zoom entry becomes a preference by @natemsz in https://github.com/natemsz/evesynapse/pull/531
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.5.0...v0.5.5.1
 
 ## [v0.5.5.0]
 
 Automated build of EveSynapse v0.5.5.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🐛 Bug Fixes
@@ -3094,13 +2794,11 @@ Automated build of EveSynapse v0.5.5.0. Update with: evesynapse -update -arm64 (
 * Universe map: New Eden top-down with tactical region views by @natemsz in https://github.com/natemsz/evesynapse/pull/526
 * Map: smooth zoom, touchpad gestures, full keyboard by @natemsz in https://github.com/natemsz/evesynapse/pull/527
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.8...v0.5.5.0
 
 ## [v0.5.4.8]
 
 Automated build of EveSynapse v0.5.4.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🐛 Bug Fixes
@@ -3108,25 +2806,21 @@ Automated build of EveSynapse v0.5.4.8. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Abyssal: rolled attributes only (display, scoring, features); drones size by bandwidth by @natemsz in https://github.com/natemsz/evesynapse/pull/524
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.7...v0.5.4.8
 
 ## [v0.5.4.7]
 
 Automated build of EveSynapse v0.5.4.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
 * Abyssal ladder: bound both ends, close the top with the perfect roll by @natemsz in https://github.com/natemsz/evesynapse/pull/522
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.6...v0.5.4.7
 
 ## [v0.5.4.6]
 
 Automated build of EveSynapse v0.5.4.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🐛 Bug Fixes
@@ -3135,13 +2829,11 @@ Automated build of EveSynapse v0.5.4.6. Update with: evesynapse -update -arm64 (
 ### Other Changes
 * Abyssal learned correction, confirmed contract sales, per-path recreation cost by @natemsz in https://github.com/natemsz/evesynapse/pull/519
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.5...v0.5.4.6
 
 ## [v0.5.4.5]
 
 Automated build of EveSynapse v0.5.4.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3150,18 +2842,15 @@ Automated build of EveSynapse v0.5.4.5. Update with: evesynapse -update -arm64 (
 * Phone sheet: cap the character grid, never scroll by @natemsz in https://github.com/natemsz/evesynapse/pull/517
 * Sticky footer for the app shell; star-tile footer background by @natemsz in https://github.com/natemsz/evesynapse/pull/518
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.4...v0.5.4.5
 
 ## [v0.5.4.4]
 
 Automated build of EveSynapse v0.5.4.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
 * Contracts: abyssal valuation, drawer stats, contract page rebuilt from drawer cards by @natemsz in https://github.com/natemsz/evesynapse/pull/515
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.3...v0.5.4.4
 
@@ -3169,11 +2858,9 @@ Automated build of EveSynapse v0.5.4.4. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.4.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### Other Changes
 * Mobile pass 4: native phone layer, table cards, phone sheets by @natemsz in https://github.com/natemsz/evesynapse/pull/514
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.2...v0.5.4.3
 
@@ -3181,19 +2868,16 @@ Automated build of EveSynapse v0.5.4.3. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.4.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🚀 Features
 * Mobile pass 3: phone bottom bar, sections sheet, More wrapper guard by @natemsz in https://github.com/natemsz/evesynapse/pull/512
 * Fitting tool: phone top declutter, module search behind the tab bar toggle by @natemsz in https://github.com/natemsz/evesynapse/pull/513
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.1...v0.5.4.2
 
 ## [v0.5.4.1]
 
 Automated build of EveSynapse v0.5.4.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3208,13 +2892,11 @@ Automated build of EveSynapse v0.5.4.1. Update with: evesynapse -update -arm64 (
 ### 🧰 Maintenance & Dependencies
 * Sync-side drain harness (TestSyncDrain) by @natemsz in https://github.com/natemsz/evesynapse/pull/504
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.4.0...v0.5.4.1
 
 ## [v0.5.4.0]
 
 Automated build of EveSynapse v0.5.4.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3222,13 +2904,11 @@ Automated build of EveSynapse v0.5.4.0. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * ocikms: do not send x-content-sha256 on bodyless requests by @natemsz in https://github.com/natemsz/evesynapse/pull/503
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.9...v0.5.4.0
 
 ## [v0.5.3.9]
 
 Automated build of EveSynapse v0.5.3.9. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3244,18 +2924,15 @@ Automated build of EveSynapse v0.5.3.9. Update with: evesynapse -update -arm64 (
 * Document the KMS cutover in the README by @natemsz in https://github.com/natemsz/evesynapse/pull/496
 * CSS delivery: minified stylesheets at serve time by @natemsz in https://github.com/natemsz/evesynapse/pull/501
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.8...v0.5.3.9
 
 ## [v0.5.3.8]
 
 Automated build of EveSynapse v0.5.3.8. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Fix the OCI federation exchange to the real protocol by @natemsz in https://github.com/natemsz/evesynapse/pull/492
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.7...v0.5.3.8
 
@@ -3263,18 +2940,15 @@ Automated build of EveSynapse v0.5.3.8. Update with: evesynapse -update -arm64 (
 
 Automated build of EveSynapse v0.5.3.7. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Fix the OCI tenancy parse for the real instance certificate shape by @natemsz in https://github.com/natemsz/evesynapse/pull/491
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.6...v0.5.3.7
 
 ## [v0.5.3.6]
 
 Automated build of EveSynapse v0.5.3.6. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3284,13 +2958,11 @@ Automated build of EveSynapse v0.5.3.6. Update with: evesynapse -update -arm64 (
 ### 🐛 Bug Fixes
 * Landing: restore the mockup's darkening, glass, and background treatment by @natemsz in https://github.com/natemsz/evesynapse/pull/489
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.5...v0.5.3.6
 
 ## [v0.5.3.5]
 
 Automated build of EveSynapse v0.5.3.5. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3298,13 +2970,11 @@ Automated build of EveSynapse v0.5.3.5. Update with: evesynapse -update -arm64 (
 * Landing restructure: trust and playstyles up top, alternating feature sections by @natemsz in https://github.com/natemsz/evesynapse/pull/485
 * Add PKCE to the EVE SSO flow by @natemsz in https://github.com/natemsz/evesynapse/pull/486
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.4...v0.5.3.5
 
 ## [v0.5.3.4]
 
 Automated build of EveSynapse v0.5.3.4. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3317,25 +2987,21 @@ Automated build of EveSynapse v0.5.3.4. Update with: evesynapse -update -arm64 (
 * Trim the CSP: no Cloudflare hosts, no nonce by @natemsz in https://github.com/natemsz/evesynapse/pull/480
 * Regenerate sqlc output and guard it in CI by @natemsz in https://github.com/natemsz/evesynapse/pull/483
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.3...v0.5.3.4
 
 ## [v0.5.3.3]
 
 Automated build of EveSynapse v0.5.3.3. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
 
-
 ## What's Changed
 ### 🐛 Bug Fixes
 * Fix empty hub console on appraisal share and error pages by @natemsz in https://github.com/natemsz/evesynapse/pull/477
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.2...v0.5.3.3
 
 ## [v0.5.3.2]
 
 Automated build of EveSynapse v0.5.3.2. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3345,13 +3011,11 @@ Automated build of EveSynapse v0.5.3.2. Update with: evesynapse -update -arm64 (
 * Landing screenshots at display size by @natemsz in https://github.com/natemsz/evesynapse/pull/474
 * Static cache: wallpaper URLs carry content-hash tokens (immutable caching) by @natemsz in https://github.com/natemsz/evesynapse/pull/476
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.1...v0.5.3.2
 
 ## [v0.5.3.1]
 
 Automated build of EveSynapse v0.5.3.1. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🚀 Features
@@ -3368,13 +3032,11 @@ Automated build of EveSynapse v0.5.3.1. Update with: evesynapse -update -arm64 (
 * fix(appraisal): reject empty pastes, store anonymous appraisals, add delete and expiry by @natemsz in https://github.com/natemsz/evesynapse/pull/457
 * Landing: live alerts, priced fit showcase, full public tools list, accessibility fixes by @natemsz in https://github.com/natemsz/evesynapse/pull/472
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.3.0...v0.5.3.1
 
 ## [v0.5.3.0]
 
 Automated build of EveSynapse v0.5.3.0. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🐛 Bug Fixes
@@ -3384,13 +3046,11 @@ Automated build of EveSynapse v0.5.3.0. Update with: evesynapse -update -arm64 (
 ### 🧰 Maintenance & Dependencies
 * docs(appraisal): state EFT, blueprint-copy and mutated-item appraisal plainly by @natemsz in https://github.com/natemsz/evesynapse/pull/456
 
-
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.2.14...v0.5.3.0
 
 ## [v0.5.2.14]
 
 Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 (or -x86, -amd64, -x64 on Intel/AMD computers).
-
 
 ## What's Changed
 ### 🐛 Bug Fixes
@@ -3400,7 +3060,6 @@ Automated build of EveSynapse v0.5.2.14. Update with: evesynapse -update -arm64 
 ### 🧰 Maintenance & Dependencies
 * docs(changelog): backfill releases v0.5.2.10 through v0.5.2.12 by @natemsz in https://github.com/natemsz/evesynapse/pull/454
 * Fix the changelog automation: it never fires for bot-published releases by @natemsz in https://github.com/natemsz/evesynapse/pull/455
-
 
 **Full Changelog**: https://github.com/natemsz/evesynapse/compare/v0.5.2.13...v0.5.2.14
 

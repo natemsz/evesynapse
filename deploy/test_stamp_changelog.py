@@ -75,6 +75,25 @@ class StampChangelogTest(unittest.TestCase):
             self.assertEqual(root.read_text(encoding="utf-8"), emb.read_text(encoding="utf-8"))
             self.assertIn("## [v1.0.3.1] - 2026-11-27", emb.read_text(encoding="utf-8"))
 
+    def test_drops_self_update_entries_and_empty_categories(self) -> None:
+        raw_notes = (
+            "Automated build of EveSynapse v1.0.3.2.\n\n"
+            "## What's Changed\n\n"
+            "### Features\n"
+            "* Add changelog version explorer by @natemsz in #642\n\n"
+            "### Other Changes\n"
+            "* Update changelog for v1.0.3.1 by @natemsz in #644\n"
+            "* Updated changelog to version 1.0.3.0 by @natemsz in #645\n"
+            "* docs(changelog): review changelog for v0.7.0.3 by @github-actions[bot] in #820\n"
+        )
+        updated, changed = stamp_changelog.stamp_text(SAMPLE_CHANGELOG, "1.0.3.2", raw_notes, "2026-11-27")
+        self.assertTrue(changed)
+        self.assertIn("Add changelog version explorer", updated)
+        self.assertNotIn("Update changelog for v1.0.3.1", updated)
+        self.assertNotIn("Updated changelog to version 1.0.3.0", updated)
+        self.assertNotIn("review changelog for v0.7.0.3", updated)
+        self.assertNotIn("### Other Changes", updated)
+
     def test_errors_on_missing_marker_or_empty_notes(self) -> None:
         with self.assertRaises(ValueError):
             stamp_changelog.stamp_text("# Changelog\n\n## [v1.0.0]\n", "1.0.1", "Notes", "2026-11-27")

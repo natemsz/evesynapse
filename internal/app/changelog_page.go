@@ -107,8 +107,9 @@ type changelogIndex struct {
 var changelogStore = parseChangelog(changelogText)
 
 var (
-	reChangelogVersion = regexp.MustCompile(`^## \[v(\d+)\.(\d+)\.(\d+)\.(\d+)\](?:\s*-\s*(\S+))?\s*$`)
-	reChangelogAuthor  = regexp.MustCompile(`^(.*?)\s+by\s+(@\S+)(?:\s+in\s+(?:#\d+|https?://\S+))?\s*$`)
+	reChangelogVersion    = regexp.MustCompile(`^## \[v(\d+)\.(\d+)\.(\d+)\.(\d+)\](?:\s*-\s*(\S+))?\s*$`)
+	reChangelogAuthor     = regexp.MustCompile(`^(.*?)\s+by\s+(@\S+)(?:\s+in\s+(?:#\d+|https?://\S+))?\s*$`)
+	reChangelogSelfUpdate = regexp.MustCompile(`(?i)^(?:docs\(changelog\):\s*)?(?:updated?\s+changelog(?:\.md)?(?:\s+and\s+embedded\s+changelog)?|review\s+changelog)\s+(?:for|to)\s+(?:version\s+)?v?\d+\.\d+`)
 )
 
 // canonicalChangelogCategories defines the display order for
@@ -135,6 +136,9 @@ func isChangelogBoilerplate(line string) bool {
 		return true
 	}
 	if strings.HasPrefix(line, "No merged pull requests in the interval") {
+		return true
+	}
+	if reChangelogSelfUpdate.MatchString(line) {
 		return true
 	}
 	return false

@@ -139,7 +139,12 @@ jobs:
           printf 'Automated build of EveSynapse v%s. Update with: %s.\n' "$VERSION" "$HOW" > release-notes.md
           printf 'If this is your first install, use the [EveSynapse Installer](https://natems.dev/EveSynapse/evesynapse-installer/releases/latest) (recommended) and see the [Installation guide](https://natems.dev/EveSynapse/evesynapse/wiki/Installation).\n' >> release-notes.md
           python3 - <<'PYEOF'
-          import json, os, urllib.request
+          import json, os, re, urllib.request
+
+          self_update_re = re.compile(
+              r"^(?:docs\(changelog\):\s*)?(?:updated?\s+changelog(?:\.md)?(?:\s+and\s+embedded\s+changelog)?|review\s+changelog)\s+(?:for|to)\s+(?:version\s+)?v?\d+\.\d+",
+              re.I,
+          )
 
           api = os.environ["FORGEJO_API"]
           token = os.environ["FORGEJO_TOKEN"]
@@ -174,7 +179,8 @@ jobs:
               if since and (pr.get("merged_at") or "") <= since:
                   continue
               head_ref = (pr.get("head") or {}).get("ref") or ""
-              if head_ref.startswith("chore/changelog-") or (pr.get("title") or "").startswith("Update changelog for v"):
+              title = (pr.get("title") or "").strip()
+              if head_ref.startswith("chore/changelog-") or self_update_re.match(title):
                   continue
               labels = {l["name"] for l in pr.get("labels") or []}
               for name, wanted in cats:

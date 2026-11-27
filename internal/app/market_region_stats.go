@@ -567,6 +567,12 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 		return res, err
 	}
 	defer tx.Rollback(ctx)
+	// The batch store runs the trends refresh over the whole
+	// region on a cold full write; it gets its own ceiling so the
+	// tight server-wide timeout never rolls the sweep back.
+	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = '120s'"); err != nil {
+		return res, err
+	}
 	qtx := app.queries.WithTx(tx)
 
 	if ob == nil {

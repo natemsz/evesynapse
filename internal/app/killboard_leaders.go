@@ -242,6 +242,9 @@ func (app *Application) totalKillLeaders(ctx context.Context, day, since, until 
 	if _, err := tx.Exec(ctx, "SET LOCAL work_mem = '128MB'"); err != nil {
 		return 0, err
 	}
+	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = '120s'"); err != nil {
+		return 0, err
+	}
 	q := db.New(tx)
 	if err := q.ClearKillLeadersStage(ctx); err != nil {
 		return 0, err

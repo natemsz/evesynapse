@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 const entityDirectoryMaxAge = 24 * time.Hour
@@ -40,21 +42,37 @@ func (app *Application) kickEntityDirectoryBuild() {
 }
 
 func (app *Application) buildEntityDirectory(ctx context.Context) error {
-	pilotRows, err := app.queries.ListSearchIndexPilotRecords(ctx)
+	// The cold-start load reads the whole pilot, corporation,
+	// alliance and structure name sets in one consistent snapshot;
+	// it gets its own ceiling so the tight server-wide timeout
+	// never cuts it short.
+	tx, err := app.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return fmt.Errorf("entity directory: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = '60s'"); err != nil {
+		return fmt.Errorf("entity directory: %w", err)
+	}
+	q := app.queries.WithTx(tx)
+	pilotRows, err := q.ListSearchIndexPilotRecords(ctx)
 	if err != nil {
 		return fmt.Errorf("entity directory: pilots: %w", err)
 	}
-	corpRows, err := app.queries.ListSearchIndexCorporationRecords(ctx)
+	corpRows, err := q.ListSearchIndexCorporationRecords(ctx)
 	if err != nil {
 		return fmt.Errorf("entity directory: corps: %w", err)
 	}
-	allianceRows, err := app.queries.ListSearchIndexAllianceRecords(ctx)
+	allianceRows, err := q.ListSearchIndexAllianceRecords(ctx)
 	if err != nil {
 		return fmt.Errorf("entity directory: alliances: %w", err)
 	}
-	structRows, err := app.queries.ListResolvedStructureNames(ctx)
+	structRows, err := q.ListResolvedStructureNames(ctx)
 	if err != nil {
 		return fmt.Errorf("entity directory: structures: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("entity directory: %w", err)
 	}
 
 	snap := &entityDirectorySnapshot{

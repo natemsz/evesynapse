@@ -23,7 +23,7 @@
 
 [Unit]
 Description=EveSynapse: EVE Online companion
-After=network-online.target postgresql.service
+After=network-online.target postgresql-18.service
 Wants=network-online.target
 StartLimitIntervalSec=60
 StartLimitBurst=5

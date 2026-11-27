@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	json "github.com/goccy/go-json"
+	"github.com/jackc/pgx/v5"
 	"sort"
 	"strings"
 	"time"
@@ -204,28 +205,43 @@ func (app *Application) kickSearchIndexBuild() {
 // the snapshot whole. Record deltas noted up to the swap are
 // folded in, so nothing stored while the build ran is lost.
 func (app *Application) buildSearchIndex(ctx context.Context) error {
-	typeRows, err := app.queries.ListSearchIndexTypes(ctx)
+	// The cold-start load reads the whole SDE and record tables in
+	// one consistent snapshot; it gets its own ceiling so the
+	// tight server-wide timeout never cuts it short.
+	tx, err := app.pool.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return err
 	}
-	systemRows, err := app.queries.ListSearchIndexSystems(ctx)
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = '60s'"); err != nil {
+		return err
+	}
+	q := app.queries.WithTx(tx)
+	typeRows, err := q.ListSearchIndexTypes(ctx)
 	if err != nil {
 		return err
 	}
-	regionRows, err := app.queries.ListSearchIndexRegions(ctx)
+	systemRows, err := q.ListSearchIndexSystems(ctx)
 	if err != nil {
 		return err
 	}
-	pilotRows, err := app.queries.ListSearchIndexPilotRecords(ctx)
+	regionRows, err := q.ListSearchIndexRegions(ctx)
 	if err != nil {
 		return err
 	}
-	corpRows, err := app.queries.ListSearchIndexCorporationRecords(ctx)
+	pilotRows, err := q.ListSearchIndexPilotRecords(ctx)
 	if err != nil {
 		return err
 	}
-	allianceRows, err := app.queries.ListSearchIndexAllianceRecords(ctx)
+	corpRows, err := q.ListSearchIndexCorporationRecords(ctx)
 	if err != nil {
+		return err
+	}
+	allianceRows, err := q.ListSearchIndexAllianceRecords(ctx)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 

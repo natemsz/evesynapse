@@ -704,13 +704,13 @@ func TestRegionSweepStoresStatPackTrends(t *testing.T) {
 			t.Fatalf("seed daily type %d: %v", typeID, err)
 		}
 	}
-	// Type 34 now sells at 10: 8 a day back, 5 a week back, 20 a
-	// month back. Type 35 has only a row 12 days back, outside
-	// every window.
+	// Type 34 now sells at 10: 8 a day back (rolling 7d avg = 9),
+	// 5 a week back (prior 7d avg = 5 -> +80%), 20 a month back (-50%).
+	// Type 35 has only a row 20 days back, outside every comparison window.
 	seedDay(34, 1, 8)
 	seedDay(34, 7, 5)
 	seedDay(34, 30, 20)
-	seedDay(35, 12, 50)
+	seedDay(35, 20, 50)
 
 	transport.books[10000002] = [][]esi.MarketOrder{{
 		{OrderID: 1, TypeID: 34, Price: 10, VolumeRemain: 100},
@@ -725,10 +725,13 @@ func TestRegionSweepStoresStatPackTrends(t *testing.T) {
 	for name, c := range map[string]struct {
 		v    sql.NullFloat64
 		want float64
-	}{"1d": {got.SellChg1d, 25}, "7d": {got.SellChg7d, 100}, "30d": {got.SellChg30d, -50}} {
+	}{"1d": {got.SellChg1d, 25}, "7d": {got.SellChg7d, 80}, "30d": {got.SellChg30d, -50}} {
 		if !c.v.Valid || c.v.Float64 < c.want-1e-9 || c.v.Float64 > c.want+1e-9 {
 			t.Errorf("type 34 sell change %s = %+v, want %v", name, c.v, c.want)
 		}
+	}
+	if got.SellAvg7d < 9-1e-9 || got.SellAvg7d > 9+1e-9 {
+		t.Errorf("type 34 sell_avg_7d = %v, want 9", got.SellAvg7d)
 	}
 	if got.BuyChg1d.Valid || got.Volatility30d.Valid {
 		t.Errorf("type 34: buy change %+v / volatility %+v, want NULL", got.BuyChg1d, got.Volatility30d)

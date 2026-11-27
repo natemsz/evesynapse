@@ -259,6 +259,11 @@ type Application struct {
 	hubBooks   map[int64]*hubBook
 	hubWindows map[int64]esiWindow
 
+	// hubConfirmMu serializes post-commit cross-hub confirmation updates
+	// across the trade hub regions so concurrent hub sweeps always see
+	// each other's committed stats without lock-ordering conflicts.
+	hubConfirmMu sync.Mutex
+
 	// esiExpires holds, per fetch kind, the Expires ESI gave the
 	// last answer (string -> time.Time), for the passes that wait
 	// out ESI's own cache window instead of a fixed gate.

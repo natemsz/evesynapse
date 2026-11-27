@@ -30,14 +30,20 @@ const (
 
 // marketChangeRow is one feed row, display-ready.
 type marketChangeRow struct {
-	TypeID   int64
-	Name     string
-	Day      string
-	Kind     string
-	Label    string
-	Detail   string
-	Dir      string
-	Detected string
+	TypeID        int64
+	Name          string
+	Day           string
+	Kind          string
+	Label         string
+	Detail        string
+	Dir           string
+	Detected      string
+	ISKTradedDay  string
+	TradesDay     string
+	LowTrades     bool
+	SpreadWidened bool
+	HubBadge      string
+	HubTitle      string
 }
 
 // describeMarketChange words one change: its label, the before and
@@ -69,10 +75,15 @@ var marketChangeKinds = []struct{ key, label string }{
 	{"supply_down", "Supply falls"}, {"spread_wide", "Spreads widening"},
 }
 
-// marketChangesForRegion reads a region's feed over the last days.
-func (app *Application) marketChangesForRegion(ctx context.Context, regionID int64, kind string, days int) []marketChangeRow {
-	rows, err := app.queries.ListMarketChangesForRegion(ctx, db.ListMarketChangesForRegionParams{
-		RegionID: regionID, Since: time.Now().UTC().AddDate(0, 0, -days+1).Format("2006-01-02"), Kind: kind,
+// marketChangesForRegionFiltered reads a region's feed over the last
+// days with the active ISK traded/day and trades/day floors enforced in SQL.
+func (app *Application) marketChangesForRegionFiltered(ctx context.Context, regionID int64, kind string, days int, minISK, minTrades float64) []marketChangeRow {
+	rows, err := app.queries.ListMarketChangesForRegionFiltered(ctx, db.ListMarketChangesForRegionFilteredParams{
+		RegionID:  regionID,
+		Since:     time.Now().UTC().AddDate(0, 0, -days+1).Format("2006-01-02"),
+		Kind:      kind,
+		MinIsk:    minISK,
+		MinTrades: minTrades,
 	})
 	if err != nil {
 		logging.Errorf("market changes: region %d: %v", regionID, err)
@@ -82,9 +93,22 @@ func (app *Application) marketChangesForRegion(ctx context.Context, regionID int
 	out := make([]marketChangeRow, 0, len(rows))
 	for _, r := range rows {
 		label, detail, dir := describeMarketChange(r.Kind, r.Before, r.After, r.Pct)
+		hubBadge, hubTitle := hubConfirmBadge(r.ConfirmedHubs)
 		out = append(out, marketChangeRow{
-			TypeID: r.TypeID, Name: app.typeNameOrID(ctx, r.TypeID), Day: r.Day, Kind: r.Kind,
-			Label: label, Detail: detail, Dir: dir, Detected: ageText(now, r.DetectedAt),
+			TypeID:        r.TypeID,
+			Name:          app.typeNameOrID(ctx, r.TypeID),
+			Day:           r.Day,
+			Kind:          r.Kind,
+			Label:         label,
+			Detail:        detail,
+			Dir:           dir,
+			Detected:      ageText(now, r.DetectedAt),
+			ISKTradedDay:  iskCompact(r.IskTraded7d),
+			TradesDay:     formatTradesPerDay(r.AvgOrders7d),
+			LowTrades:     r.AvgOrders7d < float64(defaultMoversMinTrades),
+			SpreadWidened: r.SpreadWidened,
+			HubBadge:      hubBadge,
+			HubTitle:      hubTitle,
 		})
 	}
 	return out

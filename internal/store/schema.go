@@ -1126,6 +1126,12 @@ var pgMarketMoversRankedSchema string
 //go:embed schema_pg/191_station_leaderboard_band.sql
 var pgStationLeaderboardBandSchema string
 
+// Step 192: indexes for abyssal scoring and lookups, public contract
+// region-cycle sweeps, and incremental LP offer value refreshes.
+//
+//go:embed schema_pg/192_perf_indexes.sql
+var pgPerfIndexesSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1344,6 +1350,7 @@ func schemaSteps() []schemaStep {
 		{188, "market_movers_metrics", pgMarketMoversMetricsSchema, ""},
 		{189, "market_movers_ranked", pgMarketMoversRankedSchema, ""},
 		{191, "station_leaderboard_band", pgStationLeaderboardBandSchema, ""},
+		{192, "perf_indexes", pgPerfIndexesSchema, ""},
 	}
 }
 

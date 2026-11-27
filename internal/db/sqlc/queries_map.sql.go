@@ -62,64 +62,35 @@ func (q *Queries) CountRegionSystemsBySecurity(ctx context.Context, regionID int
 }
 
 const distillRegionActivityStats = `-- name: DistillRegionActivityStats :exec
-WITH coverage AS (
-    SELECT COUNT(DISTINCT hour)::int AS hours
-    FROM system_activity_hours
-    WHERE hour > $1::timestamptz - INTERVAL '7 days'
-),
-latest AS (
-    SELECT DISTINCT ON (h.system_id) h.system_id, h.hour,
-           h.ship_kills, h.pod_kills, h.npc_kills, h.ship_jumps
-    FROM system_activity_hours h
-    WHERE h.hour > $1::timestamptz - INTERVAL '7 days'
-    ORDER BY h.system_id, h.hour DESC
-),
-reg1h AS (
-    SELECT s.region_id,
-           SUM(CASE WHEN l.hour > $1::timestamptz - INTERVAL '2 hours' THEN l.ship_kills ELSE 0 END) AS sk1,
-           SUM(CASE WHEN l.hour > $1::timestamptz - INTERVAL '2 hours' THEN l.pod_kills ELSE 0 END) AS pk1,
-           SUM(CASE WHEN l.hour > $1::timestamptz - INTERVAL '2 hours' THEN l.npc_kills ELSE 0 END) AS nk1,
-           SUM(CASE WHEN l.hour > $1::timestamptz - INTERVAL '2 hours' THEN l.ship_jumps ELSE 0 END) AS j1
-    FROM latest l
-    JOIN sde_systems s ON s.system_id = l.system_id
-    GROUP BY s.region_id
-),
-regwin AS (
-    SELECT s.region_id,
-           COALESCE(SUM(h.ship_kills) FILTER (WHERE h.hour > $1::timestamptz - INTERVAL '24 hours'), 0) AS sk24,
-           COALESCE(SUM(h.pod_kills)  FILTER (WHERE h.hour > $1::timestamptz - INTERVAL '24 hours'), 0) AS pk24,
-           COALESCE(SUM(h.npc_kills)  FILTER (WHERE h.hour > $1::timestamptz - INTERVAL '24 hours'), 0) AS nk24,
-           COALESCE(SUM(h.ship_jumps) FILTER (WHERE h.hour > $1::timestamptz - INTERVAL '24 hours'), 0) AS j24,
-           SUM(h.ship_kills) AS sk7, SUM(h.pod_kills) AS pk7,
-           SUM(h.npc_kills) AS nk7, SUM(h.ship_jumps) AS j7
-    FROM system_activity_hours h
-    JOIN sde_systems s ON s.system_id = h.system_id
-    WHERE h.hour > $1::timestamptz - INTERVAL '7 days'
-    GROUP BY s.region_id
-)
 INSERT INTO region_activity_stats (
     region_id, ship_kills_1h, pod_kills_1h, npc_kills_1h, jumps_1h,
     ship_kills_24h, pod_kills_24h, npc_kills_24h, jumps_24h,
     ship_kills_day, pod_kills_day, npc_kills_day, jumps_day,
     hours_covered, updated_at)
-SELECT r.region_id, r.sk1, r.pk1, r.nk1, r.j1,
-       w.sk24, w.pk24, w.nk24, w.j24,
-       w.sk7 * 24.0 / GREATEST(c.hours, 1),
-       w.pk7 * 24.0 / GREATEST(c.hours, 1),
-       w.nk7 * 24.0 / GREATEST(c.hours, 1),
-       w.j7 * 24.0 / GREATEST(c.hours, 1),
-       c.hours,
+SELECT s.region_id,
+       SUM(a.ship_kills_1h)::bigint,
+       SUM(a.pod_kills_1h)::bigint,
+       SUM(a.npc_kills_1h)::bigint,
+       SUM(a.jumps_1h)::bigint,
+       SUM(a.ship_kills_24h)::bigint,
+       SUM(a.pod_kills_24h)::bigint,
+       SUM(a.npc_kills_24h)::bigint,
+       SUM(a.jumps_24h)::bigint,
+       SUM(a.ship_kills_day)::double precision,
+       SUM(a.pod_kills_day)::double precision,
+       SUM(a.npc_kills_day)::double precision,
+       SUM(a.jumps_day)::double precision,
+       MAX(a.hours_covered)::int,
        $1::timestamptz
-FROM reg1h r
-CROSS JOIN coverage c
-JOIN regwin w ON w.region_id = r.region_id
+FROM system_activity_stats a
+JOIN sde_systems s ON s.system_id = a.system_id
+GROUP BY s.region_id
 `
 
 // DistillRegionActivityStats is DistillSystemActivityStats summed
-// over each region's member systems: the 1h and window sums add the
-// systems' histories directly, and the averages and hours_covered
-// use the same collection coverage, so a region's daily average is
-// its total scaled by the hours of collection behind it.
+// over each region's member systems: reads the per-system rows just
+// written into system_activity_stats instead of rescanning the
+// hourly history.
 func (q *Queries) DistillRegionActivityStats(ctx context.Context, now time.Time) error {
 	_, err := q.db.Exec(ctx, distillRegionActivityStats, now)
 	return err
@@ -127,15 +98,19 @@ func (q *Queries) DistillRegionActivityStats(ctx context.Context, now time.Time)
 
 const distillSystemActivityStats = `-- name: DistillSystemActivityStats :exec
 WITH coverage AS (
-    SELECT COUNT(DISTINCT hour)::int AS hours
-    FROM system_activity_hours
-    WHERE hour > $1::timestamptz - INTERVAL '7 days'
+    SELECT COUNT(*)::int AS hours
+    FROM (
+        SELECT hour
+        FROM system_activity_hours
+        WHERE hour > $1::timestamptz - INTERVAL '7 days'
+        GROUP BY hour
+    ) h
 ),
 latest AS (
-    SELECT DISTINCT ON (h.system_id) h.system_id, h.hour,
+    SELECT DISTINCT ON (h.system_id) h.system_id,
            h.ship_kills, h.pod_kills, h.npc_kills, h.ship_jumps
     FROM system_activity_hours h
-    WHERE h.hour > $1::timestamptz - INTERVAL '7 days'
+    WHERE h.hour > $1::timestamptz - INTERVAL '2 hours'
     ORDER BY h.system_id, h.hour DESC
 ),
 win AS (
@@ -155,21 +130,21 @@ INSERT INTO system_activity_stats (
     ship_kills_24h, pod_kills_24h, npc_kills_24h, jumps_24h,
     ship_kills_day, pod_kills_day, npc_kills_day, jumps_day,
     hours_covered, updated_at)
-SELECT l.system_id,
-       CASE WHEN l.hour > $1::timestamptz - INTERVAL '2 hours' THEN l.ship_kills ELSE 0 END,
-       CASE WHEN l.hour > $1::timestamptz - INTERVAL '2 hours' THEN l.pod_kills ELSE 0 END,
-       CASE WHEN l.hour > $1::timestamptz - INTERVAL '2 hours' THEN l.npc_kills ELSE 0 END,
-       CASE WHEN l.hour > $1::timestamptz - INTERVAL '2 hours' THEN l.ship_jumps ELSE 0 END,
-       COALESCE(w.sk24, 0), COALESCE(w.pk24, 0), COALESCE(w.nk24, 0), COALESCE(w.j24, 0),
-       COALESCE(w.sk7, 0) * 24.0 / GREATEST(c.hours, 1),
-       COALESCE(w.pk7, 0) * 24.0 / GREATEST(c.hours, 1),
-       COALESCE(w.nk7, 0) * 24.0 / GREATEST(c.hours, 1),
-       COALESCE(w.j7, 0) * 24.0 / GREATEST(c.hours, 1),
+SELECT w.system_id,
+       COALESCE(l.ship_kills, 0),
+       COALESCE(l.pod_kills, 0),
+       COALESCE(l.npc_kills, 0),
+       COALESCE(l.ship_jumps, 0),
+       w.sk24, w.pk24, w.nk24, w.j24,
+       w.sk7 * 24.0 / GREATEST(c.hours, 1),
+       w.pk7 * 24.0 / GREATEST(c.hours, 1),
+       w.nk7 * 24.0 / GREATEST(c.hours, 1),
+       w.j7 * 24.0 / GREATEST(c.hours, 1),
        c.hours,
        $1::timestamptz
-FROM latest l
+FROM win w
 CROSS JOIN coverage c
-LEFT JOIN win w ON w.system_id = l.system_id
+LEFT JOIN latest l ON l.system_id = w.system_id
 `
 
 // DistillSystemActivityStats rebuilds the per-system figures from

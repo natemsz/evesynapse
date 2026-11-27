@@ -79,13 +79,17 @@ import (
 )
 
 const (
-	// abyssalScoreBatch caps one pass; the corpus is probed
-	// over days, and the pass runs every cycle.
-	abyssalScoreBatch = 200
-	// abyssalRescoreAge: stored scores refresh hourly, the
-	// cadence the appraisal pass reprices contracts on, so a
-	// growing corpus improves estimates within the hour.
-	abyssalRescoreAge = time.Hour
+	// abyssalScoreBatch caps one pass; at 300/min (18,000/hour)
+	// against the live corpus on a 3h refresh window, the queue
+	// drains inside the window with wide headroom.
+	abyssalScoreBatch = 300
+	// abyssalRescoreAge: stored scores of live listings refresh
+	// every three hours so the queue drains inside the window;
+	// departed items stay frozen until a new sighting opens.
+	abyssalRescoreAge = 3 * time.Hour
+	// abyssalModelCacheTTL caps how often a family's learned GBM
+	// correction may be refit when new sightings arrive.
+	abyssalModelCacheTTL = time.Hour
 )
 
 // abyssalBandRef is the multiplier-band width at which an
@@ -1385,9 +1389,83 @@ type abyssalRollKV struct {
 	Value       float64 `json:"value"`
 }
 
+type abyssalCorpusFP struct {
+	comps         int
+	stamped       int
+	sold          int
+	departed      int
+	ladder        int
+	maxFirstSeen  int64
+	maxDeparted   int64
+	maxSold       int64
+	otherUnpriced int64
+}
+
+type abyssalCachedModel struct {
+	fp       abyssalCorpusFP
+	fittedAt time.Time
+	learned  *abyssalLearned
+}
+
+func abyssalCorpusFingerprint(rows []db.ListAbyssalCorpusByGroupNamesRow) abyssalCorpusFP {
+	fp := abyssalCorpusFP{comps: len(rows)}
+	for _, r := range rows {
+		if ns := r.FirstSeenAt.UnixNano(); ns > fp.maxFirstSeen {
+			fp.maxFirstSeen = ns
+		}
+		if r.AbyssalLines.Valid {
+			fp.stamped++
+		}
+		if r.SoldAt.Valid {
+			fp.sold++
+			if ns := r.SoldAt.Time.UnixNano(); ns > fp.maxSold {
+				fp.maxSold = ns
+			}
+		}
+		if r.DepartedAt.Valid {
+			fp.departed++
+			if ns := r.DepartedAt.Time.UnixNano(); ns > fp.maxDeparted {
+				fp.maxDeparted = ns
+			}
+		}
+		if r.OtherUnpriced.Valid {
+			fp.otherUnpriced += r.OtherUnpriced.Int64
+		}
+		if r.LadderValue.Valid && r.LadderValue.Float64 > 0 {
+			fp.ladder++
+		}
+	}
+	return fp
+}
+
+func (app *Application) cachedAbyssalModel(family string, fp abyssalCorpusFP, now time.Time) (*abyssalLearned, bool) {
+	app.abyssalModelsMu.Lock()
+	defer app.abyssalModelsMu.Unlock()
+	e, ok := app.abyssalModels[family]
+	if !ok || e.learned == nil {
+		return nil, false
+	}
+	if e.fp == fp || now.Before(e.fittedAt.Add(abyssalModelCacheTTL)) {
+		return e.learned, true
+	}
+	return nil, false
+}
+
+func (app *Application) storeAbyssalModel(family string, fp abyssalCorpusFP, now time.Time, l *abyssalLearned) {
+	app.abyssalModelsMu.Lock()
+	defer app.abyssalModelsMu.Unlock()
+	if app.abyssalModels == nil {
+		app.abyssalModels = make(map[string]abyssalCachedModel)
+	}
+	app.abyssalModels[family] = abyssalCachedModel{fp: fp, fittedAt: now, learned: l}
+}
+
 func (app *Application) scoreAbyssalItems(ctx context.Context) int {
+	return app.scoreAbyssalItemsAt(ctx, time.Now().UTC())
+}
+
+func (app *Application) scoreAbyssalItemsAt(ctx context.Context, now time.Time) int {
 	q := app.queries
-	now := time.Now().UTC()
 	due, err := q.ListAbyssalItemsDueScoring(ctx, db.ListAbyssalItemsDueScoringParams{
 		Cutoff:  now.Add(-abyssalRescoreAge),
 		MaxRows: abyssalScoreBatch,
@@ -1734,11 +1812,18 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 		return comps
 	}
 
-	// Each family's learned correction, fitted once per pass
-	// from the same clean comps, and its backtest stored.
+	// Each family's learned correction, reused from the process
+	// cache when unchanged or within abyssalModelCacheTTL, and
+	// refit (with its backtest stored) only when stale and the
+	// corpus moved.
 	learnedByFamily := map[string]*abyssalLearned{}
 	learnedFor := func(family string) *abyssalLearned {
 		if l, ok := learnedByFamily[family]; ok {
+			return l
+		}
+		fp := abyssalCorpusFingerprint(corpusByFamily[family])
+		if l, ok := app.cachedAbyssalModel(family, fp, now); ok {
+			learnedByFamily[family] = l
 			return l
 		}
 		weights := weightsByFamily[family]
@@ -1767,6 +1852,7 @@ func (app *Application) scoreAbyssalItems(ctx context.Context) int {
 			}
 		}
 		l := abyssalLearnFamily(rows)
+		app.storeAbyssalModel(family, fp, now, l)
 		learnedByFamily[family] = l
 		f := l.Fit
 		nf := func(v float64) sql.NullFloat64 { return sql.NullFloat64{Float64: v, Valid: f.HasBacktest} }

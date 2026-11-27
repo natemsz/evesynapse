@@ -59,11 +59,10 @@ import (
 )
 
 // appraisalRefreshAge is how old a stored appraisal may get
-// before the pass reprices it: the pricing inputs move on an
-// hourly-ish cadence (typicals sweep, true values recompute,
-// fallback poll), so an hour keeps stored numbers within one
-// input move of current without repricing the corpus flat.
-const appraisalRefreshAge = time.Hour
+// before the pass reprices it: at 3h, ~50k live stored contracts
+// need ~280 appraisals/min, well under the 400/min batch cap so
+// the queue drains cleanly inside the window.
+const appraisalRefreshAge = 3 * time.Hour
 
 // appraisalBatchPerCycle caps one appraisal pass: the first
 // pass over a full corpus drains over a few cycles in

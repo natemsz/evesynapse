@@ -52,9 +52,9 @@ DELETE FROM kill_leaders_totals WHERE day = sqlc.arg(day)::date;
 -- name: InsertKillLeadersTotalsEntity :exec
 INSERT INTO kill_leaders_totals (day, board, scope, scope_id, entity_id, kills, solo, isk)
 SELECT sqlc.arg(day)::date, sqlc.arg(board)::smallint, p.scope, p.scope_id, p.entity_id, count(*)::integer,
-       (count(*) FILTER (WHERE w.solo))::integer, COALESCE(sum(w.value), 0)::double precision
+       (count(*) FILTER (WHERE p.solo))::integer, COALESCE(sum(p.value), 0)::double precision
 FROM (
-    SELECT DISTINCT s.scope, s.scope_id, e.killmail_id, e.entity_id
+    SELECT DISTINCT s.scope, s.scope_id, e.killmail_id, e.entity_id, w.solo, w.value
     FROM (
         SELECT a.killmail_id, a.ship_type_id, a.corporation_id, a.alliance_id,
                CASE sqlc.arg(board)::smallint WHEN 1 THEN a.character_id
@@ -73,7 +73,6 @@ FROM (
       AND (s.scope <> 4 OR sqlc.arg(board)::smallint IN (1, 2))
       AND (s.scope <> 5 OR sqlc.arg(board)::smallint = 1)
 ) p
-JOIN kill_leaders_win w ON w.killmail_id = p.killmail_id
 GROUP BY p.scope, p.scope_id, p.entity_id;
 
 -- Victim-side boards: hulls destroyed (board 4, in New Eden, each
@@ -117,16 +116,15 @@ WHERE r.rn <= CASE r.scope WHEN 0 THEN 50 WHEN 2 THEN 5 ELSE 10 END;
 -- name: InsertKillLeadersTotalsShipsUsed :exec
 INSERT INTO kill_leaders_totals (day, board, scope, scope_id, entity_id, kills, solo, isk)
 SELECT sqlc.arg(day)::date, 5, p.scope, p.scope_id, p.entity_id, count(*)::integer,
-       (count(*) FILTER (WHERE w.solo))::integer, COALESCE(sum(w.value), 0)::double precision
+       (count(*) FILTER (WHERE p.solo))::integer, COALESCE(sum(p.value), 0)::double precision
 FROM (
-    SELECT DISTINCT s.scope, s.scope_id, a.killmail_id, a.ship_type_id AS entity_id
+    SELECT DISTINCT s.scope, s.scope_id, a.killmail_id, a.ship_type_id AS entity_id, w.solo, w.value
     FROM kill_leaders_att a
     JOIN kill_leaders_win w ON w.killmail_id = a.killmail_id
     CROSS JOIN LATERAL (VALUES (0::smallint, 0::bigint), (1::smallint, w.region_id)) s(scope, scope_id)
     WHERE a.character_id > 0 AND a.ship_type_id > 0 AND a.ship_type_id NOT IN (670, 33328)
       AND (s.scope = 0 OR s.scope_id > 0)
 ) p
-JOIN kill_leaders_win w ON w.killmail_id = p.killmail_id
 GROUP BY p.scope, p.scope_id, p.entity_id;
 
 -- name: UpsertKillLeadersDay :exec

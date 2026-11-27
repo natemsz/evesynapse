@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/rand"
@@ -122,5 +123,208 @@ func TestContractExitFromStatus(t *testing.T) {
 		if got := contractExitFromStatus(c.err, c.expires, now); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// TestAbyssalModelCacheParity: reusing a cached family model over identical
+// corpus inputs produces identical estimates to a fresh fit, skips refits
+// while the corpus is unchanged or inside the hourly window, refits once
+// stale and changed, and leaves departed items frozen out of the due queue.
+func TestAbyssalModelCacheParity(t *testing.T) {
+	ctx := context.Background()
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	exec := func(stmt string, args ...any) {
+		t.Helper()
+		if _, err := app.db.ExecContext(ctx, stmt, args...); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+	t0 := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+
+	exec(`INSERT INTO sde_groups (group_id, name) VALUES (501, 'Test Damage Thing')`)
+	exec(`INSERT INTO sde_types (type_id, name, group_id, market_group_id) VALUES
+		(60001, 'Abyssal Test Damage', 501, 0), (30001, 'Test Damage II', 501, 9),
+		(30010, 'Faction Test Damage', 501, 9), (30011, 'Officer Test Damage', 501, 9),
+		(47735, 'Test Mutaplasmid', 501, 0)`)
+	exec(`INSERT INTO sde_attribute_types (attribute_id, name, stackable, high_is_good, unit_id, default_value) VALUES
+		(64, 'damageMultiplier', 1, 1, 0, 0), (6, 'capacitorNeed', 1, 0, 0, 0), (50, 'cpu', 1, 0, 0, 0)`)
+	exec(`INSERT INTO sde_type_attributes (type_id, attribute_id, value) VALUES
+		(30001, 64, 2.0), (30001, 6, 10), (30001, 50, 20),
+		(30010, 64, 2.3), (30010, 6, 9.5), (30010, 50, 20),
+		(30011, 64, 2.6), (30011, 6, 9), (30011, 50, 22)`)
+	exec(`INSERT INTO abyssal_family_weights (family, attribute_id, weight, penalty_only) VALUES
+		('test_damage_thing', 64, 1.0, false), ('test_damage_thing', 6, 0.25, false),
+		('test_damage_thing', 50, 0.5, true)`)
+	exec(`INSERT INTO abyssal_ranges (mutator_type_id, attribute_id, min_mult, max_mult) VALUES
+		(47735, 64, 0.90, 1.25), (47735, 6, 0.90, 1.20), (47735, 50, 0.85, 1.40)`)
+	exec(`INSERT INTO market_region_stats (region_id, type_id, typical_sell, updated_at) VALUES
+		(10000002, 30001, 100000000, $1), (10000002, 47735, 60000000, $1),
+		(10000002, 30010, 300000000, $1), (10000002, 30011, 2000000000, $1)`, t0)
+
+	r64 := abyssalRange{MinMult: 0.90, MaxMult: 1.25}
+	r6 := abyssalRange{MinMult: 0.90, MaxMult: 1.20}
+	r50 := abyssalRange{MinMult: 0.85, MaxMult: 1.40}
+	seedItem := func(itemID, contractID int64, p64, p6, p50, ask float64, seen time.Time, departed bool) {
+		t.Helper()
+		attrs := mustAbyssalJSON(t, []abyssalRollKV{
+			{AttributeID: 64, Value: rollAt(2.0, r64, p64, true)},
+			{AttributeID: 6, Value: rollAt(10, r6, p6, false)},
+			{AttributeID: 50, Value: rollAt(20, r50, p50, false)},
+		})
+		exec(`INSERT INTO abyssal_items (item_id, type_id, source_type_id, mutator_type_id, created_by,
+			attributes, fetched_at, first_seen_at, last_seen_at)
+			VALUES ($1, 60001, 30001, 47735, 9001, $2, $3, $3, $3)`, itemID, attrs, seen)
+		if departed {
+			exec(`INSERT INTO abyssal_sightings (item_id, contract_id, contract_type, price, region_id,
+				location_id, date_expired, first_seen_at, last_seen_at, departed_at, depart_kind,
+				issuer_id, abyssal_lines, wanted_lines, other_lines, other_unpriced, other_value)
+				VALUES ($1, $2, 'item_exchange', $3, 10000002, 60003760, $4, $5, $5, $6, 'expired',
+				$7, 1, 0, 0, 0, 0)`,
+				itemID, contractID, ask, seen.Add(7*24*time.Hour), seen, seen.Add(2*time.Hour), itemID)
+		} else {
+			exec(`INSERT INTO abyssal_sightings (item_id, contract_id, contract_type, price, region_id,
+				location_id, date_expired, first_seen_at, last_seen_at,
+				issuer_id, abyssal_lines, wanted_lines, other_lines, other_unpriced, other_value)
+				VALUES ($1, $2, 'item_exchange', $3, 10000002, 60003760, $4, $5, $5,
+				$6, 1, 0, 0, 0, 0)`,
+				itemID, contractID, ask, seen.Add(7*24*time.Hour), seen, itemID)
+		}
+	}
+
+	// Seed 80 live items with a clear monotone premium on top damage rolls
+	// so the learned correction earns UseModel = true on holdout backtest.
+	const liveCount = 80
+	rng := rand.New(rand.NewSource(42))
+	for i := 0; i < liveCount; i++ {
+		p64 := rng.Float64()
+		p6 := rng.Float64()
+		p50 := 0.3 + 0.6*rng.Float64()
+		baseAsk := 100e6 * math.Exp(2.2*p64)
+		if p64 > 0.7 {
+			baseAsk *= 1.45
+		}
+		baseAsk *= math.Exp(0.04 * rng.NormFloat64())
+		seedItem(int64(910000+i), int64(710000+i), p64, p6, p50, baseAsk, t0.Add(-time.Duration(liveCount-i)*time.Hour), false)
+	}
+	// Seed one already-scored departed item; it must stay frozen.
+	frozenAt := t0.Add(-12 * time.Hour)
+	seedItem(999001, 799001, 0.5, 0.5, 0.5, 180e6, t0.Add(-24*time.Hour), true)
+	exec(`UPDATE abyssal_items SET family = 'test_damage_thing', score = 0.5, est_value = 180000000, ladder_value = 180000000, scored_at = $1 WHERE item_id = 999001`, frozenAt)
+
+	// Initial scoring populates score and ladder_value on the 80 live items.
+	if n := app.scoreAbyssalItemsAt(ctx, t0); n != liveCount {
+		t.Fatalf("initial pass scored %d, want %d (departed item must stay frozen)", n, liveCount)
+	}
+	frozen, err := q.GetAbyssalItem(ctx, 999001)
+	if err != nil || !frozen.ScoredAt.Valid || !frozen.ScoredAt.Time.Equal(frozenAt) {
+		t.Fatalf("departed item rescored: %+v (err=%v)", frozen.ScoredAt, err)
+	}
+
+	// Capture the pre-pass state of all 80 live items so we can run both a
+	// fresh-fit pass and a cached-model pass from the exact same DB snapshot
+	// at the exact same timestamp t1.
+	t1 := t0.Add(4 * time.Hour)
+	type itemSnap struct {
+		id                         int64
+		score, est, lo, hi, ladder float64
+		basis, scope, mBasis       string
+		comps                      int64
+		premium, calib             float64
+	}
+	readSnaps := func() []itemSnap {
+		t.Helper()
+		out := make([]itemSnap, liveCount)
+		for i := 0; i < liveCount; i++ {
+			id := int64(910000 + i)
+			ab, err := q.GetAbyssalItem(ctx, id)
+			if err != nil {
+				t.Fatalf("get item %d: %v", id, err)
+			}
+			out[i] = itemSnap{
+				id: id, score: ab.Score.Float64, est: ab.EstValue.Float64,
+				lo: ab.EstLow.Float64, hi: ab.EstHigh.Float64, ladder: ab.LadderValue.Float64,
+				basis: ab.EstBasis, scope: ab.EstScope, mBasis: ab.MarketBasis,
+				comps: ab.EstComps, premium: ab.PremiumMult, calib: ab.MarketCalib,
+			}
+		}
+		return out
+	}
+	pre := readSnaps()
+	restorePre := func(scoredAt time.Time) {
+		t.Helper()
+		for _, s := range pre {
+			exec(`UPDATE abyssal_items SET score = $2, est_value = $3, est_low = $4, est_high = $5,
+				ladder_value = $6, est_basis = $7, est_scope = $8, market_basis = $9,
+				est_comps = $10, premium_mult = $11, market_calib = $12, scored_at = $13
+				WHERE item_id = $1`,
+				s.id, s.score, s.est, s.lo, s.hi, s.ladder, s.basis, s.scope, s.mBasis, s.comps, s.premium, s.calib, scoredAt)
+		}
+	}
+
+	// Pass A (fresh fit): empty cache at t1.
+	app.abyssalModelsMu.Lock()
+	app.abyssalModels = nil
+	app.abyssalModelsMu.Unlock()
+	restorePre(t1.Add(-4 * time.Hour))
+	if n := app.scoreAbyssalItemsAt(ctx, t1); n != liveCount {
+		t.Fatalf("fresh pass scored %d, want %d", n, liveCount)
+	}
+	freshOut := readSnaps()
+	fitA, err := q.GetAbyssalFamilyFit(ctx, "test_damage_thing")
+	if err != nil {
+		t.Fatalf("read family fit: %v", err)
+	}
+	if !fitA.UseModel || !fitA.FittedAt.Equal(t1) {
+		t.Fatalf("fresh fit = %+v, want UseModel=true FittedAt=%v", fitA, t1)
+	}
+
+	// Pass B (cached model): identical DB state and timestamp t1, cache warm.
+	restorePre(t1.Add(-4 * time.Hour))
+	if n := app.scoreAbyssalItemsAt(ctx, t1); n != liveCount {
+		t.Fatalf("cached pass scored %d, want %d", n, liveCount)
+	}
+	cachedOut := readSnaps()
+	for i := range freshOut {
+		if freshOut[i] != cachedOut[i] {
+			t.Fatalf("item %d mismatch: fresh=%+v cached=%+v", freshOut[i].id, freshOut[i], cachedOut[i])
+		}
+	}
+
+	// Unchanged corpus after > 1h: must still hit cache and skip refit.
+	t2 := t1.Add(4 * time.Hour)
+	if n := app.scoreAbyssalItemsAt(ctx, t2); n != liveCount {
+		t.Fatalf("unchanged pass at t2 scored %d, want %d", n, liveCount)
+	}
+	fitAfterUnchanged, err := q.GetAbyssalFamilyFit(ctx, "test_damage_thing")
+	if err != nil || !fitAfterUnchanged.FittedAt.Equal(t1) {
+		t.Fatalf("unchanged corpus refit at t2: fitted_at=%v, want %v (err=%v)", fitAfterUnchanged.FittedAt, t1, err)
+	}
+
+	// New sighting inside 1h of t1: hourly refit cap still reuses cached model.
+	tWithin := t1.Add(30 * time.Minute)
+	seedItem(920001, 720001, 0.85, 0.6, 0.7, 900e6, tWithin, false)
+	if n := app.scoreAbyssalItemsAt(ctx, tWithin); n != 1 {
+		t.Fatalf("new item pass scored %d, want 1", n)
+	}
+	fitThrottled, err := q.GetAbyssalFamilyFit(ctx, "test_damage_thing")
+	if err != nil || !fitThrottled.FittedAt.Equal(t1) {
+		t.Fatalf("refit inside 1h window: fitted_at=%v, want %v (err=%v)", fitThrottled.FittedAt, t1, err)
+	}
+
+	// Once >= 1h has elapsed and the corpus changed, the next pass refits.
+	tAfter := t1.Add(90 * time.Minute)
+	seedItem(920002, 720002, 0.82, 0.55, 0.65, 850e6, tAfter, false)
+	if n := app.scoreAbyssalItemsAt(ctx, tAfter); n != 1 {
+		t.Fatalf("post-window item pass scored %d, want 1", n)
+	}
+	fitRefit, err := q.GetAbyssalFamilyFit(ctx, "test_damage_thing")
+	if err != nil || !fitRefit.FittedAt.Equal(tAfter) {
+		t.Fatalf("changed corpus after 1h did not refit: fitted_at=%v, want %v (err=%v)", fitRefit.FittedAt, tAfter, err)
+	}
+
+	// The departed item remained frozen through every pass.
+	frozen, err = q.GetAbyssalItem(ctx, 999001)
+	if err != nil || !frozen.ScoredAt.Valid || !frozen.ScoredAt.Time.Equal(frozenAt) {
+		t.Fatalf("departed item was rescored: %+v (err=%v)", frozen.ScoredAt, err)
 	}
 }

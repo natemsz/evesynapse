@@ -460,7 +460,7 @@ func analyticsPhaseGroup(phase string) string {
 	switch phase {
 	case "characters", "names", "foresight":
 		return "Pilot warming"
-	case "market data", "contract appraisal", "public records", "guide and indices":
+	case "market data", "abyssal scoring", "blueprint medians", "contract appraisal", "public records", "guide and indices":
 		return "Public data"
 	}
 	return "Other"

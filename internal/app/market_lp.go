@@ -132,6 +132,8 @@ func (app *Application) refreshLPStores(ctx context.Context) (stored int, limite
 		for _, region := range marketRegions {
 			if err := app.refreshLPOfferValues(ctx, app.queries, region.ID, now); err != nil {
 				logging.Errorf("worker: lp stores: values for %s: %v", marketRegionLabel(region.ID), err)
+			} else {
+				app.markLPRegionRefreshed(region.ID)
 			}
 		}
 	}
@@ -262,14 +264,31 @@ func (app *Application) storeLPOffers(ctx context.Context, corpID int64, offers 
 	return tx.Commit(ctx) == nil
 }
 
-// refreshLPOfferValues rewrites one hub region's offer values from
-// the stat pack. q may be a transaction's queries: the region sweep
-// calls it inside the transaction that replaces the region's stats.
+func (app *Application) lpRegionRefreshed(regionID int64) bool {
+	app.lpFullRefreshedMu.Lock()
+	defer app.lpFullRefreshedMu.Unlock()
+	return app.lpFullRefreshed[regionID]
+}
+
+func (app *Application) markLPRegionRefreshed(regionID int64) {
+	app.lpFullRefreshedMu.Lock()
+	defer app.lpFullRefreshedMu.Unlock()
+	if app.lpFullRefreshed == nil {
+		app.lpFullRefreshed = make(map[int64]bool)
+	}
+	app.lpFullRefreshed[regionID] = true
+}
+
+// refreshLPOfferValues reconciles one hub region's offer values from
+// the stat pack, deleting removed offers and upserting only rows whose
+// computed figures changed. q may be a transaction's queries: the
+// region sweep calls it inside the transaction that replaces the
+// region's stats.
 func (app *Application) refreshLPOfferValues(ctx context.Context, q *db.Queries, regionID int64, now time.Time) error {
 	if _, ok := marketRegionName(regionID); !ok {
 		return nil // the global book carries no LP products
 	}
-	if err := q.DeleteLPOfferValuesByRegion(ctx, regionID); err != nil {
+	if err := q.DeleteOrphanLPOfferValuesByRegion(ctx, regionID); err != nil {
 		return err
 	}
 	sellNet := tradefees.SellProceeds(1, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
@@ -279,6 +298,27 @@ func (app *Application) refreshLPOfferValues(ctx context.Context, q *db.Queries,
 		Now:           now,
 		SellNetFactor: sellNet,
 		BuyNetFactor:  buyNet,
+	})
+	return err
+}
+
+// refreshLPOfferValuesForTypes revalues only the offers whose product
+// or a required item moved in the sweep, skipping unchanged rows.
+func (app *Application) refreshLPOfferValuesForTypes(ctx context.Context, q *db.Queries, regionID int64, typeIDs []int64, now time.Time) error {
+	if _, ok := marketRegionName(regionID); !ok {
+		return nil
+	}
+	if len(typeIDs) == 0 {
+		return nil
+	}
+	sellNet := tradefees.SellProceeds(1, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
+	buyNet := tradefees.InstantSellProceeds(1, tradefees.PerfectSalesTax())
+	_, err := q.RefreshLPOfferValuesForTypes(ctx, db.RefreshLPOfferValuesForTypesParams{
+		RegionID:      regionID,
+		Now:           now,
+		SellNetFactor: sellNet,
+		BuyNetFactor:  buyNet,
+		TypeIds:       typeIDs,
 	})
 	return err
 }

@@ -1740,15 +1740,28 @@ func (q *Queries) ListPrunableKillIDs(ctx context.Context, arg ListPrunableKillI
 }
 
 const listRecentKillEntities = `-- name: ListRecentKillEntities :many
-SELECT DISTINCT unnest(ARRAY[k.victim_character_id, k.victim_corporation_id, k.victim_alliance_id,
-    a.character_id, a.corporation_id, a.alliance_id])::bigint AS id
-FROM kills k
-LEFT JOIN kill_attackers a ON a.killmail_id = k.killmail_id
-WHERE k.public AND k.ingested_at >= $1::timestamptz
+WITH recent AS MATERIALIZED (
+    SELECT killmail_id, victim_character_id, victim_corporation_id, victim_alliance_id
+    FROM kills
+    WHERE public AND ingested_at >= $1::timestamptz
+    ORDER BY ingested_at DESC
+    LIMIT 2000
+)
+SELECT DISTINCT id FROM (
+    SELECT unnest(ARRAY[r.victim_character_id, r.victim_corporation_id, r.victim_alliance_id])::bigint AS id
+    FROM recent r
+    UNION ALL
+    SELECT unnest(ARRAY[a.character_id, a.corporation_id, a.alliance_id])::bigint AS id
+    FROM recent r
+    JOIN kill_attackers a ON a.killmail_id = r.killmail_id
+) u
+WHERE id > 0
 `
 
 // Names the board will show: recent public kills' people, corps and
-// alliances, victim and attacker side.
+// alliances, victim and attacker side. Bounded to the newest 2000
+// kills in the window so a backfill burst never fans out across
+// the whole table.
 func (q *Queries) ListRecentKillEntities(ctx context.Context, since time.Time) ([]int64, error) {
 	rows, err := q.db.Query(ctx, listRecentKillEntities, since)
 	if err != nil {

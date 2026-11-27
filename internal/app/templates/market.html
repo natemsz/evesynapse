@@ -24,6 +24,7 @@
     <input type="hidden" name="region" value="{{.Region}}">
     {{if .Query}}<input type="hidden" name="bq" value="{{.Query}}">{{end}}
     {{if and (ne .Sort "name") (ne .Sort "match")}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+    {{if .FloorsCleared}}<input type="hidden" name="floors" value="0">{{end}}
     <label class="mb-minvol"><span>At least traded per day</span> <input type="number" name="minvol" min="0" step="1" value="{{if .MinVolume}}{{.MinVolume}}{{end}}" size="6"></label>
     <button class="btn" type="submit">Apply</button>
   </form>
@@ -615,6 +616,7 @@
 <p class="market-crumbs"><small><a href="/market/" data-browse-link>Market</a>{{range .Breadcrumbs}} › <a href="/market/?group={{.ID}}&region={{$.Region}}" data-browse-link>{{.Name}}</a>{{end}} › {{.Current.Name}}</small></p>
 {{end}}
 {{if .Query}}<p class="mb-filter-note"><small>{{if .Fix}}Nothing matches “{{.Query}}”. Showing matches for “{{.Fix}}”.{{else}}Matching “{{.Query}}”{{end}}</small> <a href="{{.ClearQueryHref}}" data-browse-link><small>Clear</small></a></p>{{end}}
+{{if .FloorsActive}}<p class="mb-filter-note"><small>Hiding thinly traded items (at least {{.MinISKLabel}} and {{.MinTrades}} trades per day).</small> <a href="{{.ClearFloorsHref}}" data-browse-link><small>Show all items</small></a></p>{{else if .FloorsCleared}}<p class="mb-filter-note"><small>Showing all items, including thinly traded ones.</small> <a href="{{.ApplyFloorsHref}}" data-browse-link><small>Apply activity floor</small></a></p>{{end}}
 {{if .AwaitingPick}}
 <p><small>Pick a category from the tree to see its items, or search by name above.</small></p>
 {{else if .Types}}

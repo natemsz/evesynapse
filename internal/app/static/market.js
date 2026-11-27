@@ -139,6 +139,7 @@
       setHidden(form, "region", url.searchParams.get("region"));
       setHidden(form, "sort", url.searchParams.get("sort"));
       setHidden(form, "bq", url.searchParams.get("bq"));
+      setHidden(form, "floors", url.searchParams.get("floors"));
       var mv = form.querySelector('[name="minvol"]');
       if (mv && document.activeElement !== mv) mv.value = url.searchParams.get("minvol") || "";
     }
@@ -293,7 +294,7 @@
       e.stopPropagation();
       var bq = new URLSearchParams(location.search);
       var keep = new URLSearchParams();
-      ["region", "sort"].forEach(function (k) { if (bq.get(k)) keep.set(k, bq.get(k)); });
+      ["region", "sort", "floors"].forEach(function (k) { if (bq.get(k)) keep.set(k, bq.get(k)); });
       var qs = keep.toString();
       loadItems("/market/" + (qs ? "?" + qs : ""), true);
       return;

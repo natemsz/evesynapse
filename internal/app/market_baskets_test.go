@@ -71,6 +71,34 @@ func TestMarketBasketOwnershipAndValue(t *testing.T) {
 	if code, _ := getPage(t, app, ownerCookie, path); code != http.StatusOK {
 		t.Errorf("owner GET: status %d, want 200", code)
 	}
+
+	// Outside movers apply the shared Trends activity floors and rank by
+	// mover_score rather than raw percentage change on thin books.
+	if _, err := app.db.ExecContext(ctx, `
+		UPDATE sde_types SET market_group_id = 910 WHERE type_id IN (900001, 900002);
+		INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
+		  (900003, 'Thin Spike Outside', 1, 910, 1),
+		  (900004, 'Liquid Mover High', 1, 910, 1),
+		  (900005, 'Liquid Mover Low', 1, 910, 1);
+		INSERT INTO market_region_stats (region_id, type_id, typical_sell, sell_orders, sell_chg_7d, mover_chg_7v30, isk_traded_7d, avg_orders_7d, mover_score, updated_at) VALUES
+		  (10000002, 900003, 100, 10, 500.0, 500.0, 1000000, 2, 6900.0, now()),
+		  (10000002, 900004, 1000, 10, 12.0, 18.0, 500000000, 40, 360.0, now()),
+		  (10000002, 900005, 1000, 10, 25.0, 10.0, 150000000, 15, 188.0, now());
+	`); err != nil {
+		t.Fatalf("seed outside movers: %v", err)
+	}
+	if code, body := getPage(t, app, ownerCookie, path); code != http.StatusOK {
+		t.Errorf("owner GET with outside movers: status %d, want 200", code)
+	} else {
+		if strings.Contains(body, "Thin Spike Outside") {
+			t.Errorf("outside movers included thin item below activity floor")
+		}
+		hi := strings.Index(body, "Liquid Mover High")
+		lo := strings.Index(body, "Liquid Mover Low")
+		if hi < 0 || lo < 0 || hi > lo {
+			t.Errorf("outside movers order: High=%d Low=%d, want High ranked ahead of Low by mover_score", hi, lo)
+		}
+	}
 	if code, _ := getPage(t, app, otherCookie, path); code != http.StatusNotFound {
 		t.Errorf("other player GET: status %d, want 404", code)
 	}

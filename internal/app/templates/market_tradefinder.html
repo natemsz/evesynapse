@@ -27,9 +27,12 @@
   <label><small>At least margin %</small>
     <input type="number" name="minmargin" min="0" step="any" value="{{$s.MinMargin}}">
   </label>
-  <label><small>At least sold per day in {{$s.DestName}}</small>
-    <input type="number" name="minvol" min="0" step="1" value="{{$s.MinVolume}}">
+  <label><small>At least ISK traded per day in {{$s.DestName}}</small>
+    <select name="minisk">
+      {{range $s.MinISKChoices}}<option value="{{.Value}}"{{if .Active}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
   </label>
+  {{if gt $s.MinVolume 0}}<input type="hidden" name="minvol" value="{{$s.MinVolume}}">{{end}}
   <label class="mk-check"><input type="checkbox" name="lowball" value="1"{{if $s.Lowball}} checked{{end}}> <small>Include long shots (selling for over ten times the buy price)</small></label>
   {{if $s.Scope}}<input type="hidden" name="scope" value="{{$s.Scope}}">{{end}}
   <button class="btn" type="submit">Find routes</button>
@@ -66,7 +69,7 @@
   {{else if $s.Pending}}
   <p>No route has sales figures in {{$s.DestName}} yet. The candidates are listed below while their figures are fetched.</p>
   {{else}}
-  <p>No profitable routes between these regions right now. Try a lower minimum margin or fewer sold per day{{if not $s.Lowball}}, or include long shots{{end}}.</p>
+  <p>No profitable routes between these regions right now. Try a lower minimum margin or a lower ISK traded floor{{if not $s.Lowball}}, or include long shots{{end}}.</p>
   {{end}}
 </section>
 {{if $s.Pending}}

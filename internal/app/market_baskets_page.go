@@ -24,6 +24,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -318,16 +319,25 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 		}
 	}
 
-	// Movers out: the same market groups, outside the basket.
+	// Movers out: the same market groups, outside the basket,
+	// gated by the shared Trends activity floors and ranked by
+	// mover_score (or the equivalent 1d/30d volume-weighted score).
 	if len(items) > 0 {
 		out, err := app.queries.ListMarketBasketOutsideMovers(ctx, db.ListMarketBasketOutsideMoversParams{
-			RegionID: b.RegionID, BasketID: b.ID, Period: int32(view.Period),
+			RegionID:  b.RegionID,
+			BasketID:  b.ID,
+			Period:    int32(view.Period),
+			MinIsk:    float64(markethistory.DefaultMinISK(b.RegionID)),
+			MinTrades: float64(markethistory.DefaultMinTrades),
 		})
 		if err != nil {
 			logging.Errorf("baskets: outside movers for %d: %v", b.ID, err)
 		}
 		for _, o := range out {
-			chg := o.SellChg7d
+			chg := o.MoverChg7v30
+			if !chg.Valid {
+				chg = o.SellChg7d
+			}
 			switch view.Period {
 			case 1:
 				chg = o.SellChg1d

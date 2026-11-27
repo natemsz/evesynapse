@@ -22,6 +22,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 	"evesynapse/internal/tradefees"
 )
 
@@ -57,17 +58,20 @@ type scannerRow struct {
 
 // scannerView is the /market/scanner/ page body.
 type scannerView struct {
-	RegionID   int64
-	RegionName string
-	Regions    []module.RegionChoice
-	MinVolume  int64  // sold-per-day floor from the filter
-	MinSpread  string // spread-% floor as typed (echoed in the form)
-	Scope      string // the raw ?scope= value, carried by the filter form
-	Selector   *module.ScopeSelector
-	HasData    bool   // a sweep has covered this region
-	AsOf       string // "Prices as of Oct 4, 3:04 PM", HasData only
-	Age        string // "12 minutes ago", HasData only
-	Rows       []scannerRow
+	RegionID      int64
+	RegionName    string
+	Regions       []module.RegionChoice
+	MinISK        int64 // regional 7-day average ISK-traded/day floor
+	MinISKParam   string
+	MinISKChoices []markethistory.ISKFloorChoice
+	MinVolume     int64  // optional sold-per-day floor from ?minvol=
+	MinSpread     string // spread-% floor as typed (echoed in the form)
+	Scope         string // the raw ?scope= value, carried by the filter form
+	Selector      *module.ScopeSelector
+	HasData       bool   // a sweep has covered this region
+	AsOf          string // "Prices as of Oct 4, 3:04 PM", HasData only
+	Age           string // "12 minutes ago", HasData only
+	Rows          []scannerRow
 	// Pick is the opportunity open in the inspector (?pick=<rank>),
 	// nil for none; Depth is the console level it puts the page at.
 	// CloseHref returns to the list with the same filters.
@@ -95,7 +99,7 @@ func (app *page) handleMarketScanner(w http.ResponseWriter, r *http.Request) {
 
 // serveScannerCSV writes the scanner's opportunity rows as a CSV download.
 func (app *page) serveScannerCSV(w http.ResponseWriter, view *scannerView) {
-	header := []string{"Item", "Station", "Typical buy price", "Typical sell price", "Spread %", "Sold per day", "Estimated daily profit"}
+	header := []string{"Item", "Station", "Typical buy price", "Typical sell price", "Spread %", "Sold per day in " + view.RegionName + " (region)", "Estimated daily profit"}
 	rows := make([][]string, 0, len(view.Rows))
 	for _, row := range view.Rows {
 		rows = append(rows, []string{
@@ -142,7 +146,8 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 	}
 	regionName, _ := app.deps.MarketRegionName(regionID)
 
-	minVolume := int64(1)
+	minISK, minISKParam := markethistory.ResolveMinISK(module.QueryValue(q, "minisk"), regionID)
+	minVolume := int64(0)
 	if raw := module.QueryValue(q, "minvol"); raw != "" {
 		if v, err := strconv.ParseInt(raw, 10, 64); err == nil && v >= 0 {
 			minVolume = v
@@ -158,11 +163,14 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 	}
 
 	view := &scannerView{
-		RegionID:   regionID,
-		RegionName: regionName,
-		MinVolume:  minVolume,
-		MinSpread:  strconv.FormatFloat(minSpread, 'f', -1, 64),
-		Scope:      module.QueryValue(q, "scope"),
+		RegionID:      regionID,
+		RegionName:    regionName,
+		MinISK:        minISK,
+		MinISKParam:   minISKParam,
+		MinISKChoices: markethistory.ISKFloorChoices(minISKParam),
+		MinVolume:     minVolume,
+		MinSpread:     strconv.FormatFloat(minSpread, 'f', -1, 64),
+		Scope:         module.QueryValue(q, "scope"),
 	}
 	// The pricer resolves the viewer once for the render: the
 	// scope control above the list, and the per-station rates
@@ -206,7 +214,7 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 		RegionID:  regionID,
 		MinSpread: minSpread,
 		MinVolume: minVolume,
-		MinIsk:    0,
+		MinIsk:    float64(minISK),
 		RowCap:    int64(rowCap),
 	})
 	if err != nil {
@@ -278,7 +286,12 @@ func scannerMeters(view *scannerView, q map[string][]string) {
 	}
 	base := url.Values{}
 	base.Set("region", strconv.FormatInt(view.RegionID, 10))
-	base.Set("minvol", strconv.FormatInt(view.MinVolume, 10))
+	if view.MinISKParam != "" && view.MinISKParam != "auto" {
+		base.Set("minisk", view.MinISKParam)
+	}
+	if view.MinVolume > 0 {
+		base.Set("minvol", strconv.FormatInt(view.MinVolume, 10))
+	}
 	base.Set("minspread", view.MinSpread)
 	if view.Scope != "" {
 		base.Set("scope", view.Scope)

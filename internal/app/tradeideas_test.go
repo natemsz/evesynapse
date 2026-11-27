@@ -90,9 +90,8 @@ func seedTradeIdeasScanner(t *testing.T, conn *sql.DB, q *db.Queries) {
 			t.Fatalf("seed station stat: %v", err)
 		}
 	}
-	// Daily volumes clear The Forge's 100M ISK/day floor (15M*10 = 150M, 1.5M*100 = 150M).
-	seedScannerVolume(t, q, 10000002, 34, 15_000_000)
-	seedScannerVolume(t, q, 10000002, 35, 1_500_000)
+	seedScannerVolume(t, conn, q, 10000002, 34, 20)
+	seedScannerVolume(t, conn, q, 10000002, 35, 100)
 }
 
 func TestTradeIdeasCSVBounded(t *testing.T) {
@@ -199,7 +198,7 @@ func TestTradeIdeasCSVRowCap(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("seed stat: %v", err)
 		}
-		seedScannerVolume(t, q, 10000002, typeID, 6_000_000)
+		seedScannerVolume(t, conn, q, 10000002, typeID, 10)
 	}
 	text, ok := tradeideas.BuildCSV(context.Background(), app, csvRows)
 	if !ok {
@@ -251,10 +250,13 @@ func TestTradeIdeasCSVFiltersNetFloorAndRanksByNetProfit(t *testing.T) {
 			t.Fatalf("seed station stat %d: %v", s.TypeID, err)
 		}
 	}
-	seedScannerVolume(t, q, 10000002, 501, 2_000_000) // 200M ISK/d
-	seedScannerVolume(t, q, 10000002, 502, 1_000)     // 20K ISK/d (< 100M)
-	seedScannerVolume(t, q, 10000002, 503, 200_000)   // 200M ISK/d
-	seedScannerVolume(t, q, 10000002, 504, 300_000)   // 180M ISK/d
+	seedScannerVolume(t, conn, q, 10000002, 501, 2_000_000) // 200M ISK/d
+	seedScannerVolume(t, conn, q, 10000002, 502, 1_000)     // 20K ISK/d (< 100M)
+	if _, err := conn.ExecContext(ctx, `UPDATE market_region_stats SET isk_traded_7d = 20000 WHERE region_id = 10000002 AND type_id = 502`); err != nil {
+		t.Fatalf("seed thin isk_traded_7d: %v", err)
+	}
+	seedScannerVolume(t, conn, q, 10000002, 503, 200_000) // 200M ISK/d
+	seedScannerVolume(t, conn, q, 10000002, 504, 300_000) // 180M ISK/d
 
 	rows, ok := tradeideas.BuildCSVRows(ctx, app, csvRows)
 	if !ok {

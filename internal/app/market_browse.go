@@ -24,6 +24,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 const marketBrowseTypesPerPage = 100
@@ -52,23 +53,27 @@ type marketBrowseType struct {
 
 // marketBrowseView is the browser panel.
 type marketBrowseView struct {
-	Region       int64
-	RegionName   string
-	Current      *marketBrowseGroup
-	Breadcrumbs  []marketBrowseCrumb
-	Tree         []marketBrowseNode
-	Types        []marketBrowseType
-	Query        string
-	Fix          string // the corrected name the list answers when Query as typed found nothing
-	MinVolume    int64
-	Sort         string
-	GroupID      int64
-	Page         int
-	TotalPages   int
-	TotalTypes   int64
-	PrevHref     string
-	NextHref     string
-	AwaitingPick bool // nothing chosen or searched yet: no item list
+	Region        int64
+	RegionName    string
+	Current       *marketBrowseGroup
+	Breadcrumbs   []marketBrowseCrumb
+	Tree          []marketBrowseNode
+	Types         []marketBrowseType
+	Query         string
+	Fix           string // the corrected name the list answers when Query as typed found nothing
+	MinVolume     int64
+	Sort          string
+	FloorsActive  bool
+	FloorsCleared bool
+	MinISKLabel   string
+	MinTrades     int64
+	GroupID       int64
+	Page          int
+	TotalPages    int
+	TotalTypes    int64
+	PrevHref      string
+	NextHref      string
+	AwaitingPick  bool // nothing chosen or searched yet: no item list
 }
 
 // marketBrowseCrumb is one breadcrumb step (an ancestor group).
@@ -195,6 +200,12 @@ func (app *Application) buildMarketBrowseLevel(ctx context.Context, parent int64
 	return nodes
 }
 
+// isMarketBrowseMoverSort reports whether sort orders by price movement or
+// volatility, where thinly traded items are hidden by default.
+func isMarketBrowseMoverSort(sort string) bool {
+	return sort == "rising" || sort == "falling" || sort == "volatile"
+}
+
 // href is the browser's URL for this view with one change.
 func (v *marketBrowseView) href(change func(url.Values)) string {
 	q := url.Values{}
@@ -211,6 +222,9 @@ func (v *marketBrowseView) href(change func(url.Values)) string {
 	if v.Sort != "name" {
 		q.Set("sort", v.Sort)
 	}
+	if v.FloorsCleared && isMarketBrowseMoverSort(v.Sort) {
+		q.Set("floors", "0")
+	}
 	if v.Page > 1 {
 		q.Set("page", strconv.Itoa(v.Page))
 	}
@@ -222,6 +236,25 @@ func (v *marketBrowseView) href(change func(url.Values)) string {
 func (v *marketBrowseView) SortHref(key string) string {
 	return v.href(func(q url.Values) {
 		q.Set("sort", key)
+		if !isMarketBrowseMoverSort(key) {
+			q.Del("floors")
+		}
+		q.Del("page")
+	})
+}
+
+// ClearFloorsHref is the list URL with the default mover activity floors off.
+func (v *marketBrowseView) ClearFloorsHref() string {
+	return v.href(func(q url.Values) {
+		q.Set("floors", "0")
+		q.Del("page")
+	})
+}
+
+// ApplyFloorsHref is the list URL with the default mover activity floors on.
+func (v *marketBrowseView) ApplyFloorsHref() string {
+	return v.href(func(q url.Values) {
+		q.Del("floors")
 		q.Del("page")
 	})
 }
@@ -298,6 +331,18 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 			view.Sort = key
 		}
 	}
+	var minISK, minTrades float64
+	if isMarketBrowseMoverSort(view.Sort) {
+		if q.Get("floors") == "0" {
+			view.FloorsCleared = true
+		} else {
+			view.FloorsActive = true
+			minISK = float64(markethistory.DefaultMinISK(region))
+			minTrades = float64(markethistory.DefaultMinTrades)
+			view.MinISKLabel = iskCompact(minISK) + " ISK"
+			view.MinTrades = markethistory.DefaultMinTrades
+		}
+	}
 	if p, err := strconv.Atoi(q.Get("page")); err == nil && p > 1 {
 		view.Page = p
 	}
@@ -365,6 +410,7 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 	like, prefix := patterns(search)
 	total, err := app.queries.CountMarketBrowseTypes(ctx, db.CountMarketBrowseTypesParams{
 		GroupID: view.GroupID, RegionID: region, NameLike: like, MinVolume: float64(view.MinVolume),
+		MinIsk: minISK, MinTrades: minTrades,
 	})
 	if err != nil {
 		logging.Errorf("market: count browse types under %d: %v", view.GroupID, err)
@@ -375,6 +421,7 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 			fixLike, fixPrefix := patterns(fix)
 			if n, ferr := app.queries.CountMarketBrowseTypes(ctx, db.CountMarketBrowseTypesParams{
 				GroupID: view.GroupID, RegionID: region, NameLike: fixLike, MinVolume: float64(view.MinVolume),
+				MinIsk: minISK, MinTrades: minTrades,
 			}); ferr == nil && n > 0 {
 				search, like, prefix, total = fix, fixLike, fixPrefix, n
 				view.Fix = fix
@@ -392,6 +439,7 @@ func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64
 	}
 	rows, err := app.queries.ListMarketBrowseTypes(ctx, db.ListMarketBrowseTypesParams{
 		GroupID: view.GroupID, RegionID: region, NameLike: like, MinVolume: float64(view.MinVolume),
+		MinIsk: minISK, MinTrades: minTrades,
 		Sort: view.Sort, MatchName: strings.ToLower(search), MatchPrefix: prefix, MatchWords: marketMatchWords(search),
 		RowLimit: marketBrowseTypesPerPage, RowOffset: int64((view.Page - 1) * marketBrowseTypesPerPage),
 	})

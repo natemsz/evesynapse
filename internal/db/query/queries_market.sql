@@ -1071,7 +1071,7 @@ FROM (
       AND ss.buy_orders >= 3
       AND (ss.typical_sell - ss.typical_buy) / ss.typical_buy * 100 >= sqlc.arg(min_spread)
       AND COALESCE(rs.avg_daily_volume, 0) >= sqlc.arg(min_volume)::bigint
-      AND (sqlc.arg(min_isk)::double precision <= 0 OR COALESCE(rs.avg_daily_volume, 0) * COALESCE(NULLIF(rs.typical_sell, 0), ss.typical_sell) >= sqlc.arg(min_isk)::double precision)
+      AND (sqlc.arg(min_isk)::double precision <= 0 OR COALESCE(rs.isk_traded_7d, 0) >= sqlc.arg(min_isk)::double precision)
       AND LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) > 0
       AND (COALESCE(rs.typical_sell, 0) <= 0 OR ss.typical_sell <= rs.typical_sell * 10)
       AND (COALESCE(rs.typical_buy, 0) <= 0 OR ss.typical_buy * 10 >= rs.typical_buy)
@@ -1127,6 +1127,7 @@ FROM (
       AND (sqlc.arg(include_lowball)::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
       AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= sqlc.arg(min_margin)
       AND d.avg_daily_volume >= sqlc.arg(min_volume)::bigint
+      AND (sqlc.arg(min_isk)::double precision <= 0 OR d.isk_traded_7d >= sqlc.arg(min_isk)::double precision)
       AND LEAST(d.avg_daily_volume, o.sell_volume::double precision) > 0
       AND o.updated_at >= sqlc.arg(cutoff) AND d.updated_at >= sqlc.arg(cutoff)
 ) ranked
@@ -1697,6 +1698,8 @@ LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.t
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
   AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8
+  AND (sqlc.arg(min_isk)::float8 <= 0 OR COALESCE(rs.isk_traded_7d, gs.isk_traded_7d, 0) >= sqlc.arg(min_isk)::float8)
+  AND (sqlc.arg(min_trades)::float8 <= 0 OR COALESCE(rs.avg_orders_7d, gs.avg_orders_7d, 0) >= sqlc.arg(min_trades)::float8)
 ORDER BY
   -- Best match (a name search's default): the exact name, then names
   -- that start with the words, then a word in the name that starts
@@ -1733,7 +1736,9 @@ LEFT JOIN market_region_stats rs ON rs.region_id = sqlc.arg(region_id)::bigint A
 LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.type_id AND rs.type_id IS NULL
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
-  AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8;
+  AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8
+  AND (sqlc.arg(min_isk)::float8 <= 0 OR COALESCE(rs.isk_traded_7d, gs.isk_traded_7d, 0) >= sqlc.arg(min_isk)::float8)
+  AND (sqlc.arg(min_trades)::float8 <= 0 OR COALESCE(rs.avg_orders_7d, gs.avg_orders_7d, 0) >= sqlc.arg(min_trades)::float8);
 -- name: UpdateOrderLifecycleBook :exec
 -- The order-health pass's verdict on one open order's station book
 -- (schema 105): beaten state and count, when it was beaten, what

@@ -117,10 +117,12 @@ LIMIT 2000;
 
 -- name: ListMarketBasketOutsideMovers :many
 -- The biggest movers outside a basket: types in the same market
--- groups as its items, in its region, that it does not hold, ranked
--- by the size of their typical-sell change over 1, 7 or 30 days,
--- with the same depth floor the Trends screen uses.
-SELECT s.type_id, s.typical_sell, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.avg_daily_volume_30d
+-- groups as its items, in its region, that it does not hold, gated
+-- by the shared Trends activity floors (7-day average ISK traded
+-- and daily trade count) and ranked by mover_score (or the same
+-- volume-weighted move score for 1-day and 30-day windows).
+SELECT s.type_id, s.typical_sell, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d,
+       s.mover_chg_7v30, s.avg_daily_volume_30d, s.isk_traded_7d, s.avg_orders_7d, s.mover_score
 FROM market_region_stats s
 JOIN sde_types t ON t.type_id = s.type_id
 WHERE s.region_id = sqlc.arg(region_id)
@@ -129,9 +131,19 @@ WHERE s.region_id = sqlc.arg(region_id)
       JOIN sde_types bt ON bt.type_id = bi.type_id
       WHERE bi.basket_id = sqlc.arg(basket_id) AND bt.market_group_id > 0)
   AND s.type_id NOT IN (SELECT bi.type_id FROM market_basket_items bi WHERE bi.basket_id = sqlc.arg(basket_id))
-  AND s.sell_orders >= 5
-  AND (CASE sqlc.arg(period)::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END) IS NOT NULL
-ORDER BY ABS(CASE sqlc.arg(period)::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END) DESC, s.type_id
+  AND s.typical_sell > 0
+  AND s.isk_traded_7d >= sqlc.arg(min_isk)::double precision
+  AND s.avg_orders_7d >= sqlc.arg(min_trades)::double precision
+  AND (CASE sqlc.arg(period)::int
+       WHEN 1 THEN CASE WHEN s.sell_chg_1d IS NOT NULL AND s.sell_chg_1d <> 0 THEN ABS(s.sell_chg_1d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
+       WHEN 30 THEN CASE WHEN s.sell_chg_30d IS NOT NULL AND s.sell_chg_30d <> 0 THEN ABS(s.sell_chg_30d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
+       ELSE CASE WHEN s.mover_score IS NOT NULL AND s.mover_score > 0 THEN s.mover_score END
+       END) IS NOT NULL
+ORDER BY (CASE sqlc.arg(period)::int
+          WHEN 1 THEN ABS(s.sell_chg_1d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0))
+          WHEN 30 THEN ABS(s.sell_chg_30d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0))
+          ELSE s.mover_score
+          END) DESC, s.type_id
 LIMIT 10;
 
 -- name: ResolveTypeNamesExact :many

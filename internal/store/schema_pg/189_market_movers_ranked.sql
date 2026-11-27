@@ -163,7 +163,7 @@ ranked AS (
 INSERT INTO market_movers_ranked (region_id, sort_by, mode, period, rank, type_id, score, isk_traded_7d, avg_orders_7d, updated_at)
 SELECT region_id, sort_by, mode, period, rank, type_id, score, isk_traded_7d, avg_orders_7d, now()
 FROM ranked
-WHERE sort_by <> 'raw_pct' OR rank <= 100
+WHERE sort_by <> 'raw_pct' OR rank <= 100 OR isk_traded_7d > 0
 ON CONFLICT (region_id, sort_by, mode, period, rank) DO UPDATE SET
     type_id       = excluded.type_id,
     score         = excluded.score,

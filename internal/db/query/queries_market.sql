@@ -1637,7 +1637,7 @@ ranked AS (
 INSERT INTO market_movers_ranked (region_id, sort_by, mode, period, rank, type_id, score, isk_traded_7d, avg_orders_7d, updated_at)
 SELECT sqlc.arg(region_id), sort_by, mode, period, rank, type_id, score, isk_traded_7d, avg_orders_7d, sqlc.arg(now)
 FROM ranked
-WHERE sort_by <> 'raw_pct' OR rank <= 100;
+WHERE sort_by <> 'raw_pct' OR rank <= 100 OR isk_traded_7d > 0;
 
 -- name: ListRankedMarketMovers :many
 -- Reads pre-ranked movers for the Trends screen and Market Movers widget

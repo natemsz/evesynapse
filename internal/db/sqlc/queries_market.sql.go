@@ -1044,7 +1044,7 @@ ranked AS (
 INSERT INTO market_movers_ranked (region_id, sort_by, mode, period, rank, type_id, score, isk_traded_7d, avg_orders_7d, updated_at)
 SELECT $1, sort_by, mode, period, rank, type_id, score, isk_traded_7d, avg_orders_7d, $2
 FROM ranked
-WHERE sort_by <> 'raw_pct' OR rank <= 100
+WHERE sort_by <> 'raw_pct' OR rank <= 100 OR isk_traded_7d > 0
 `
 
 type InsertMarketMoversRankedForRegionParams struct {

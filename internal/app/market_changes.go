@@ -20,24 +20,26 @@ import (
 )
 
 const (
-	// marketChangeMinMove is the smallest daily typical-sell move, in
-	// percent, the feed records; a volatile type needs three times
-	// its own daily swing on top.
-	marketChangeMinMove = 10.0
 	// marketChangeKeepDays is how long feed rows are kept.
 	marketChangeKeepDays = 30
 )
 
 // marketChangeRow is one feed row, display-ready.
 type marketChangeRow struct {
-	TypeID   int64
-	Name     string
-	Day      string
-	Kind     string
-	Label    string
-	Detail   string
-	Dir      string
-	Detected string
+	TypeID        int64
+	Name          string
+	Day           string
+	Kind          string
+	Label         string
+	Detail        string
+	Dir           string
+	Detected      string
+	ISKTradedDay  string
+	TradesDay     string
+	LowTrades     bool
+	SpreadWidened bool
+	HubBadge      string
+	HubTitle      string
 }
 
 // describeMarketChange words one change: its label, the before and
@@ -50,7 +52,7 @@ func describeMarketChange(kind string, before, after, pct float64) (label, detai
 		if kind == "price_down" {
 			label, dir = "Price dropped", "down"
 		}
-		detail = fmt.Sprintf("Typical sell went from %s to %s ISK (%+.1f%%)", esi.FormatISK(before), esi.FormatISK(after), pct)
+		detail = fmt.Sprintf("7-day traded median moved from %s to %s ISK (%+.1f%%)", esi.FormatISK(before), esi.FormatISK(after), pct)
 	case "supply_down":
 		label, dir = "Supply fell", "down"
 		detail = fmt.Sprintf("Units for sale went from %s to %s (%+.0f%%)", esi.FormatInt(int64(before)), esi.FormatInt(int64(after)), pct)
@@ -69,10 +71,15 @@ var marketChangeKinds = []struct{ key, label string }{
 	{"supply_down", "Supply falls"}, {"spread_wide", "Spreads widening"},
 }
 
-// marketChangesForRegion reads a region's feed over the last days.
-func (app *Application) marketChangesForRegion(ctx context.Context, regionID int64, kind string, days int) []marketChangeRow {
+// marketChangesForRegionFiltered reads a region's feed over the last
+// days with the active ISK traded/day and trades/day floors enforced in SQL.
+func (app *Application) marketChangesForRegionFiltered(ctx context.Context, regionID int64, kind string, days int, minISK, minTrades float64) []marketChangeRow {
 	rows, err := app.queries.ListMarketChangesForRegion(ctx, db.ListMarketChangesForRegionParams{
-		RegionID: regionID, Since: time.Now().UTC().AddDate(0, 0, -days+1).Format("2006-01-02"), Kind: kind,
+		RegionID:  regionID,
+		Since:     time.Now().UTC().AddDate(0, 0, -days+1).Format("2006-01-02"),
+		Kind:      kind,
+		MinIsk:    minISK,
+		MinTrades: minTrades,
 	})
 	if err != nil {
 		logging.Errorf("market changes: region %d: %v", regionID, err)
@@ -82,9 +89,22 @@ func (app *Application) marketChangesForRegion(ctx context.Context, regionID int
 	out := make([]marketChangeRow, 0, len(rows))
 	for _, r := range rows {
 		label, detail, dir := describeMarketChange(r.Kind, r.Before, r.After, r.Pct)
+		hubBadge, hubTitle := hubConfirmBadge(r.ConfirmedHubs)
 		out = append(out, marketChangeRow{
-			TypeID: r.TypeID, Name: app.typeNameOrID(ctx, r.TypeID), Day: r.Day, Kind: r.Kind,
-			Label: label, Detail: detail, Dir: dir, Detected: ageText(now, r.DetectedAt),
+			TypeID:        r.TypeID,
+			Name:          app.typeNameOrID(ctx, r.TypeID),
+			Day:           r.Day,
+			Kind:          r.Kind,
+			Label:         label,
+			Detail:        detail,
+			Dir:           dir,
+			Detected:      ageText(now, r.DetectedAt),
+			ISKTradedDay:  iskCompact(r.IskTraded7d),
+			TradesDay:     formatTradesPerDay(r.AvgOrders7d),
+			LowTrades:     r.AvgOrders7d < float64(defaultMoversMinTrades),
+			SpreadWidened: r.SpreadWidened,
+			HubBadge:      hubBadge,
+			HubTitle:      hubTitle,
 		})
 	}
 	return out
@@ -132,16 +152,22 @@ type watchMove struct {
 func (app *Application) watchMove(ctx context.Context, typeID, regionID int64) watchMove {
 	var m watchMove
 	if s, err := app.queries.GetMarketStatChange7(ctx, db.GetMarketStatChange7Params{RegionID: regionID, TypeID: typeID}); err == nil &&
-		s.TypicalSell > 0 && s.SellChg7d.Valid && time.Since(s.UpdatedAt) < watchFreshFor {
-		m = watchMove{Current: s.TypicalSell, Has: true, Chg7: s.SellChg7d.Float64, Has7: true, FromSweep: true}
-		if s.SellChg30d.Valid {
-			m.Chg30, m.Has30 = s.SellChg30d.Float64, true
-		} else {
-			// The sweep's daily book rows do not reach 30 days back
-			// yet: the recorded traded averages carry the 30-day move.
-			m.Chg30, m.Has30 = markethistory.ChangePct(app.recentHistoryRows(ctx, regionID, typeID, watchHistory30Rows), 30)
+		s.TypicalSell > 0 && time.Since(s.UpdatedAt) < watchFreshFor {
+		if s.MoverChg7v30.Valid {
+			m = watchMove{Current: s.TypicalSell, Has: true, Chg7: s.MoverChg7v30.Float64, Has7: true, FromSweep: true}
+		} else if s.SellChg7d.Valid {
+			m = watchMove{Current: s.TypicalSell, Has: true, Chg7: s.SellChg7d.Float64, Has7: true, FromSweep: true}
 		}
-		return m
+		if m.Has7 {
+			if s.SellChg30d.Valid {
+				m.Chg30, m.Has30 = s.SellChg30d.Float64, true
+			} else {
+				// The sweep's daily book rows do not reach 30 days back
+				// yet: the recorded traded averages carry the 30-day move.
+				m.Chg30, m.Has30 = markethistory.ChangePct(app.recentHistoryRows(ctx, regionID, typeID, watchHistory30Rows), 30)
+			}
+			return m
+		}
 	}
 	rows := app.recentHistoryRows(ctx, regionID, typeID, markethistory.ChartRows)
 	if len(rows) > 0 {

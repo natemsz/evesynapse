@@ -75,3 +75,27 @@ func TestNetRoundTrip(t *testing.T) {
 		t.Errorf("NetHaul profit = %v, want %v", profit, 95.625-89.61)
 	}
 }
+
+func TestSellProceedsAndLPOfferISKPerLP(t *testing.T) {
+	broker, tax := PerfectBrokerFee(), PerfectSalesTax()
+	if got := SellProceeds(100, broker, tax); !close(got, 95.625) {
+		t.Errorf("SellProceeds = %v, want 95.625", got)
+	}
+	if got := InstantSellProceeds(100, tax); !close(got, 96.625) {
+		t.Errorf("InstantSellProceeds = %v, want 96.625", got)
+	}
+	// Owned stock at 90 sold on a sell order at 97.9 after perfect broker + tax:
+	wantMargin := (97.9*(1-tax-broker) - 90) / (97.9 * (1 - tax - broker)) * 100
+	if got := NetSellMarginPct(90, 97.9, broker, tax); !close(got, wantMargin) {
+		t.Errorf("NetSellMarginPct = %v, want %v", got, wantMargin)
+	}
+	// 100 units at 50 ISK, 1000 ISK cost, 1000 required cost, 1000 LP:
+	wantSellLP := (100*50*(1-tax-broker) - 1000 - 1000) / 1000
+	if got := LPOfferISKPerLP(100, 50, 1000, 1000, 1000, broker, tax); !close(got, wantSellLP) {
+		t.Errorf("LPOfferISKPerLP(sell) = %v, want %v", got, wantSellLP)
+	}
+	wantBuyLP := (100*40*(1-tax) - 1000 - 1000) / 1000
+	if got := LPOfferISKPerLP(100, 40, 1000, 1000, 1000, 0, tax); !close(got, wantBuyLP) {
+		t.Errorf("LPOfferISKPerLP(instant) = %v, want %v", got, wantBuyLP)
+	}
+}

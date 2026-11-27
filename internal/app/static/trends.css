@@ -3,7 +3,7 @@
    pane, one item its inspector. The filters and ranking modes sit
    above it at the page's top level. This sheet holds what is the
    page's own: the filter row, the ranked column's highlight, the
-   rank badges and the inspector's figures. */
+   rank badges, confirmation/warning badges, and the inspector's figures. */
 
 .tr .l-panes { --l-insp: 21rem; }
 
@@ -15,21 +15,49 @@
 .tr-modes .pilltabs { margin: 0; }
 
 .tr-chip { cursor: default; color: var(--muted); }
-.tr-item { display: inline-flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.tr-item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.45rem 0.55rem; min-width: 0; }
 .tr-item img { flex: none; border-radius: var(--r-xs); }
 .tr-rank { flex: none; min-width: 1.6rem; color: var(--muted); font-family: var(--font-num); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; text-align: right; }
 .tr-table td:first-child { white-space: normal; min-width: 11rem; }
+
+/* Cross-hub confirmation badge and raw-mode warning signs. */
+.tr-hub-badge,
+.tr-warn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.4rem;
+  border-radius: var(--r-xs);
+  font-family: var(--font-display);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.tr-hub-badge {
+  color: var(--v-good-ink, #7fe0a3);
+  background: color-mix(in srgb, var(--v-good, #4cc38a) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--v-good, #4cc38a) 35%, transparent);
+}
+.tr-warn {
+  color: var(--v-warn, #e8b04a);
+  background: color-mix(in srgb, var(--v-warn, #e8b04a) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--v-warn, #e8b04a) 38%, transparent);
+}
 
 /* The column the ranking sorts by reads in the highlight. */
 .tr-table[data-rank="swing"] .tr-swing,
 .tr-table[data-rank="chg1"] .tr-chg1,
 .tr-table[data-rank="chg7"] .tr-chg7,
-.tr-table[data-rank="chg30"] .tr-chg30 { background: var(--sel-row); }
-.tr-table[data-rank="swing"] td.tr-swing { color: var(--gold); }
+.tr-table[data-rank="chg30"] .tr-chg30,
+.tr-table[data-rank="iskmove"] .tr-iskmove,
+.tr-table[data-rank="profit"] .tr-profit { background: var(--sel-row); }
+.tr-table[data-rank="swing"] td.tr-swing,
+.tr-table[data-rank="iskmove"] td.tr-iskmove,
+.tr-table[data-rank="profit"] td.tr-profit { color: var(--gold); }
 
-/* With an item open beside the list, the columns its inspector
-   repeats (typical buy, sell orders, traded per day) step out. */
-.l-console.tr[data-depth="2"] .tr-table :is(th, td):is(:nth-child(3), :nth-child(8), :nth-child(9)) { display: none; }
+/* With an item open beside the list, columns the inspector repeats step out. */
+.l-console.tr[data-depth="2"] .tr-table .tr-hide-insp { display: none; }
 
 .tr-note { margin: var(--space-3) 0 0; color: var(--muted); }
 .tr-changes .tr-note { margin-bottom: 0; }

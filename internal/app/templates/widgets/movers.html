@@ -1,6 +1,5 @@
-{{/* Market Movers: the hub's biggest price moves this week and its
-     most volatile items, from the stored stat pack. Four forms; none
-     reads its size. */}}
+{{/* Market Movers: volume-confirmed price movers, ISK move, spread profit,
+     or raw % swings from the stored stat pack. Four forms; none reads its size. */}}
 
 {{define "w-movers-small"}}<div class="w-body {{.BodyClass}}">{{with .Data}}{{if .Any}}
 <ul class="mv-list mv-top">
@@ -36,8 +35,8 @@
 {{define "w-movers-list"}}<ul class="mv-list" data-w-fit>{{range .}}{{template "w-movers-row" .}}{{end}}</ul>{{end}}
 
 {{define "w-movers-row"}}<li>
-  <a class="mv-name" href="{{.Href}}">{{.Name}}</a>
+  <span class="mv-head"><a class="mv-name" href="{{.Href}}">{{.Name}}</a>{{if .HubBadge}}<span class="mv-badge" title="{{.HubTitle}}">{{.HubBadge}}</span>{{end}}</span>
   <span class="mv-chg {{.Change.Dir}}">{{if .Change.Text}}{{.Change.Text}}{{else}}{{.Swing}}{{end}}</span>
-  <small class="mv-sub">{{.Price}} ISK{{if .Swing}}, swings {{.Swing}}{{end}}</small>
+  <small class="mv-sub">{{.Price}} ISK{{if .Meta}} · {{.Meta}}{{end}}{{if .Warn}} · <span class="mv-warn">{{.Warn}}</span>{{end}}</small>
   {{if .Line}}<svg class="mv-line {{.Change.Dir}}" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{.Line}}" vector-effect="non-scaling-stroke"/></svg>{{end}}
 </li>{{end}}

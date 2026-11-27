@@ -21,6 +21,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/tradefees"
 )
 
 const (
@@ -271,6 +272,13 @@ func (app *Application) refreshLPOfferValues(ctx context.Context, q *db.Queries,
 	if err := q.DeleteLPOfferValuesByRegion(ctx, regionID); err != nil {
 		return err
 	}
-	_, err := q.RefreshLPOfferValues(ctx, db.RefreshLPOfferValuesParams{RegionID: regionID, Now: now})
+	sellNet := tradefees.SellProceeds(1, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
+	buyNet := tradefees.InstantSellProceeds(1, tradefees.PerfectSalesTax())
+	_, err := q.RefreshLPOfferValues(ctx, db.RefreshLPOfferValuesParams{
+		RegionID:      regionID,
+		Now:           now,
+		SellNetFactor: sellNet,
+		BuyNetFactor:  buyNet,
+	})
 	return err
 }

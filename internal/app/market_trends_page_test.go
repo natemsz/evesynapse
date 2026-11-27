@@ -2,9 +2,8 @@ package app
 
 import "testing"
 
-// The ranking is cached and shared between readers, so opening an
-// item lands on a copy: the cached rows never carry one reader's
-// selection into another's page.
+// Opening an item in the inspector returns a copy so selection never
+// mutates the source view.
 func TestMarketTrendsSelectionCopies(t *testing.T) {
 	cached := &marketTrendsView{Rows: []marketTrendRow{{TypeID: 34, Rank: 1}, {TypeID: 35, Rank: 2}}}
 	got := cached.withSelection("35")

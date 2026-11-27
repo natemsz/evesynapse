@@ -11,6 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"fmt"
 	json "github.com/goccy/go-json"
 	"html/template"
 	"math"
@@ -55,6 +56,8 @@ type marketLPRow struct {
 	ISKPerLP     string
 	ISKPerLPDir  string // "up" when the offer pays, "down" when it loses
 	TradedDay    string
+	VolumeWarn   string // set when one redemption exceeds a day's sales or volume is zero
+	VolumeNote   string // plain-English comparison of offer output quantity against daily volume
 	Chg7         trendFigure
 	Age          string
 	RequiredCost string // what the also-needs items cost at their sell, "" with none
@@ -336,6 +339,7 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 		if store == "" {
 			store = "Corporation " + strconv.FormatInt(r.CorporationID, 10)
 		}
+		volWarn, volNote := lpVolumeCheck(r.Quantity, r.DailyVolume)
 		row := marketLPRow{
 			TypeID: r.TypeID, Name: app.typeNameOrID(ctx, r.TypeID),
 			Store: store, StoreID: r.CorporationID,
@@ -347,6 +351,8 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 			ISKCostShort: iskCompact(r.IskCost),
 			ISKPerLP:     esi.FormatISK(perLP.Float64),
 			TradedDay:    esi.FormatInt(int64(math.Round(r.DailyVolume))),
+			VolumeWarn:   volWarn,
+			VolumeNote:   volNote,
 			Chg7:         newTrendFigure(r.SellChg7d),
 			OfferID:      r.OfferID,
 			IconURL:      contracts.TypeCategoryIconURL(r.TypeID, rowCategories[r.TypeID], 32),
@@ -372,6 +378,33 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 		view.Rows = append(view.Rows, row)
 	}
 	return view
+}
+
+// lpVolumeCheck compares one redemption's output quantity against the
+// item's regional daily volume. When one redemption exceeds a full day
+// of sales (or daily volume is zero), warn carries a compact badge for
+// the table cell while note carries the full sentence for tooltips and
+// the inspector.
+func lpVolumeCheck(qty int64, dailyVol float64) (warn, note string) {
+	if qty <= 0 {
+		return "", ""
+	}
+	if dailyVol <= 0 {
+		return "No daily sales", "No recorded daily sales in this region"
+	}
+	days := float64(qty) / dailyVol
+	if days > 1.0 {
+		if days >= 10.0 {
+			d := int64(math.Round(days))
+			return fmt.Sprintf("%dd of sales", d), fmt.Sprintf("One redemption is %s days of regional sales", esi.FormatInt(d))
+		}
+		return fmt.Sprintf("%.1fd of sales", days), fmt.Sprintf("One redemption is %.1f days of regional sales", days)
+	}
+	pct := days * 100
+	if pct < 1.0 {
+		return "", "Under 1% of daily regional sales"
+	}
+	return "", fmt.Sprintf("One redemption is %.0f%% of daily regional sales", math.Round(pct))
 }
 
 // lpOfferKey names one offer in the URL: the store, then the offer.

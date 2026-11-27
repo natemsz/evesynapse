@@ -1760,6 +1760,19 @@ type MarketHistoryWant struct {
 	Priority        int64     `json:"priority"`
 }
 
+type MarketMoversRanked struct {
+	RegionID    int64     `json:"region_id"`
+	SortBy      string    `json:"sort_by"`
+	Mode        string    `json:"mode"`
+	Period      int32     `json:"period"`
+	Rank        int32     `json:"rank"`
+	TypeID      int64     `json:"type_id"`
+	Score       float64   `json:"score"`
+	IskTraded7d float64   `json:"isk_traded_7d"`
+	AvgOrders7d float64   `json:"avg_orders_7d"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type MarketRegionStat struct {
 	RegionID          int64           `json:"region_id"`
 	TypeID            int64           `json:"type_id"`
@@ -1797,6 +1810,21 @@ type MarketRegionStat struct {
 	SellHigh30d       float64         `json:"sell_high_30d"`
 	SellMean30d       float64         `json:"sell_mean_30d"`
 	SweptAt           time.Time       `json:"swept_at"`
+	SellAvg7d         float64         `json:"sell_avg_7d"`
+	SellMedian7d      float64         `json:"sell_median_7d"`
+	SellMedian30d     float64         `json:"sell_median_30d"`
+	MoverChg7v30      sql.NullFloat64 `json:"mover_chg_7v30"`
+	MoverHoldDays     int64           `json:"mover_hold_days"`
+	IskTraded7d       float64         `json:"isk_traded_7d"`
+	AvgOrders7d       float64         `json:"avg_orders_7d"`
+	AvgVol7d          float64         `json:"avg_vol_7d"`
+	AvgVol30d         float64         `json:"avg_vol_30d"`
+	MoverScore        sql.NullFloat64 `json:"mover_score"`
+	IskMove7d         float64         `json:"isk_move_7d"`
+	DailySpreadProfit float64         `json:"daily_spread_profit"`
+	SpreadPct         sql.NullFloat64 `json:"spread_pct"`
+	SpreadWidened     bool            `json:"spread_widened"`
+	ConfirmedHubs     int64           `json:"confirmed_hubs"`
 }
 
 type MarketRegionStatsDaily struct {

@@ -155,11 +155,39 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 	// due together once ESI publishes a day, and one after another
 	// the cap's worth would hold the cycle for most of a minute.
 	var window []marketKey
+	touchedRegions := map[int64]bool{}
 	flush := func() (limited bool) {
-		fetched, limited := app.fetchHistoryWindow(ctx, window)
-		stored += fetched
+		landed, limited := app.fetchHistoryWindow(ctx, window)
+		stored += len(landed)
+		for _, k := range landed {
+			touchedRegions[k.RegionID] = true
+		}
 		window = window[:0]
 		return limited
+	}
+	refreshTouched := func() {
+		if len(touchedRegions) == 0 {
+			return
+		}
+		now := time.Now().UTC()
+		hubTouched := false
+		for regionID := range touchedRegions {
+			if err := app.refreshMarketMoversRanked(ctx, regionID, now); err != nil {
+				logging.Errorf("worker: market history: refresh ranked movers for region %d: %v", regionID, err)
+			}
+			if _, isHub := marketRegionName(regionID); isHub {
+				hubTouched = true
+			}
+		}
+		if hubTouched {
+			app.hubConfirmMu.Lock()
+			if _, err := app.queries.RefreshMarketHubConfirmation(ctx, db.RefreshMarketHubConfirmationParams{
+				HubRegions: marketHubRegionIDs(), TypeIds: []int64{},
+			}); err != nil {
+				logging.Errorf("worker: market history: hub confirmation: %v", err)
+			}
+			app.hubConfirmMu.Unlock()
+		}
 	}
 	for i, key := range candidates {
 		if stored+len(window) >= maxHistoryFetchesPerCycle || ctx.Err() != nil {
@@ -185,12 +213,15 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 		}
 		window = append(window, key)
 		if len(window) == historyFetchWindow && flush() {
+			refreshTouched()
 			return stored, true
 		}
 	}
 	if len(window) > 0 && flush() {
+		refreshTouched()
 		return stored, true
 	}
+	refreshTouched()
 	return stored, false
 }
 
@@ -200,13 +231,12 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 // one another.
 const historyFetchWindow = 6
 
-// fetchHistoryWindow fetches and stores keys at once, reporting how
-// many landed and whether ESI's error limit stopped any of them.
-func (app *Application) fetchHistoryWindow(ctx context.Context, keys []marketKey) (fetched int, limited bool) {
+// fetchHistoryWindow fetches and stores keys at once, reporting the
+// keys that landed and whether ESI's error limit stopped any of them.
+func (app *Application) fetchHistoryWindow(ctx context.Context, keys []marketKey) (landed []marketKey, limited bool) {
 	var (
 		wg      sync.WaitGroup
 		mu      sync.Mutex
-		landed  int
 		stopped bool
 	)
 	for _, key := range keys {
@@ -217,7 +247,7 @@ func (app *Application) fetchHistoryWindow(ctx context.Context, keys []marketKey
 			ok, ltd := app.fetchAndStoreHistory(ctx, key)
 			mu.Lock()
 			if ok {
-				landed++
+				landed = append(landed, key)
 			}
 			stopped = stopped || ltd
 			mu.Unlock()
@@ -439,10 +469,17 @@ func (app *Application) refreshWantedAvgVolumes(ctx context.Context, wants []db.
 		}
 	}
 	for regionID, typeIDs := range byRegion {
-		if _, err := app.queries.RefreshMarketRegionStatAvgVolumes(ctx, db.RefreshMarketRegionStatAvgVolumesParams{
+		n, err := app.queries.RefreshMarketRegionStatAvgVolumes(ctx, db.RefreshMarketRegionStatAvgVolumesParams{
 			RegionID: regionID, TypeIds: typeIDs,
-		}); err != nil {
+		})
+		if err != nil {
 			logging.Errorf("worker: market history: refresh sold-per-day for wanted types in region %d: %v", regionID, err)
+			continue
+		}
+		if n > 0 {
+			if err := app.refreshMarketMoversRanked(ctx, regionID, time.Now().UTC()); err != nil {
+				logging.Errorf("worker: market history: refresh ranked movers for wanted types in region %d: %v", regionID, err)
+			}
 		}
 	}
 }

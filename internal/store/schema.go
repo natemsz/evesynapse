@@ -1111,6 +1111,16 @@ var pgDoctrineFitSearchSchema string
 //go:embed schema_pg/187_scan_dscan_rows.sql
 var pgScanDScanRowsSchema string
 
+// Step 188: precomputed mover scores, ISK traded, and hub confirmation on market_region_stats.
+//
+//go:embed schema_pg/188_market_movers_metrics.sql
+var pgMarketMoversMetricsSchema string
+
+// Step 189: precomputed ranked movers table for Trends and Market Movers.
+//
+//go:embed schema_pg/189_market_movers_ranked.sql
+var pgMarketMoversRankedSchema string
+
 // Step 191: station leaderboard band-filtered totals and ranking indexes.
 //
 //go:embed schema_pg/191_station_leaderboard_band.sql
@@ -1331,6 +1341,8 @@ func schemaSteps() []schemaStep {
 		{185, "customize_prompt_seen", pgCustomizePromptSeenSchema, ""},
 		{186, "doctrine_fit_search", pgDoctrineFitSearchSchema, ""},
 		{187, "scan_dscan_rows", pgScanDScanRowsSchema, ""},
+		{188, "market_movers_metrics", pgMarketMoversMetricsSchema, ""},
+		{189, "market_movers_ranked", pgMarketMoversRankedSchema, ""},
 		{191, "station_leaderboard_band", pgStationLeaderboardBandSchema, ""},
 	}
 }

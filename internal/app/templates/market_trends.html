@@ -8,11 +8,12 @@
 {{with .MarketTrends}}
 <div class="l-page">
 <div class="l-head">
-  <p class="prose">Items whose typical sell price swings the most, moved the most, or changed sharply in a hub region. Figures come from each sweep of the whole regional book.</p>
+  <p class="prose">Items whose prices moved with real volume, shifted in value, or changed sharply in a hub region. All figures are precomputed from regional sweeps and trade history.</p>
 </div>
 
 <div class="l-stack tr-controls l-root">
-<form method="get" action="/market/trends/" class="l-panel tr-filters">
+<search>
+<form method="get" action="/market/trends/" class="l-panel tr-filters" aria-label="Market Trends filters">
   <input type="hidden" name="mode" value="{{.Mode}}">
   <input type="hidden" name="period" value="{{.Period}}">
   {{if .Kind}}<input type="hidden" name="kind" value="{{.Kind}}">{{end}}
@@ -21,14 +22,22 @@
       {{range .Regions}}<option value="{{.ID}}"{{if .Active}} selected{{end}}>{{.Name}}</option>{{end}}
     </select>
   </label>
-  <label><small>At least traded per day</small>
-    <input type="number" name="minvol" min="0" step="1" value="{{.MinVolume}}">
+  <label><small>Rank by</small>
+    <select name="sort">
+      {{range .Sorts}}<option value="{{.Value}}"{{if .Active}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
   </label>
-  <label><small>At least sell orders</small>
-    <input type="number" name="minorders" min="1" step="1" value="{{.MinOrders}}">
+  <label><small>At least ISK traded per day</small>
+    <select name="minisk">
+      {{range .MinISKChoices}}<option value="{{.Value}}"{{if .Active}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  <label><small>At least trades per day</small>
+    <input type="number" name="mintrades" min="0" step="1" value="{{.MinTrades}}">
   </label>
   <button class="btn" type="submit">Show</button>
 </form>
+</search>
 
 <div class="l-cluster tr-modes">
   <nav class="pilltabs" aria-label="Ranking">{{range .Modes}}<a class="pilltab{{if .Active}} on{{end}}" href="{{.Href}}"{{if .Active}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
@@ -39,15 +48,25 @@
 
 {{if eq .Mode "changes"}}
 <section class="l-panel tr-changes">
+  <div class="l-pane-bar">
+    <h2 class="l-pane-title">{{.RegionName}} <small>up to 100 changes</small></h2>
+    {{if .RawMode}}
+    <span class="fchip tr-chip">All gates off (raw mode)</span>
+    {{else}}
+    <span class="fchip tr-chip">ISK traded/day >= {{.MinISKLabel}} · Trades/day >= {{.MinTrades}}</span>
+    {{end}}
+  </div>
 {{if .Changes}}
-<div class="tw">
+<div class="tw" tabindex="0" role="region" aria-label="Market changes in {{.RegionName}}">
 <table>
-  <thead><tr><th>Item</th><th>What changed</th><th>Day</th><th>Seen</th></tr></thead>
+  <thead><tr><th class="card-title">Item</th><th>What changed</th><th class="mt-num">ISK/day</th><th class="mt-num">Trades/day</th><th>Day</th><th>Seen</th></tr></thead>
   <tbody>
   {{range .Changes}}
     <tr>
-      <td><a href="/market/?type={{.TypeID}}&amp;region={{$.MarketTrends.RegionID}}">{{.Name}}</a></td>
+      <td><a href="/market/?type={{.TypeID}}&amp;region={{$.MarketTrends.RegionID}}">{{.Name}}</a>{{if .HubBadge}} <span class="tr-hub-badge" title="{{.HubTitle}}">{{.HubBadge}}</span>{{end}}</td>
       <td><span class="mt-chg {{.Dir}}">{{.Label}}</span><br><small class="mt-reqs">{{.Detail}}</small></td>
+      <td class="mt-num">{{.ISKTradedDay}}</td>
+      <td class="mt-num">{{.TradesDay}}{{if and $.MarketTrends.RawMode .LowTrades}} <span class="tr-warn">Low</span>{{end}}</td>
       <td>{{.Day}}</td>
       <td><small>{{.Detected}}</small></td>
     </tr>
@@ -55,9 +74,9 @@
   </tbody>
 </table>
 </div>
-<p class="prose">What each sweep finds against the day before, kept for 30 days. A price move counts at 10% or more, and at three times the item's usual daily swing. Only books with at least five sell orders and recorded trade count. Watch an item to be told when it changes.</p>
+<p class="prose tr-note">Detected at each sweep by comparing the 7-day traded median against the 30-day traded median (and supply and spread against the trailing 7-day baseline), kept for 30 days. Only items clearing the hub ISK traded/day and trades/day floors are recorded; price moves require at least 10% in The Forge, 15% in Domain and Sinq Laison, or 20% in Heimatar and Metropolis, plus three times the item's daily swing.</p>
 {{else}}
-<p>Nothing in {{.RegionName}} changed enough to list in that span.</p>
+<p class="tr-note">Nothing in {{.RegionName}} cleared those filters in that span. Try a lower ISK traded/day or trades/day floor, or switch Rank by to Raw % move.</p>
 {{end}}
 </section>
 {{else if .HasData}}
@@ -68,33 +87,86 @@
   <div class="l-pane-bar">
     <h2 class="l-pane-title">{{.RegionName}} <small>updated {{.Age}} · up to 100 items</small></h2>
     <span class="fchip tr-chip">{{.ModeLabel}}{{if ne .Mode "volatile"}}, {{.Period}} {{if eq .Period 1}}day{{else}}days{{end}}{{end}}</span>
-    <span class="fchip tr-chip">Traded per day ≥ {{.MinVolume}} · Sell orders ≥ {{.MinOrders}}</span>
+    <span class="fchip tr-chip">{{.SortLabel}}</span>
+    {{if .RawMode}}
+    <span class="fchip tr-chip">All gates off · warning signs shown</span>
+    {{else if eq .Sort "confirmed"}}
+    <span class="fchip tr-chip">ISK/day >= {{.MinISKLabel}} · Trades/day >= {{.MinTrades}}{{if and (ne .Mode "volatile") (eq .Period 7)}} · 4+ of 7d held{{end}} · 7d vol >= 30d</span>
+    {{else}}
+    <span class="fchip tr-chip">ISK/day >= {{.MinISKLabel}} · Trades/day >= {{.MinTrades}}</span>
+    {{end}}
   </div>
   {{if .Rows}}
-  <div class="tw">
+  <div class="tw" tabindex="0" role="region" aria-label="Ranked market trends in {{.RegionName}}">
   <table class="tr-table" data-rank="{{.RankCol}}">
-    <thead><tr><th class="card-title">Item</th><th class="mt-num">Typical sell</th><th class="mt-num opt">Typical buy</th><th class="mt-num tr-chg1{{if ne .RankCol "chg1"}} opt{{end}}">1 day</th><th class="mt-num tr-chg7">7 days</th><th class="mt-num tr-chg30{{if ne .RankCol "chg30"}} opt{{end}}">30 days</th><th class="tr-trend opt">Trend, 30 days</th><th class="mt-num tr-swing">Daily swing</th><th class="mt-num">Sell orders</th><th class="mt-num">Traded per day</th></tr></thead>
+    <thead>
+      <tr>
+        <th class="card-title">Item</th>
+        <th class="mt-num">Typical sell</th>
+        <th class="mt-num tr-chg1{{if ne .RankCol "chg1"}} opt{{end}}">1 day</th>
+        <th class="mt-num tr-chg7">{{if .UseMedian7}}7d vs 30d{{else}}7 days{{end}}</th>
+        <th class="mt-num tr-chg30{{if ne .RankCol "chg30"}} opt{{end}}">30 days</th>
+        <th class="tr-trend opt">Trend, 30 days</th>
+        {{if eq .Sort "isk_move"}}
+        <th class="mt-num tr-iskmove">ISK move/day</th>
+        {{else if eq .Sort "spread_profit"}}
+        <th class="mt-num tr-profit">Spread profit/day</th>
+        {{else if not .RawMode}}
+        <th class="mt-num tr-isk">ISK traded/day</th>
+        {{end}}
+        {{if .RawMode}}
+        <th class="mt-num tr-hide-insp">Trades/day</th>
+        <th class="mt-num tr-hide-insp">Spread</th>
+        <th class="tr-hide-insp">Hubs</th>
+        {{else}}
+        <th class="mt-num tr-swing tr-hide-insp">Daily swing</th>
+        <th class="mt-num tr-hide-insp">Trades/day</th>
+        {{end}}
+      </tr>
+    </thead>
     <tbody>
     {{range .Rows}}
       <tr{{if .On}} class="yours"{{end}}>
-        <td><span class="tr-item"><span class="tr-rank">{{.Rank}}</span><img src="{{.IconURL}}" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="{{.Href}}" data-l-step="in">{{.Name}}</a></span></td>
+        <td>
+          <span class="tr-item">
+            <span class="tr-rank">{{.Rank}}</span>
+            <img src="{{.IconURL}}" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg">
+            <a href="{{.Href}}" data-l-step="in">{{.Name}}</a>
+            {{if .HubBadge}}<span class="tr-hub-badge" title="{{.HubTitle}}">{{.HubBadge}}</span>{{end}}
+          </span>
+        </td>
         <td class="mt-num" title="{{.TypicalSell}} ISK" data-sort="{{.TypicalSell}}">{{sparkFigFallback .SellShort .Spark}}</td>
-        <td class="mt-num"{{if .TypicalBuy}} title="{{.TypicalBuy}} ISK"{{end}}>{{if .BuyShort}}{{.BuyShort}}{{else}}—{{end}}</td>
-        <td class="mt-num tr-chg1">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}—{{end}}</td>
-        <td class="mt-num tr-chg7">{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}—{{end}}</td>
-        <td class="mt-num tr-chg30">{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}—{{end}}</td>
+        <td class="mt-num tr-chg1">{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}-{{end}}</td>
+        <td class="mt-num tr-chg7">{{if .PrimaryChg7.Text}}<span class="mt-chg {{.PrimaryChg7.Dir}}">{{.PrimaryChg7.Text}}</span>{{else}}-{{end}}</td>
+        <td class="mt-num tr-chg30">{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}-{{end}}</td>
         <td class="tr-trend opt" data-sort="{{.Chg30.Text}}">{{.Line}}</td>
-        <td class="mt-num tr-swing">{{if .Volatility}}{{.Volatility}}{{else}}—{{end}}</td>
-        <td class="mt-num">{{.Orders}}</td>
-        <td class="mt-num">{{.TradedDay}}</td>
+        {{if eq $.MarketTrends.Sort "isk_move"}}
+        <td class="mt-num tr-iskmove">{{.ISKMoveDay}}</td>
+        {{else if eq $.MarketTrends.Sort "spread_profit"}}
+        <td class="mt-num tr-profit">{{.SpreadProfit}}</td>
+        {{else if not $.MarketTrends.RawMode}}
+        <td class="mt-num tr-isk">{{.ISKTradedDay}}</td>
+        {{end}}
+        {{if $.MarketTrends.RawMode}}
+        <td class="mt-num tr-hide-insp">{{.TradesDay}}{{if .LowTrades}} <span class="tr-warn">Low</span>{{end}}</td>
+        <td class="mt-num tr-hide-insp">{{if .SpreadPct}}{{.SpreadPct}}{{else}}-{{end}}{{if .SpreadWidened}} <span class="tr-warn">Widening</span>{{end}}</td>
+        <td class="tr-hide-insp">{{if .SingleHub}}<span class="tr-warn">1 hub only</span>{{else}}<span class="tr-hub-badge" title="{{.HubTitle}}">{{.HubBadge}}</span>{{end}}</td>
+        {{else}}
+        <td class="mt-num tr-swing tr-hide-insp">{{if .Volatility}}{{.Volatility}}{{else}}-{{end}}</td>
+        <td class="mt-num tr-hide-insp">{{.TradesDay}}</td>
+        {{end}}
       </tr>
     {{end}}
     </tbody>
   </table>
   </div>
-  <p class="prose">Prices in ISK. Daily swing is how far the typical sell moves from one day to the next, on average over the last 30 days. A change shows only when a stored day sits in its window.</p>
+  {{if .RawMode}}
+  <p class="prose tr-note">Raw % mode removes every volume, ISK, trade-count, and persistence gate so you can inspect thin or manipulated markets directly. Warning badges flag items with under 10 trades/day, a widening spread, or a move seen in only one trade hub.</p>
   {{else}}
-  <p>Nothing in {{.RegionName}} clears those filters. Try a lower traded-per-day or order count.</p>
+  <p class="prose tr-note">Prices in ISK. Volume-confirmed moves score the 7-day vs 30-day median daily traded price move from market history weighted by 7-day average daily ISK traded, requiring at least 4 of 7 days held and 7-day volume at or above the 30-day average. 7-day rolling changes compare the current 7-day average typical sell to the prior 7 days. Badges mark moves confirmed in at least one other trade hub.</p>
+  {{end}}
+  {{else}}
+  <p class="tr-note">Nothing in {{.RegionName}} clears those filters. Try a lower ISK traded/day or trades/day floor, or switch Rank by to Raw % move.</p>
   {{end}}
 </section>
 
@@ -112,18 +184,26 @@
   <p class="tr-open"><a class="btn" href="/market/?type={{.TypeID}}&amp;region={{$.MarketTrends.RegionID}}">Open in Market ({{$.MarketTrends.RegionName}})</a></p>
   <h4 class="tr-h">Price moves and swing</h4>
   <dl class="insp-facts">
+    <div><dt>7d median vs 30d median</dt><dd>{{if .Chg7v30.Text}}<span class="mt-chg {{.Chg7v30.Dir}}">{{.Chg7v30.Text}}</span> ({{.HoldDays}}/7 days held){{else}}not enough days yet{{end}}</dd></div>
+    <div><dt>7-day rolling change</dt><dd>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}no comparison week{{end}}</dd></div>
+    {{if .SellAvg7}}<div><dt>7-day average sell</dt><dd>{{.SellAvg7}} ISK</dd></div>{{end}}
     <div><dt>1 day</dt><dd>{{if .Chg1.Text}}<span class="mt-chg {{.Chg1.Dir}}">{{.Chg1.Text}}</span>{{else}}no comparison day{{end}}</dd></div>
-    <div><dt>7 days</dt><dd>{{if .Chg7.Text}}<span class="mt-chg {{.Chg7.Dir}}">{{.Chg7.Text}}</span>{{else}}no comparison day{{end}}</dd></div>
     <div><dt>30 days</dt><dd>{{if .Chg30.Text}}<span class="mt-chg {{.Chg30.Dir}}">{{.Chg30.Text}}</span>{{else}}no comparison day{{end}}</dd></div>
     <div><dt>Daily swing</dt><dd>{{if .Volatility}}{{.Volatility}}{{else}}not enough days yet{{end}}</dd></div>
   </dl>
   {{if .Volatility}}<svg class="l-meter tr-meter" viewBox="0 0 100 4" preserveAspectRatio="none" role="img" aria-label="Daily swing against the widest in this ranking"><rect x="0" y="0" width="{{.SwingPct}}" height="4"/></svg>{{end}}
-  <h4 class="tr-h">Book depth and activity</h4>
+  <h4 class="tr-h">Activity and confirmation</h4>
   <dl class="insp-facts">
+    <div><dt>ISK traded/day (7d avg)</dt><dd>{{.ISKTradedDay}} ISK</dd></div>
+    <div><dt>Trades/day (7d avg)</dt><dd>{{.TradesDay}}{{if .LowTrades}} <span class="tr-warn">Low</span>{{end}}</dd></div>
+    <div><dt>Units/day (7d vs 30d)</dt><dd>{{.Vol7d}} vs {{.Vol30d}}</dd></div>
+    <div><dt>ISK move/day</dt><dd>{{.ISKMoveDay}} ISK</dd></div>
+    <div><dt>Daily spread profit</dt><dd>{{.SpreadProfit}} ISK</dd></div>
+    <div><dt>Book spread</dt><dd>{{if .SpreadPct}}{{.SpreadPct}}{{else}}none{{end}}{{if .SpreadWidened}} <span class="tr-warn">Widening</span>{{end}}</dd></div>
+    <div><dt>Trade hubs</dt><dd>{{if .HubTitle}}{{.HubTitle}}{{else}}This hub only{{end}}</dd></div>
     <div><dt>Sell orders</dt><dd>{{.Orders}}</dd></div>
-    <div><dt>Traded per day, 30-day average</dt><dd>{{.TradedDay}}</dd></div>
   </dl>
-  <p class="insp-note">Figures come from each sweep of the whole regional book in {{$.MarketTrends.RegionName}}. The meter sets this item's swing against the widest in the ranking.</p>
+  <p class="insp-note">Figures come from regional sweeps and market history in {{$.MarketTrends.RegionName}}.</p>
 </aside>
 <a class="l-scrim" href="{{$.MarketTrends.ListHref}}" aria-label="Close the item" tabindex="-1"></a>
 {{end}}

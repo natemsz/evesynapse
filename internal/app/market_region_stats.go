@@ -34,6 +34,7 @@ import (
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 )
 
 const sweepBatchSize = 2000
@@ -690,12 +691,17 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 		scope = []int64{}
 	}
 	if len(res.changed) > 0 {
-		// The stat pack's trend figures (schema 101), so a reader
-		// never sees today's prices beside yesterday's trends.
+		// The stat pack's trend and mover figures (schemas 101, 188, 189),
+		// so a reader never sees today's prices beside yesterday's trends.
 		if _, err := qtx.RefreshMarketStatPackTrends(ctx, db.RefreshMarketStatPackTrendsParams{
 			RegionID: regionID, Today: now, TypeIds: scope,
 		}); err != nil {
 			return res, fmt.Errorf("stat pack trends: %w", err)
+		}
+		// Ranked movers (schema 189), so Trends and Market Movers
+		// read stored rows in rank order with LIMIT only.
+		if err := refreshMarketMoversRankedTx(ctx, qtx, regionID, now); err != nil {
+			return res, fmt.Errorf("ranked movers: %w", err)
 		}
 		// The 30-day price line every hover card reads (schema 121).
 		if _, err := qtx.RefreshMarketStatPackSparks(ctx, db.RefreshMarketStatPackSparksParams{
@@ -703,10 +709,17 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 		}); err != nil {
 			return res, fmt.Errorf("stat pack sparks: %w", err)
 		}
-		// The change feed (schema 106) compares the rows just
-		// written with their last stored day.
+		// The change feed (schema 106) compares the traded history
+		// medians (and trailing 7-day supply/spread baseline), gated
+		// by the shared ISK/trade floors and hub-scaled threshold.
 		if _, err := qtx.DetectMarketChanges(ctx, db.DetectMarketChangesParams{
-			RegionID: regionID, Day: day, Now: now, MinMove: marketChangeMinMove, TypeIds: scope,
+			RegionID:  regionID,
+			Day:       day,
+			Now:       now,
+			MinMove:   markethistory.DefaultChangeMinMove(regionID),
+			MinIsk:    float64(markethistory.DefaultMinISK(regionID)),
+			MinTrades: float64(markethistory.DefaultMinTrades),
+			TypeIds:   scope,
 		}); err != nil {
 			return res, fmt.Errorf("change feed: %w", err)
 		}
@@ -924,6 +937,47 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	if err := tx.Commit(ctx); err != nil {
 		return res, err
 	}
+	// Cross-hub confirmation (schema 188) runs post-commit under a
+	// short mutex so concurrent hub sweeps see each other's committed
+	// moves without deadlocking across regions.
+	if len(res.changed) > 0 {
+		if _, isHub := marketRegionName(regionID); isHub {
+			app.hubConfirmMu.Lock()
+			if _, err := app.queries.RefreshMarketHubConfirmation(ctx, db.RefreshMarketHubConfirmationParams{
+				HubRegions: marketHubRegionIDs(), TypeIds: scope,
+			}); err != nil {
+				logging.Errorf("worker: hub confirmation after sweep of %s: %v", marketRegionLabel(regionID), err)
+			}
+			app.hubConfirmMu.Unlock()
+		}
+	}
 	app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")
 	return res, nil
+}
+
+// refreshMarketMoversRankedTx replaces one region's pre-ranked mover rows
+// inside an existing transaction (region sweeps or history refreshes).
+func refreshMarketMoversRankedTx(ctx context.Context, qtx *db.Queries, regionID int64, now time.Time) error {
+	if err := qtx.DeleteMarketMoversRankedByRegion(ctx, regionID); err != nil {
+		return err
+	}
+	_, err := qtx.InsertMarketMoversRankedForRegion(ctx, db.InsertMarketMoversRankedForRegionParams{
+		RegionID: regionID,
+		Now:      now,
+	})
+	return err
+}
+
+// refreshMarketMoversRanked refreshes one region's pre-ranked mover rows
+// atomically in its own transaction (called after history ingest updates).
+func (app *Application) refreshMarketMoversRanked(ctx context.Context, regionID int64, now time.Time) error {
+	tx, err := app.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := refreshMarketMoversRankedTx(ctx, app.queries.WithTx(tx), regionID, now); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

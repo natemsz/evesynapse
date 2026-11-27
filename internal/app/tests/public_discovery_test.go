@@ -94,6 +94,14 @@ func TestPublicSEOFiles(t *testing.T) {
 		"Allow: /fittings/public/",
 		"Allow: /items/",
 		"Allow: /ships/",
+		"Allow: /market/",
+		"Allow: /map/",
+		"Allow: /contracts/search/",
+		"Allow: /pilot/",
+		"Allow: /about/",
+		"Allow: /sitemap.xml",
+		"Disallow: /market/stream",
+		"Disallow: /intel/kills/stream",
 		"Disallow: /fittings/saved/",
 	)
 	// An instance with no address of its own configured publishes

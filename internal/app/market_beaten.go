@@ -12,10 +12,10 @@ package app
 import (
 	"context"
 	"math"
-	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
+	"evesynapse/internal/tradefees"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -73,27 +73,28 @@ func stationCompetition(o esi.CharOrder, book []esi.MarketOrder, own map[int64]b
 	return best, volume, best < o.Price-0.005
 }
 
-// beatenMargin is the margin at the suggested price after the sales
-// tax rate: a sell against what the stock cost, a buy against the
-// typical sell it could be resold at. ok is false with no cost.
-func beatenMargin(suggested, unitCost, taxRate float64, buy bool) (float64, bool) {
+// beatenMargin is the net margin at the suggested price after broker
+// fee and sales tax via tradefees: a sell against what the stock cost,
+// a buy against the typical sell it could be resold at. ok is false
+// with no cost.
+func beatenMargin(suggested, unitCost, broker, salesTax float64, buy bool) (float64, bool) {
 	if suggested <= 0 || unitCost <= 0 {
 		return 0, false
 	}
 	if buy {
-		return (unitCost*(1-taxRate) - suggested) / suggested * 100, true
+		return tradefees.NetMarginPct(suggested, unitCost, broker, salesTax), true
 	}
-	return (suggested*(1-taxRate) - unitCost) / suggested * 100, true
+	return tradefees.NetSellMarginPct(unitCost, suggested, broker, salesTax), true
 }
 
 // beatenContext caches, for one pass, what the margins need per
-// character: its open position costs and its observed sales tax rate.
+// character: its open position costs and its trade fee viewer.
 type beatenContext struct {
-	app   *Application
-	costs map[int64]map[int64]float64 // character -> type -> cost per unit
-	pools map[int64]ledgerPool        // character -> the pool its positions sit in
-	rates map[int64]float64
-	stats map[[2]int64]float64 // (region, type) -> typical sell for a beaten buy's resale basis
+	app     *Application
+	costs   map[int64]map[int64]float64 // character -> type -> cost per unit
+	pools   map[int64]ledgerPool        // character -> the pool its positions sit in
+	viewers map[int64]*tradeViewer      // character -> skills & standings for tradefees
+	stats   map[[2]int64]float64        // (region, type) -> typical sell for a beaten buy's resale basis
 }
 
 // regionTypicalSell is the stat pack's typical sell for a type in a
@@ -144,23 +145,20 @@ func (b *beatenContext) unitCost(ctx context.Context, characterID, typeID int64)
 	return c
 }
 
-// taxRate is the character's effective sales tax over the last 90
-// days of its ledger, or 0 when it sold nothing in that time.
-func (b *beatenContext) taxRate(ctx context.Context, characterID int64) float64 {
-	if b.rates == nil {
-		b.rates = map[int64]float64{}
+// tradeRates resolves the character's broker fee and sales tax at
+// stationID through the shared tradefees helper (character skills and
+// unmodified station standings, matching the scanner).
+func (b *beatenContext) tradeRates(ctx context.Context, characterID, stationID int64) (broker, salesTax float64) {
+	if b.viewers == nil {
+		b.viewers = map[int64]*tradeViewer{}
 	}
-	if r, ok := b.rates[characterID]; ok {
-		return r
+	viewer, ok := b.viewers[characterID]
+	if !ok {
+		viewer = b.app.resolveTradeViewer(ctx, []db.Character{{CharacterID: characterID}}, charScope{all: true})
+		b.viewers[characterID] = viewer
 	}
-	r := 0.0
-	if row, err := b.app.queries.GetObservedSalesTaxRate(ctx, db.GetObservedSalesTaxRateParams{
-		CharacterID: characterID, Since: time.Now().UTC().AddDate(0, 0, -90),
-	}); err == nil && row.Revenue > 0 && row.Tax > 0 {
-		r = math.Min(row.Tax/row.Revenue, 0.5)
-	}
-	b.rates[characterID] = r
-	return r
+	broker, salesTax, _ = b.app.tradeRatesFor(ctx, viewer, stationID)
+	return broker, salesTax
 }
 
 // verdict prices one open order against its station's book.
@@ -171,13 +169,14 @@ func (b *beatenContext) verdict(ctx context.Context, characterID int64, o esi.Ch
 		return p, false
 	}
 	p.SuggestedPrice = nextPricePast(best, o.IsBuyOrder)
-	p.TaxRate = b.taxRate(ctx, characterID)
+	broker, salesTax := b.tradeRates(ctx, characterID, o.LocationID)
+	p.TaxRate = salesTax
 	if o.IsBuyOrder {
 		p.UnitCost = b.regionTypicalSell(ctx, o.RegionID, o.TypeID)
 	} else {
 		p.UnitCost = b.unitCost(ctx, characterID, o.TypeID)
 	}
-	if m, ok := beatenMargin(p.SuggestedPrice, p.UnitCost, p.TaxRate, o.IsBuyOrder); ok {
+	if m, ok := beatenMargin(p.SuggestedPrice, p.UnitCost, broker, salesTax, o.IsBuyOrder); ok {
 		p.MarginPct = pgtype.Float8{Float64: m, Valid: true}
 	}
 	return p, true

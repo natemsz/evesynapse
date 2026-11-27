@@ -21,6 +21,7 @@ type orderRow struct {
 	TypeID int64
 	Side   string // "Buy" | "Sell"
 	Price  string
+	price  float64
 	Volume string // "remain / total"
 	Loc    module.PlaceRef
 	Region string
@@ -252,6 +253,7 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 			TypeID:   o.TypeID,
 			Side:     side,
 			Price:    esi.FormatISK(o.Price),
+			price:    o.Price,
 			Volume:   fmt.Sprintf("%s / %s", esi.FormatInt(o.VolumeRemain), esi.FormatInt(o.VolumeTotal)),
 			Loc:      app.deps.LinkPlace(ctx, o.LocationID, app.deps.EconLocationTitle(ctx, o.LocationID)),
 			LocID:    o.LocationID,
@@ -324,7 +326,7 @@ func (app *mod) handleOrders(w http.ResponseWriter, r *http.Request) {
 			if view.OpenRows[i].Side != view.OpenRows[j].Side {
 				return view.OpenRows[i].Side < view.OpenRows[j].Side // Buy before Sell
 			}
-			return view.OpenRows[i].Price < view.OpenRows[j].Price
+			return view.OpenRows[i].price < view.OpenRows[j].price
 		})
 		// Competition at each order's station (schema 120): one
 		// stored read for the page's stations. A pair with no

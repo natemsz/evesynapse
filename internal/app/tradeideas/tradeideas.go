@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/ideas"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 	"evesynapse/internal/tradefees"
 )
 
@@ -184,7 +186,7 @@ func noteAttempt(ctx context.Context, q *db.Queries, at time.Time, failures int)
 
 // forgeRegionID is The Forge (Jita): the region the trade-ideas prompt
 // asks about. It matches the scanner's default region.
-const forgeRegionID = int64(10000002)
+const forgeRegionID = markethistory.ForgeRegionID
 
 // BuildCSV renders the Forge scanner's top rows as the CSV the model
 // reads, capped to limit rows. Each row leads with its 1-based "#"
@@ -229,12 +231,12 @@ func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row
 		return nil, false
 	}
 	minSpread, rowLimit := deps.SpreadDefaults()
-	rowCap := min(int64(limit), int64(rowLimit))
 	opp, err := q.ListScannerOpportunities(ctx, db.ListScannerOpportunitiesParams{
 		RegionID:  forgeRegionID,
 		MinSpread: minSpread,
-		MinVolume: 1,
-		RowCap:    rowCap,
+		MinVolume: 0,
+		MinIsk:    float64(markethistory.DefaultMinISK(forgeRegionID)),
+		RowCap:    int64(rowLimit),
 	})
 	if err != nil {
 		logging.Errorf("trade ideas: list opportunities for region %d: %v", forgeRegionID, err)
@@ -243,14 +245,28 @@ func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row
 	if len(opp) == 0 {
 		return nil, false
 	}
-	rows := make([]ideas.Row, 0, len(opp))
-	stationMemo := make(map[int64]module.PlaceRef)
-	for i, s := range opp {
+	type netCandidate struct {
+		s         db.ListScannerOpportunitiesRow
+		spreadPct float64
+		netProfit float64
+	}
+	broker, salesTax := tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax()
+	kept := make([]netCandidate, 0, len(opp))
+	for _, s := range opp {
 		// The rows are built by the background worker with no
 		// viewer, so the spread and profit are net of broker
 		// fees and sales tax at perfect skills and relations.
-		spreadPct := tradefees.NetSpreadPct(s.TypicalBuy, s.TypicalSell, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
-		unitProfit, _ := tradefees.NetRoundTrip(s.TypicalBuy, s.TypicalSell, tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax())
+		// Drop any row whose net spread falls below the floor
+		// or whose net profit is non-positive before anything
+		// reaches the model.
+		spreadPct := tradefees.NetSpreadPct(s.TypicalBuy, s.TypicalSell, broker, salesTax)
+		if spreadPct < minSpread {
+			continue
+		}
+		unitProfit, _ := tradefees.NetRoundTrip(s.TypicalBuy, s.TypicalSell, broker, salesTax)
+		if unitProfit <= 0 {
+			continue
+		}
 		// The tradeable size is whichever runs out first: what trades
 		// each day, what sellers hold, or what buyers want.
 		size := s.DailyVolume
@@ -260,15 +276,41 @@ func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row
 		if float64(s.BuyVolume) < size {
 			size = float64(s.BuyVolume)
 		}
+		kept = append(kept, netCandidate{
+			s:         s,
+			spreadPct: spreadPct,
+			netProfit: unitProfit * size,
+		})
+	}
+	if len(kept) == 0 {
+		return nil, false
+	}
+	// Re-rank by net daily profit after fees, breaking ties deterministically.
+	sort.SliceStable(kept, func(i, j int) bool {
+		if kept[i].netProfit != kept[j].netProfit {
+			return kept[i].netProfit > kept[j].netProfit
+		}
+		if kept[i].s.TypeID != kept[j].s.TypeID {
+			return kept[i].s.TypeID < kept[j].s.TypeID
+		}
+		return kept[i].s.LocationID < kept[j].s.LocationID
+	})
+	capN := min(limit, rowLimit)
+	if len(kept) > capN {
+		kept = kept[:capN]
+	}
+	rows := make([]ideas.Row, 0, len(kept))
+	stationMemo := make(map[int64]module.PlaceRef)
+	for i, c := range kept {
 		rows = append(rows, ideas.Row{
 			N:       i + 1,
-			Item:    tradeIdeasCell(deps.TypeName(ctx, s.TypeID)),
-			Station: tradeIdeasCell(deps.StationRef(ctx, stationMemo, s.LocationID).Name),
-			Buy:     esi.FormatISK(s.TypicalBuy),
-			Sell:    esi.FormatISK(s.TypicalSell),
-			Spread:  fmt.Sprintf("%.1f%%", spreadPct),
-			Sold:    esi.FormatInt(int64(math.Round(s.DailyVolume))),
-			Profit:  esi.FormatISK(unitProfit * size),
+			Item:    tradeIdeasCell(deps.TypeName(ctx, c.s.TypeID)),
+			Station: tradeIdeasCell(deps.StationRef(ctx, stationMemo, c.s.LocationID).Name),
+			Buy:     esi.FormatISK(c.s.TypicalBuy),
+			Sell:    esi.FormatISK(c.s.TypicalSell),
+			Spread:  fmt.Sprintf("%.1f%%", c.spreadPct),
+			Sold:    esi.FormatInt(int64(math.Round(c.s.DailyVolume))),
+			Profit:  esi.FormatISK(c.netProfit),
 		})
 	}
 	return rows, true

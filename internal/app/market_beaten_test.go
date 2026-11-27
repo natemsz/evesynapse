@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"evesynapse/internal/esi"
+	"evesynapse/internal/tradefees"
 )
 
 // The suggested reprice is the next price the game allows past the
 // competition (four significant digits, a cent at the finest), the
 // owner's own orders never count as competition, and the margin is
-// taken after sales tax.
+// taken after broker fee and sales tax via tradefees.
 func TestBeatenOrderPricing(t *testing.T) {
 	for _, c := range []struct {
 		beating float64
@@ -43,11 +44,18 @@ func TestBeatenOrderPricing(t *testing.T) {
 		t.Errorf("competition = %v x%d beaten=%v, want 98 x5 beaten (alt and other station ignored)", best, vol, beaten)
 	}
 
-	// Sell at 97.9 on a 90 ISK cost after 4% tax: (97.9*0.96-90)/97.9.
-	if m, ok := beatenMargin(97.9, 90, 0.04, false); !ok || math.Abs(m-(97.9*0.96-90)/97.9*100) > 1e-9 {
-		t.Errorf("sell margin = %v %v", m, ok)
+	broker, tax := tradefees.PerfectBrokerFee(), tradefees.PerfectSalesTax()
+	// Sell at 97.9 on a 90 ISK cost after broker fee and sales tax:
+	wantSell := tradefees.NetSellMarginPct(90, 97.9, broker, tax)
+	if m, ok := beatenMargin(97.9, 90, broker, tax, false); !ok || math.Abs(m-wantSell) > 1e-9 {
+		t.Errorf("sell margin = %v %v, want %v", m, ok, wantSell)
 	}
-	if _, ok := beatenMargin(97.9, 0, 0.04, false); ok {
+	// Buy at 87 resold at 100 after broker fees and sales tax:
+	wantBuy := tradefees.NetMarginPct(87, 100, broker, tax)
+	if m, ok := beatenMargin(87, 100, broker, tax, true); !ok || math.Abs(m-wantBuy) > 1e-9 {
+		t.Errorf("buy margin = %v %v, want %v", m, ok, wantBuy)
+	}
+	if _, ok := beatenMargin(97.9, 0, broker, tax, false); ok {
 		t.Error("margin without a cost on record must be absent")
 	}
 }

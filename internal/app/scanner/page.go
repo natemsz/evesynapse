@@ -206,6 +206,7 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 		RegionID:  regionID,
 		MinSpread: minSpread,
 		MinVolume: minVolume,
+		MinIsk:    0,
 		RowCap:    int64(rowCap),
 	})
 	if err != nil {

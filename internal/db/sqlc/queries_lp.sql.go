@@ -498,10 +498,10 @@ INSERT INTO lp_offer_values (region_id, corporation_id, offer_id, type_id, quant
 SELECT $1::bigint, v.corporation_id, v.offer_id, v.type_id, v.quantity, v.lp_cost, v.isk_cost,
        v.required_cost, v.unit_sell, v.unit_buy,
        CASE WHEN v.reason = '' AND v.lp_cost > 0 AND v.unit_sell > 0
-            THEN (v.quantity * v.unit_sell - v.isk_cost - v.required_cost) / v.lp_cost END,
+            THEN (v.quantity * v.unit_sell * $2::double precision - v.isk_cost - v.required_cost) / v.lp_cost END,
        CASE WHEN v.reason = '' AND v.lp_cost > 0 AND v.unit_buy > 0
-            THEN (v.quantity * v.unit_buy - v.isk_cost - v.required_cost) / v.lp_cost END,
-       v.reason, v.daily_volume, v.sell_chg_7d, v.volatility_30d, v.prices_at, $2::timestamptz
+            THEN (v.quantity * v.unit_buy * $3::double precision - v.isk_cost - v.required_cost) / v.lp_cost END,
+       v.reason, v.daily_volume, v.sell_chg_7d, v.volatility_30d, v.prices_at, $4::timestamptz
 FROM (
     SELECT o.corporation_id, o.offer_id, o.type_id, o.quantity, o.lp_cost, o.isk_cost,
            COALESCE(r.cost, 0) AS required_cost,
@@ -531,19 +531,27 @@ FROM (
 `
 
 type RefreshLPOfferValuesParams struct {
-	RegionID int64     `json:"region_id"`
-	Now      time.Time `json:"now"`
+	RegionID      int64     `json:"region_id"`
+	SellNetFactor float64   `json:"sell_net_factor"`
+	BuyNetFactor  float64   `json:"buy_net_factor"`
+	Now           time.Time `json:"now"`
 }
 
 // Values every mirrored offer in one region from the stat pack's
 // stored rows. The product sells at its typical sell (into sell
-// orders) or its typical buy (at once into buy orders); every
-// required item is bought at its typical sell. Unpriced when the
-// product is a blueprint copy (its original's market is not its
-// price), when the product has no typical price, or when any
-// required item has none.
+// orders, net of broker fee and sales tax via sell_net_factor) or its
+// typical buy (instant sale into buy orders, net of sales tax via
+// buy_net_factor); every required item is bought at its typical sell.
+// Unpriced when the product is a blueprint copy (its original's market
+// is not its price), when the product has no typical price, or when
+// any required item has none.
 func (q *Queries) RefreshLPOfferValues(ctx context.Context, arg RefreshLPOfferValuesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, refreshLPOfferValues, arg.RegionID, arg.Now)
+	result, err := q.db.Exec(ctx, refreshLPOfferValues,
+		arg.RegionID,
+		arg.SellNetFactor,
+		arg.BuyNetFactor,
+		arg.Now,
+	)
 	if err != nil {
 		return 0, err
 	}

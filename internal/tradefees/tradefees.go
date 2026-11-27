@@ -69,6 +69,18 @@ func PerfectSalesTax() float64 {
 	return SalesTaxRate(MaxSkillLevel)
 }
 
+// SellProceeds is the net ISK kept from a sell order of gross ISK
+// after broker fee and sales tax.
+func SellProceeds(gross, broker, salesTax float64) float64 {
+	return gross * (1 - salesTax - broker)
+}
+
+// InstantSellProceeds is the net ISK kept from selling gross ISK
+// immediately into buy orders (sales tax applies; no broker fee).
+func InstantSellProceeds(gross, salesTax float64) float64 {
+	return SellProceeds(gross, 0, salesTax)
+}
+
 // NetRoundTrip prices one unit bought at buy and sold at sell
 // at an NPC station: the buy costs the price plus the broker
 // fee, the sale returns the price minus sales tax and the
@@ -85,7 +97,7 @@ func NetRoundTrip(buy, sell, broker, salesTax float64) (profit, buyCost float64)
 // profit and the net buy cost.
 func NetHaul(buy, sell, buyBroker, sellBroker, salesTax float64) (profit, buyCost float64) {
 	buyCost = buy * (1 + buyBroker)
-	proceeds := sell * (1 - salesTax - sellBroker)
+	proceeds := SellProceeds(sell, sellBroker, salesTax)
 	return proceeds - buyCost, buyCost
 }
 
@@ -106,11 +118,34 @@ func NetSpreadPct(buy, sell, broker, salesTax float64) float64 {
 // denominator (profit over the sell price, now net).
 func NetMarginPct(buy, sell, broker, salesTax float64) float64 {
 	profit, _ := NetRoundTrip(buy, sell, broker, salesTax)
-	proceeds := sell * (1 - salesTax - broker)
+	proceeds := SellProceeds(sell, broker, salesTax)
 	if proceeds == 0 {
 		return 0
 	}
 	return profit / proceeds * 100
+}
+
+// NetSellMarginPct is the net margin of selling already-owned stock
+// acquired at unitCost on a sell order at sell, as a percentage of
+// net sell proceeds after broker fee and sales tax.
+func NetSellMarginPct(unitCost, sell, broker, salesTax float64) float64 {
+	proceeds := SellProceeds(sell, broker, salesTax)
+	if proceeds <= 0 {
+		return 0
+	}
+	return (proceeds - unitCost) / proceeds * 100
+}
+
+// LPOfferISKPerLP is the net ISK earned per loyalty point for an
+// LP offer producing qty units sold at unitPrice, costing iskCost ISK,
+// requiredCost ISK in required items, and lpCost LP. Pass broker = 0
+// when selling immediately into buy orders.
+func LPOfferISKPerLP(qty int64, unitPrice, iskCost, requiredCost float64, lpCost int64, broker, salesTax float64) float64 {
+	if lpCost <= 0 || qty <= 0 || unitPrice <= 0 {
+		return 0
+	}
+	proceeds := SellProceeds(float64(qty)*unitPrice, broker, salesTax)
+	return (proceeds - iskCost - requiredCost) / float64(lpCost)
 }
 
 // GrossSpreadPct is the raw price gap as a percentage of the

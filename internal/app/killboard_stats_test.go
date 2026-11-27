@@ -426,3 +426,105 @@ func TestKillRestoreWalkReadsOneWindowAtATime(t *testing.T) {
 		t.Fatalf("last window: floor %d, missing %v", floor, ids)
 	}
 }
+
+// TestKillStatsRebuildPrimaryKeyOrder pins the entity-first primary key
+// order created by the kill stats rebuild and swapped into the live
+// daily aggregate tables, both when the _rebuild tables already exist
+// and when they are created fresh after a prior swap.
+func TestKillStatsRebuildPrimaryKeyOrder(t *testing.T) {
+	app, conn, q := buildCorpTestApp(t, nil)
+	ctx := context.Background()
+	at := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+
+	if _, err := conn.Exec(`
+		INSERT INTO kills (killmail_id, killmail_time, system_id, victim_character_id, victim_corporation_id,
+			ship_type_id, attacker_count, fb_character_id, source, ingested_at, value_ours)
+		VALUES (980001, $1, 30000142, 93000001, 98000009, 587, 1, 90000001, 'zkill', $1, 1000000)`, at); err != nil {
+		t.Fatalf("seed kill: %v", err)
+	}
+	if _, err := conn.Exec(`
+		INSERT INTO kill_involvement (killmail_id, character_id, corporation_id)
+		VALUES (980001, 90000001, 98000002)`); err != nil {
+		t.Fatalf("seed involvement: %v", err)
+	}
+	if _, err := conn.Exec(`
+		INSERT INTO kill_attackers (killmail_id, seq, character_id, corporation_id, ship_type_id, final_blow)
+		VALUES (980001, 0, 90000001, 98000002, 11371, true)`); err != nil {
+		t.Fatalf("seed attacker: %v", err)
+	}
+
+	wantPKs := []struct {
+		table      string
+		constraint string
+		columns    string
+	}{
+		{"kill_entity_daily", "kill_entity_daily_pkey", "kind,entity_id,day"},
+		{"kill_entity_daily_ships", "kill_entity_daily_ships_pkey", "kind,entity_id,day,ship_type_id"},
+		{"kill_entity_daily_systems", "kill_entity_daily_systems_pkey", "kind,entity_id,day,system_id"},
+	}
+	assertPKs := func(pass string) {
+		t.Helper()
+		for _, w := range wantPKs {
+			var conname, cols string
+			err := conn.QueryRow(`
+				SELECT c.conname, string_agg(a.attname, ',' ORDER BY k.ord)
+				FROM pg_constraint c
+				CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+				JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+				WHERE c.conrelid = $1::regclass AND c.contype = 'p'
+				GROUP BY c.conname`, w.table).Scan(&conname, &cols)
+			if err != nil {
+				t.Fatalf("%s: read PK for %s: %v", pass, w.table, err)
+			}
+			if conname != w.constraint || cols != w.columns {
+				t.Errorf("%s: %s PK = %s (%s), want %s (%s)", pass, w.table, conname, cols, w.constraint, w.columns)
+			}
+		}
+	}
+
+	// First pass: _rebuild tables exist before the rebuild starts.
+	if err := app.rebuildKillStats(ctx); err != nil {
+		t.Fatalf("first rebuild: %v", err)
+	}
+	assertPKs("first rebuild")
+
+	// Second pass: _rebuild tables do not exist after the swap.
+	if _, err := conn.Exec(`UPDATE kill_stats_rebuild_state SET cursor = 0, started_at = NULL, done_at = NULL WHERE id = 1`); err != nil {
+		t.Fatalf("reset rebuild state: %v", err)
+	}
+	if err := app.rebuildKillStats(ctx); err != nil {
+		t.Fatalf("second rebuild: %v", err)
+	}
+	assertPKs("second rebuild")
+
+	// Verify live ON CONFLICT writes and entity reads work on the reordered PKs.
+	day := at.Truncate(24 * time.Hour)
+	if err := q.ApplyKillEntityDaily(ctx, db.ApplyKillEntityDailyParams{
+		Day: day, Kind: "character", EntityID: 90000001, Kills: 1, IskKilled: 500000, BiggestKillmailID: 980002, BiggestValue: 500000,
+	}); err != nil {
+		t.Fatalf("ApplyKillEntityDaily: %v", err)
+	}
+	if err := q.ApplyKillEntityDailyShip(ctx, db.ApplyKillEntityDailyShipParams{
+		Day: day, Kind: "character", EntityID: 90000001, ShipTypeID: 11371, Flown: 1,
+	}); err != nil {
+		t.Fatalf("ApplyKillEntityDailyShip: %v", err)
+	}
+	if err := q.ApplyKillEntityDailySystem(ctx, db.ApplyKillEntityDailySystemParams{
+		Day: day, Kind: "character", EntityID: 90000001, SystemID: 30000142,
+	}); err != nil {
+		t.Fatalf("ApplyKillEntityDailySystem: %v", err)
+	}
+	since := at.Add(-24 * time.Hour)
+	st, err := q.GetKillEntityStats(ctx, db.GetKillEntityStatsParams{Kind: "character", EntityID: 90000001, Since: since})
+	if err != nil || st.Kills != 2 {
+		t.Fatalf("GetKillEntityStats = %+v, %v; want kills=2", st, err)
+	}
+	ships, err := q.ListKillEntityTopShips(ctx, db.ListKillEntityTopShipsParams{Kind: "character", EntityID: 90000001, Since: since, MaxRows: 5})
+	if err != nil || len(ships) != 1 || ships[0].ShipTypeID != 11371 || ships[0].Flown != 2 {
+		t.Fatalf("ListKillEntityTopShips = %+v, %v; want ship 11371 flown=2", ships, err)
+	}
+	systems, err := q.ListKillEntityTopSystems(ctx, db.ListKillEntityTopSystemsParams{Kind: "character", EntityID: 90000001, Since: since, MaxRows: 5})
+	if err != nil || len(systems) != 1 || systems[0].SystemID != 30000142 || systems[0].N != 2 {
+		t.Fatalf("ListKillEntityTopSystems = %+v, %v; want system 30000142 n=2", systems, err)
+	}
+}

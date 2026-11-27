@@ -90,19 +90,17 @@ func (app *Application) rebuildKillStats(ctx context.Context) error {
 
 	cursor := st.Cursor
 	if !st.StartedAt.Valid {
-		// A swap renamed the last pass's tables into place: make
-		// them again for this one.
+		// Recreate the rebuild tables with entity-first primary keys so
+		// each pass starts empty and swaps in keys matching entity reads.
 		for _, stmt := range []string{
-			"CREATE TABLE IF NOT EXISTS kill_entity_daily_rebuild (LIKE kill_entity_daily INCLUDING DEFAULTS, CONSTRAINT kill_entity_daily_rebuild_pkey PRIMARY KEY (day, kind, entity_id))",
-			"CREATE TABLE IF NOT EXISTS kill_entity_daily_ships_rebuild (LIKE kill_entity_daily_ships INCLUDING DEFAULTS, CONSTRAINT kill_entity_daily_ships_rebuild_pkey PRIMARY KEY (day, kind, entity_id, ship_type_id))",
-			"CREATE TABLE IF NOT EXISTS kill_entity_daily_systems_rebuild (LIKE kill_entity_daily_systems INCLUDING DEFAULTS, CONSTRAINT kill_entity_daily_systems_rebuild_pkey PRIMARY KEY (day, kind, entity_id, system_id))",
+			"DROP TABLE IF EXISTS kill_entity_daily_rebuild, kill_entity_daily_ships_rebuild, kill_entity_daily_systems_rebuild",
+			"CREATE TABLE kill_entity_daily_rebuild (LIKE kill_entity_daily INCLUDING DEFAULTS, CONSTRAINT kill_entity_daily_rebuild_pkey PRIMARY KEY (kind, entity_id, day))",
+			"CREATE TABLE kill_entity_daily_ships_rebuild (LIKE kill_entity_daily_ships INCLUDING DEFAULTS, CONSTRAINT kill_entity_daily_ships_rebuild_pkey PRIMARY KEY (kind, entity_id, day, ship_type_id))",
+			"CREATE TABLE kill_entity_daily_systems_rebuild (LIKE kill_entity_daily_systems INCLUDING DEFAULTS, CONSTRAINT kill_entity_daily_systems_rebuild_pkey PRIMARY KEY (kind, entity_id, day, system_id))",
 		} {
 			if _, err := app.pool.Exec(ctx, stmt); err != nil {
 				return fmt.Errorf("make rebuild tables: %w", err)
 			}
-		}
-		if _, err := app.pool.Exec(ctx, "TRUNCATE kill_entity_daily_rebuild, kill_entity_daily_ships_rebuild, kill_entity_daily_systems_rebuild"); err != nil {
-			return fmt.Errorf("clear rebuild tables: %w", err)
 		}
 		if err := app.queries.StartKillStatsRebuild(ctx, time.Now().UTC()); err != nil {
 			return fmt.Errorf("start rebuild: %w", err)

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
@@ -19,21 +20,26 @@ import (
 //
 // Target stock levels per item. For each target the page shows what's
 // currently listed (open sell orders), the shortfall against target,
-// and the estimated restock cost at market sell prices. min_margin_pct
-// is stored for future margin-threshold alerts (not yet enforced).
+// and the estimated restock cost at the selected hub's market sell
+// prices, with each price's as-of timestamp. min_margin_pct is stored
+// for future margin-threshold alerts (not yet enforced).
 // ---------------------------------------------------------------------------
 
+const restockTypicalFreshAge = 3 * time.Hour
+
 type restockRow struct {
-	TypeID     int64
-	Name       string
-	URL        string
-	TargetQty  string
-	ListedQty  string
-	Shortfall  string
-	UnitPrice  string
-	EstCost    string
-	PriceKnown bool
-	// Spark is the unit price's hover card: The Forge's stored
+	TypeID      int64
+	Name        string
+	URL         string
+	TargetQty   string
+	ListedQty   string
+	Shortfall   string
+	UnitPrice   string
+	EstCost     string
+	PriceAsOf   string
+	PriceSource string
+	PriceKnown  bool
+	// Spark is the unit price's hover card: the selected hub's stored
 	// 30-day line, the region the unit price reads.
 	Spark template.HTML
 	// Raw values for sorting.
@@ -42,10 +48,33 @@ type restockRow struct {
 }
 
 type restockView struct {
-	Rows      []restockRow
-	HasData   bool
-	TotalCost string
-	Short     int // targets with a shortfall
+	RegionID   int64
+	RegionName string
+	Regions    []module.RegionChoice
+	AsOf       string
+	Rows       []restockRow
+	HasData    bool
+	TotalCost  string
+	Short      int // targets with a shortfall
+}
+
+func (app *page) restockRegion(raw string) (int64, string) {
+	if id, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64); err == nil && id != 0 {
+		if name, ok := app.deps.MarketRegionName(id); ok {
+			return id, name
+		}
+	}
+	id := app.deps.DefaultMarketRegion()
+	name, _ := app.deps.MarketRegionName(id)
+	return id, name
+}
+
+func (app *page) restockRedirectURL(raw string) string {
+	id, _ := app.restockRegion(raw)
+	if id != app.deps.DefaultMarketRegion() {
+		return "/market/restock/?region=" + strconv.FormatInt(id, 10)
+	}
+	return "/market/restock/"
 }
 
 func (app *page) handleRestock(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +84,7 @@ func (app *page) handleRestock(w http.ResponseWriter, r *http.Request) {
 	if v := data.Restock; len(v.Rows) > 0 {
 		keys := make([]module.SparkKey, len(v.Rows))
 		for i, row := range v.Rows {
-			keys[i] = module.SparkKey{RegionID: module.TheForgeRegionID, TypeID: row.TypeID}
+			keys[i] = module.SparkKey{RegionID: v.RegionID, TypeID: row.TypeID}
 		}
 		if cards := app.deps.PriceSparks(ctx, keys); len(cards) > 0 {
 			for i := range v.Rows {
@@ -67,7 +96,25 @@ func (app *page) handleRestock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restockView {
-	view := &restockView{}
+	regionID, regionName := app.restockRegion(r.URL.Query().Get("region"))
+	regions := make([]module.RegionChoice, 0, len(app.deps.MarketRegions()))
+	for _, reg := range app.deps.MarketRegions() {
+		regions = append(regions, module.RegionChoice{
+			ID:     reg.ID,
+			Name:   reg.Name,
+			Active: reg.ID == regionID,
+		})
+	}
+	view := &restockView{
+		RegionID:   regionID,
+		RegionName: regionName,
+		Regions:    regions,
+	}
+	if stamp, err := app.queries.GetMarketRegionStatsStamp(ctx, regionID); err == nil {
+		if at, ok := stamp.Stamp.(time.Time); ok && !at.IsZero() {
+			view.AsOf = "prices as of " + at.UTC().Format("Jan 2, 3:04 PM")
+		}
+	}
 	userID := app.deps.UserID(ctx)
 	if userID == 0 {
 		return view
@@ -86,14 +133,25 @@ func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restock
 	// compute listed quantities per type.
 	listedByType := app.restockListedQty(ctx, r)
 
-	// The house price order: the swept typical sell (The Forge's
-	// book), then the stored true-value estimate; never CCP's
-	// guide average.
-	typical := app.deps.TypicalSells(ctx)
-	estimates := app.deps.TrueValues(ctx)
+	// Price all target types in one batched pass through the shared
+	// appraisal core for the selected hub: own swept typical sell
+	// first, then stored estimate, then labeled fallback, then build
+	// cost, never CCP's guide average.
+	priceLines := make([]module.AppraisalLine, len(targets))
+	for i, t := range targets {
+		priceLines[i] = module.AppraisalLine{TypeID: t.TypeID, Quantity: 1, Included: true}
+	}
+	appraised, err := app.deps.AppraiseLinesWithBasis(ctx, priceLines, module.AppraisalBasis{
+		RegionID: regionID,
+		Mode:     module.AppraisalModeSell,
+		Percent:  100,
+	})
+	if err != nil {
+		logging.Errorf("restock: appraise targets in region %d: %v", regionID, err)
+	}
 
 	var totalCost float64
-	for _, t := range targets {
+	for i, t := range targets {
 		row := restockRow{
 			TypeID:    t.TypeID,
 			Name:      app.deps.TypeNameOrID(ctx, t.TypeID),
@@ -106,20 +164,38 @@ func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restock
 		row.Shortfall = esi.FormatInt(shortfall)
 		row.shortfallRaw = shortfall
 
-		unit := typical[t.TypeID]
-		if unit <= 0 {
-			unit = estimates[t.TypeID]
+		var al module.AppraisedLine
+		if err == nil && i < len(appraised.Lines) {
+			al = appraised.Lines[i]
 		}
-		if unit > 0 {
+		if al.Priced && al.UnitPrice > 0 {
 			row.PriceKnown = true
-			row.UnitPrice = esi.FormatISK(unit)
-			cost := unit * float64(shortfall)
+			row.UnitPrice = esi.FormatISK(al.UnitPrice)
+			cost := al.UnitPrice * float64(shortfall)
 			row.EstCost = esi.FormatISK(cost)
 			row.costRaw = cost
 			totalCost += cost
+			if !al.AsOf.IsZero() {
+				row.PriceAsOf = al.AsOf.UTC().Format("Jan 2, 3:04 PM")
+				if module.IsTypicalTier(al.Tier) && time.Since(al.AsOf) > restockTypicalFreshAge {
+					row.PriceAsOf += " (" + app.deps.AgeText(al.AsOf) + ")"
+				}
+			}
+			if al.SourceRegionID != 0 && al.SourceRegionID != regionID && module.IsTypicalTier(al.Tier) {
+				row.PriceSource = "Global PLEX market"
+			} else {
+				switch al.Tier {
+				case module.AppraisalTierEstimate:
+					row.PriceSource = "Stored estimate"
+				case module.AppraisalTierFallback:
+					row.PriceSource = "Outside fallback"
+				case module.AppraisalTierBuildCost:
+					row.PriceSource = "Build cost"
+				}
+			}
 		} else {
 			row.UnitPrice = "no price data"
-			row.EstCost = "—"
+			row.EstCost = "-"
 		}
 		view.Rows = append(view.Rows, row)
 	}
@@ -184,7 +260,7 @@ func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 	targetQty, _ := strconv.ParseInt(r.Form.Get("target_qty"), 10, 64)
 	marginPct, _ := strconv.ParseFloat(r.Form.Get("min_margin_pct"), 64)
 	if typeID <= 0 || targetQty < 0 {
-		http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
+		http.Redirect(w, r, app.restockRedirectURL(r.Form.Get("region")), http.StatusSeeOther)
 		return
 	}
 	if err := app.queries.UpsertRestockTarget(ctx, db.UpsertRestockTargetParams{
@@ -195,7 +271,7 @@ func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		logging.Errorf("restock: upsert target user %d type %d: %v", userID, typeID, err)
 	}
-	http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
+	http.Redirect(w, r, app.restockRedirectURL(r.Form.Get("region")), http.StatusSeeOther)
 }
 
 // restockTypeByName resolves the add form's item box when no pick
@@ -241,5 +317,5 @@ func (app *page) handleRestockDelete(w http.ResponseWriter, r *http.Request) {
 			logging.Errorf("restock: delete target user %d type %d: %v", userID, typeID, err)
 		}
 	}
-	http.Redirect(w, r, "/market/restock/", http.StatusSeeOther)
+	http.Redirect(w, r, app.restockRedirectURL(r.Form.Get("region")), http.StatusSeeOther)
 }

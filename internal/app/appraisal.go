@@ -53,6 +53,7 @@ import (
 
 	"evesynapse/internal/app/module"
 	db "evesynapse/internal/db/sqlc"
+	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
 	"github.com/jackc/pgx/v5"
 )
@@ -179,6 +180,112 @@ func (app *Application) AppraiseLines(ctx context.Context, lines []module.Apprai
 	return app.AppraiseLinesWithBasis(ctx, lines, module.AppraisalBasis{})
 }
 
+// buyDepthOrder is one open buy order in price-descending order
+// for buy-order depth valuation.
+type buyDepthOrder struct {
+	price  float64
+	volume int64
+}
+
+type buyDepthBook struct {
+	orders         []buyDepthOrder
+	asOf           time.Time
+	sourceRegionID int64
+	storedCap      bool
+}
+
+// walkBuyDepth fills up to qty units against open buy orders
+// sorted from highest price down. Returns total filled ISK value,
+// units filled (0..qty), and the number of buy orders consumed.
+func walkBuyDepth(orders []buyDepthOrder, qty int64) (filledValue float64, filledQty int64, ordersUsed int) {
+	if qty <= 0 {
+		return 0, 0, 0
+	}
+	rem := qty
+	for _, o := range orders {
+		if rem <= 0 {
+			break
+		}
+		if o.price <= 0 || o.volume <= 0 {
+			continue
+		}
+		take := min(rem, o.volume)
+		filledValue += float64(take) * o.price
+		filledQty += take
+		ordersUsed++
+		rem -= take
+	}
+	return filledValue, filledQty, ordersUsed
+}
+
+// loadBuyDepthBooks reads open buy orders (price descending) for
+// typeIDs in regionID, preferring the full in-memory swept hub
+// book when current and falling back to the top stored buy orders
+// in market_book_orders. Global-market types (PLEX) absent from
+// regionID read from the global market book under the same rule.
+func (app *Application) loadBuyDepthBooks(ctx context.Context, regionID int64, typeIDs []int64) (map[int64]buyDepthBook, error) {
+	out := make(map[int64]buyDepthBook, len(typeIDs))
+	if len(typeIDs) == 0 {
+		return out, nil
+	}
+	loadRegion := func(regID int64, ids []int64) error {
+		if hb := app.heldHubBook(regID); hb != nil && time.Since(hb.sweptAt) <= hubBookServeMaxAge {
+			for _, id := range ids {
+				tb := hb.types[id]
+				if tb == nil || len(tb.buys) == 0 {
+					continue
+				}
+				orders := make([]buyDepthOrder, len(tb.buys))
+				for i := range tb.buys {
+					bo := tb.buys[len(tb.buys)-1-i]
+					orders[i] = buyDepthOrder{price: bo.Price, volume: bo.VolumeRemain}
+				}
+				out[id] = buyDepthBook{
+					orders:         orders,
+					asOf:           hb.sweptAt,
+					sourceRegionID: regID,
+				}
+			}
+			return nil
+		}
+		rows, err := app.queries.ListMarketBookBuyOrdersForTypes(ctx, db.ListMarketBookBuyOrdersForTypesParams{
+			RegionID: regID,
+			Column2:  ids,
+		})
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			bk := out[r.TypeID]
+			bk.orders = append(bk.orders, buyDepthOrder{price: r.Price, volume: r.VolumeRemain})
+			if r.UpdatedAt.After(bk.asOf) {
+				bk.asOf = r.UpdatedAt
+			}
+			bk.sourceRegionID = regID
+			bk.storedCap = true
+			out[r.TypeID] = bk
+		}
+		return nil
+	}
+	if err := loadRegion(regionID, typeIDs); err != nil {
+		return nil, fmt.Errorf("appraisal: buy book depth: %w", err)
+	}
+	if globalMarketRegion != 0 && globalMarketRegion != regionID {
+		var missing []int64
+		for _, id := range typeIDs {
+			if _, ok := out[id]; !ok {
+				missing = append(missing, id)
+			}
+		}
+		if len(missing) > 0 {
+			if err := loadRegion(globalMarketRegion, missing); err != nil {
+				return nil, fmt.Errorf("appraisal: global buy book depth: %w", err)
+			}
+		}
+	}
+	return out, nil
+}
+
 // AppraiseLinesWithBasis is AppraiseLines under a
 // user-selected basis: the hub region's stored typicals speak
 // in the chosen mode, and the percent modifier is applied on
@@ -237,6 +344,13 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 		}
 		if p.Fallback != nil {
 			fbs[id] = p.Fallback
+		}
+	}
+	var buyBooks map[int64]buyDepthBook
+	if basis.WalkBuyDepth {
+		buyBooks, err = app.loadBuyDepthBooks(ctx, regionID, typeIDs)
+		if err != nil {
+			return out, err
 		}
 	}
 
@@ -345,6 +459,40 @@ func (app *Application) AppraiseLinesWithBasis(ctx context.Context, lines []modu
 			al.Tier = module.AppraisalTierAbyssal
 			al.AsOf = ab.ScoredAt.Time
 			al.Priced = true
+		} else if basis.WalkBuyDepth {
+			bk := buyBooks[ln.TypeID]
+			val, filled, used := walkBuyDepth(bk.orders, ln.Quantity)
+			if filled == 0 {
+				al.DepthNote = "No open buy orders in this region"
+			} else {
+				al.LineValue = val
+				if ln.Quantity > 0 {
+					al.UnitPrice = val / float64(ln.Quantity)
+				}
+				al.Tier = module.AppraisalTierBuyDepth
+				al.AsOf = bk.asOf
+				al.Priced = true
+				if bk.sourceRegionID != 0 && bk.sourceRegionID != regionID {
+					al.SourceRegionID = bk.sourceRegionID
+				}
+				orderWord := "buy orders"
+				if used == 1 {
+					orderWord = "buy order"
+				}
+				if filled == ln.Quantity {
+					al.DepthNote = fmt.Sprintf("Filled across %d %s", used, orderWord)
+				} else {
+					avgFilled := val / float64(filled)
+					unfilled := ln.Quantity - filled
+					if bk.storedCap && len(bk.orders) >= topMarketOrders {
+						al.DepthNote = fmt.Sprintf("Partial fill: %s of %s units filled across top %d stored %s (%s ISK avg on filled); %s unfilled",
+							esi.FormatInt(filled), esi.FormatInt(ln.Quantity), used, orderWord, esi.FormatISK(avgFilled), esi.FormatInt(unfilled))
+					} else {
+						al.DepthNote = fmt.Sprintf("Partial fill: %s of %s units filled across %d %s (%s ISK avg on filled); %s unfilled",
+							esi.FormatInt(filled), esi.FormatInt(ln.Quantity), used, orderWord, esi.FormatISK(avgFilled), esi.FormatInt(unfilled))
+					}
+				}
+			}
 		} else if p := resolveAppraisalPriceMode(own[ln.TypeID], tvs[ln.TypeID], fbs[ln.TypeID], now, mode); p.ok {
 			al.UnitPrice, al.LineValue = p.unit, p.unit*float64(ln.Quantity)
 			al.Tier, al.AsOf, al.Priced = p.tier, p.asOf, true
@@ -393,7 +541,7 @@ func appraisalTierMix(lines []module.AppraisedLine) string {
 		}
 	}
 	var parts []string
-	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierResearchMedian, module.AppraisalTierFallback} {
+	for _, tier := range []string{module.AppraisalTierTypical, module.AppraisalTierTypicalBuy, module.AppraisalTierTypicalSplit, module.AppraisalTierTypicalSplitSell, module.AppraisalTierTypicalSplitBuy, module.AppraisalTierBuyDepth, module.AppraisalTierEstimate, module.AppraisalTierAbyssal, module.AppraisalTierCopyMedian, module.AppraisalTierResearchMedian, module.AppraisalTierFallback} {
 		if n := counts[tier]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%s:%d", tier, n))
 		}

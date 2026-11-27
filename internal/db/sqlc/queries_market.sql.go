@@ -576,6 +576,37 @@ func (q *Queries) GetMarketStationLeaderboardStamp(ctx context.Context, dollar_1
 	return stamp, err
 }
 
+const getMarketStationStat = `-- name: GetMarketStationStat :one
+SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy
+FROM market_station_stats
+WHERE location_id = $1 AND type_id = $2
+`
+
+type GetMarketStationStatParams struct {
+	LocationID int64 `json:"location_id"`
+	TypeID     int64 `json:"type_id"`
+}
+
+func (q *Queries) GetMarketStationStat(ctx context.Context, arg GetMarketStationStatParams) (MarketStationStat, error) {
+	row := q.db.QueryRow(ctx, getMarketStationStat, arg.LocationID, arg.TypeID)
+	var i MarketStationStat
+	err := row.Scan(
+		&i.LocationID,
+		&i.RegionID,
+		&i.TypeID,
+		&i.BestSell,
+		&i.BestBuy,
+		&i.SellOrders,
+		&i.BuyOrders,
+		&i.SellVolume,
+		&i.BuyVolume,
+		&i.UpdatedAt,
+		&i.TypicalSell,
+		&i.TypicalBuy,
+	)
+	return i, err
+}
+
 const getMarketStationStatsStamp = `-- name: GetMarketStationStatsStamp :one
 SELECT MAX(updated_at) AS stamp, COUNT(*) AS row_count
 FROM market_station_stats WHERE region_id = $1
@@ -1571,6 +1602,58 @@ func (q *Queries) ListMarketAvgDailyVolumesForTypes(ctx context.Context, arg Lis
 	for rows.Next() {
 		var i ListMarketAvgDailyVolumesForTypesRow
 		if err := rows.Scan(&i.TypeID, &i.AvgDailyVolume); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMarketBookBuyOrdersForTypes = `-- name: ListMarketBookBuyOrdersForTypes :many
+SELECT region_id, type_id, rank, price, volume_remain, location_id, system_id, updated_at
+FROM market_book_orders
+WHERE region_id = $1 AND type_id = ANY($2::bigint[]) AND is_buy_order = 1
+ORDER BY type_id, rank
+`
+
+type ListMarketBookBuyOrdersForTypesParams struct {
+	RegionID int64   `json:"region_id"`
+	Column2  []int64 `json:"column_2"`
+}
+
+type ListMarketBookBuyOrdersForTypesRow struct {
+	RegionID     int64     `json:"region_id"`
+	TypeID       int64     `json:"type_id"`
+	Rank         int64     `json:"rank"`
+	Price        float64   `json:"price"`
+	VolumeRemain int64     `json:"volume_remain"`
+	LocationID   int64     `json:"location_id"`
+	SystemID     int64     `json:"system_id"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (q *Queries) ListMarketBookBuyOrdersForTypes(ctx context.Context, arg ListMarketBookBuyOrdersForTypesParams) ([]ListMarketBookBuyOrdersForTypesRow, error) {
+	rows, err := q.db.Query(ctx, listMarketBookBuyOrdersForTypes, arg.RegionID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMarketBookBuyOrdersForTypesRow
+	for rows.Next() {
+		var i ListMarketBookBuyOrdersForTypesRow
+		if err := rows.Scan(
+			&i.RegionID,
+			&i.TypeID,
+			&i.Rank,
+			&i.Price,
+			&i.VolumeRemain,
+			&i.LocationID,
+			&i.SystemID,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

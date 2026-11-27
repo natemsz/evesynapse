@@ -214,6 +214,7 @@ type marketItem struct {
 	// RangeKey and RangePills are what attachHistory resolves
 	// from it for the template.
 	ChartRange  string
+	HistoryPage string // "item" on Item Details so range pills keep item-page URLs
 	RangeKey    string
 	RangePills  []vizRangePill
 	Viz         vizPrefs
@@ -549,10 +550,11 @@ func (app *Application) recentHistoryRows(ctx context.Context, regionID, typeID 
 
 // vizRangePill is one range choice over the item chart.
 type vizRangePill struct {
-	Key    string
-	Label  string
-	URL    string
-	Active bool
+	Key     string
+	Label   string
+	URL     string
+	FragURL string
+	Active  bool
 }
 
 // The chart's ranges: key, pill label, displayed days. The
@@ -561,7 +563,7 @@ var vizRanges = []struct {
 	key, label string
 	days       int
 }{
-	{"5d", "5D", 5},
+	{"7d", "7D", 7},
 	{"1m", "1M", 30},
 	{"3m", "3M", 90},
 	{"6m", "6M", 180},
@@ -580,9 +582,9 @@ func vizRangeDays(key string) (string, int) {
 }
 
 // vizWarmupRows ride in front of the displayed window so the
-// chart's moving averages and channel are correct from the first
-// displayed day.
-const vizWarmupRows = 20
+// chart's 7-day and 30-day moving averages and channel are correct
+// from the first displayed day.
+const vizWarmupRows = 30
 
 // vizSetup carries a request's chart inputs onto an item view:
 // the range parameter and, for a signed-in viewer, the account's
@@ -660,8 +662,8 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 	if displayDays+vizWarmupRows > read {
 		read = displayDays + vizWarmupRows
 	}
-	if read > 385 {
-		read = 385
+	if read > 395 {
+		read = 395
 	}
 	rows := app.recentHistoryRows(ctx, regionID, typeID, read)
 	win := rows
@@ -671,10 +673,20 @@ func (app *Application) attachHistory(ctx context.Context, item *marketItem, typ
 	if item != nil {
 		item.RangeKey = rangeKey
 		for _, r := range vizRanges {
+			pillURL := fmt.Sprintf("/market/?type=%d&region=%d&range=%s", typeID, regionID, r.key)
+			fragURL := fmt.Sprintf("/market/history-fragment?region=%d&type=%d&range=%s", regionID, typeID, r.key)
+			if item.ScopeParam != "" {
+				fragURL += "&scope=" + url.QueryEscape(item.ScopeParam)
+			}
+			if item.HistoryPage == "item" {
+				pillURL = fmt.Sprintf("/items/type/%d/?range=%s", typeID, r.key)
+				fragURL += "&page=item"
+			}
 			item.RangePills = append(item.RangePills, vizRangePill{
 				Key: r.key, Label: r.label,
-				URL:    fmt.Sprintf("/market/?type=%d&region=%d&range=%s", typeID, regionID, r.key),
-				Active: r.key == rangeKey,
+				URL:     pillURL,
+				FragURL: fragURL,
+				Active:  r.key == rangeKey,
 			})
 		}
 		// The trading snapshot rides on whatever rows exist

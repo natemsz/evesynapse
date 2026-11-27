@@ -45,6 +45,8 @@ func TestItemPageHistoryChart(t *testing.T) {
 		`data-chart-scrub="true"`,
 		"<polyline",
 		`class="chart-line"`,
+		"7-day average",
+		"30-day average",
 		"Donchian channel",
 		"Daily wicks",
 		"Units traded",
@@ -54,10 +56,22 @@ func TestItemPageHistoryChart(t *testing.T) {
 		"Last recorded days",
 		"2026-10-15",
 		"Hub prices",
+		`href="/items/type/34/?range=7d"`,
+		`data-history-fragment="/market/history-fragment?region=10000002&amp;type=34&amp;range=7d&amp;page=item"`,
+		`>7D</a>`,
 	)
 	if strings.Contains(body, `class="spark"`) {
 		t.Error("item page still renders the old bare sparkline")
 	}
+	// Selecting a range via the item page or the shared history fragment
+	// keeps item-page range links instead of redirecting to /market/.
+	code, frag := apptest.GetPage(t, rig, nil, "/market/history-fragment?region=10000002&type=34&range=7d&page=item")
+	if code != 200 {
+		t.Fatalf("history fragment status = %d", code)
+	}
+	apptest.MustContain(t, "/market/history-fragment (item page)", frag,
+		`href="/items/type/34/?range=7d" data-no-swap data-history-fragment="/market/history-fragment?region=10000002&amp;type=34&amp;range=7d&amp;page=item" data-range="7d" class="active" aria-current="true"`,
+	)
 	// The page reads as a fact sheet: the hub prices panel, then
 	// the price history in its own panel below it.
 	hubAt := strings.Index(body, "<h3>Hub prices</h3>")

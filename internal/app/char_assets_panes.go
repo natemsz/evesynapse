@@ -155,7 +155,56 @@ type assetRowCand struct {
 	value    float64
 	hasValue bool
 	volume   float64
+	qty      int64
 	division string // ships | items | cans
+}
+
+// buildAssetSortHrefs builds the header-click URLs for every sortable
+// column on the Assets tables. Clicking the active column reverses its
+// direction (desc <-> asc); clicking any other column starts at its
+// natural default direction and resets to page 1.
+func buildAssetSortHrefs(st assetPageState) map[string]string {
+	out := make(map[string]string, 5)
+	for _, key := range []string{"value", "name", "volume", "stacks", "qty"} {
+		nextDir := defaultAssetSortDir(key)
+		if st.sort == key {
+			if st.dir == "asc" {
+				nextDir = "desc"
+			} else {
+				nextDir = "asc"
+			}
+		}
+		sortParam := key
+		if key == "value" {
+			sortParam = ""
+		}
+		out[key] = st.href(map[string]string{"sort": sortParam, "dir": nextDir, "page": ""})
+	}
+	return out
+}
+
+// attachAssetInspectorLinks populates the onward links (Market Details,
+// Item Details, Contracts) and compact color-coded item stats on an
+// asset inspector panel.
+func (app *Application) attachAssetInspectorLinks(ctx context.Context, insp *assetInspector, typeID int64, isBPC bool) {
+	if insp == nil || typeID <= 0 {
+		return
+	}
+	insp.TypeID = typeID
+	insp.ItemHref = "/items/type/" + strconv.FormatInt(typeID, 10) + "/"
+	if !isBPC {
+		onMarket := true
+		if t, err := app.queries.GetSDEType(ctx, typeID); err == nil {
+			onMarket = t.MarketGroupID > 0
+		}
+		if onMarket {
+			insp.MarketHref = "/market/?type=" + strconv.FormatInt(typeID, 10)
+		}
+	}
+	if moduleCompiledIn("contracts") {
+		insp.ContractsHref = "/contracts/search/?item_type=" + strconv.FormatInt(typeID, 10)
+	}
+	insp.Stats = app.buildItemBasicStats(ctx, typeID)
 }
 
 // buildAssetMatrix assembles the middle pane: it resolves the
@@ -259,13 +308,11 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 		directory[i].Selected = (global && directory[i].All) || (sel != nil && directory[i].LocationID == sel.LocationID && !directory[i].All)
 	}
 
-	m := &assetMatrix{Global: global, Sort: st.sort, SortHrefs: map[string]string{}}
-	for _, key := range []string{"value", "name", "volume", "stacks"} {
-		mut := map[string]string{"sort": key}
-		if key == "value" {
-			mut["sort"] = ""
-		}
-		m.SortHrefs[key] = st.href(mut)
+	m := &assetMatrix{
+		Global:    global,
+		Sort:      st.sort,
+		SortDir:   st.dir,
+		SortHrefs: buildAssetSortHrefs(st),
 	}
 
 	m.ListHref = st.href(map[string]string{"loc": "", "can": "", "ship": "", "item": "", "q": ""})
@@ -361,17 +408,68 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 			filtered = append(filtered, c)
 		}
 	}
-	sortAssetRows(filtered, st.sort)
-	if len(filtered) > maxMatrixRows {
-		m.MoreRows = len(filtered) - maxMatrixRows
-		filtered = filtered[:maxMatrixRows]
+	sortAssetRows(filtered, st.sort, st.dir)
+
+	totalRows := len(filtered)
+	pages := (totalRows + maxMatrixRows - 1) / maxMatrixRows
+	if pages < 1 {
+		pages = 1
 	}
-	for _, c := range filtered {
-		m.Rows = append(m.Rows, c.row)
+	page := st.page
+	// When opening a specific stack or ship without an explicit ?page=
+	// (e.g. clicking through from search), jump to the page holding it.
+	if !st.hasPage && pages > 1 && (shipCD != nil || itemCD != nil) {
+		targetID := st.ship
+		if targetID == 0 {
+			targetID = st.item
+		}
+		for i := range filtered {
+			if filtered[i].row.ItemID == targetID {
+				page = i/maxMatrixRows + 1
+				break
+			}
+		}
 	}
+	if page < 1 {
+		page = 1
+	}
+	if page > pages {
+		page = pages
+	}
+	stPage := st
+	stPage.page = page
+	start := (page - 1) * maxMatrixRows
+	end := min(start+maxMatrixRows, totalRows)
+	pageSlice := filtered
+	if start < totalRows {
+		pageSlice = filtered[start:end]
+	} else {
+		pageSlice = nil
+	}
+	for _, c := range pageSlice {
+		row := c.row
+		if page != st.page {
+			if row.ItemHref != "" {
+				row.ItemHref = stPage.href(map[string]string{
+					"item": strconv.FormatInt(row.ItemID, 10), "ship": "",
+					"loc": stPage.viewLoc(), "page": pageParam(page),
+				})
+			}
+			if row.ShipHref != "" {
+				row.ShipHref = stPage.href(map[string]string{
+					"ship": strconv.FormatInt(row.ItemID, 10),
+					"loc":  stPage.viewLoc(), "can": "", "page": pageParam(page),
+				})
+			}
+		}
+		m.Rows = append(m.Rows, row)
+	}
+	m.Pager = buildPageNav(page, pages, totalRows, "assets-list-top", func(p int) string {
+		return stPage.href(map[string]string{"page": pageParam(p), "ship": "", "item": ""})
+	})
 
 	if shipCD != nil && (global || (sel != nil && shipPlace == sel.LocationID)) {
-		m.Inspector = app.buildAssetInspector(ctx, shipCD, shipItem, st, lk)
+		m.Inspector = app.buildAssetInspector(ctx, shipCD, shipItem, stPage, lk)
 		for i := range m.Rows {
 			if m.Rows[i].ItemID == shipItem.ItemID {
 				m.Rows[i].Selected = true
@@ -380,16 +478,29 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 	}
 
 	// A selected plain stack gets the summary panel: where it
-	// sits, how much of it there is, and what it is worth. It is
-	// built from the row itself, so the panel and the table can
-	// never disagree.
+	// sits, how much of it there is, what it is worth, onward links,
+	// and its basic color-coded stats. Search filtered first so an
+	// item stays inspectable across pages.
 	if itemCD != nil && m.Inspector == nil && (global || (sel != nil && itemPlace == sel.LocationID)) {
+		var matched *assetMatrixRow
 		for i := range m.Rows {
-			if m.Rows[i].ItemID != itemSel.ItemID {
-				continue
+			if m.Rows[i].ItemID == itemSel.ItemID {
+				m.Rows[i].Selected = true
+				matched = &m.Rows[i]
+				break
 			}
-			m.Rows[i].Selected = true
-			row := m.Rows[i]
+		}
+		if matched == nil {
+			for i := range filtered {
+				if filtered[i].row.ItemID == itemSel.ItemID {
+					r := filtered[i].row
+					matched = &r
+					break
+				}
+			}
+		}
+		if matched != nil {
+			row := *matched
 			name, typeName := itemCD.ix.label(itemSel)
 			insp := &assetInspector{
 				Fallback:  true,
@@ -398,7 +509,7 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 				TypeName:  typeName,
 				GroupName: row.GroupName,
 				IconURL:   row.IconURL,
-				CloseHref: st.href(map[string]string{"item": ""}),
+				CloseHref: stPage.href(map[string]string{"item": "", "page": pageParam(page)}),
 				ValueText: row.ValueText,
 			}
 			insp.Pip, insp.PipClass = assetPip(lk, itemSel.TypeID, row.GroupName)
@@ -407,29 +518,55 @@ func (app *Application) buildAssetMatrix(ctx context.Context, datas []*assetChar
 			}
 			insp.QuantityText = esi.FormatInt(itemSel.Quantity)
 			insp.VolumeText = row.VolumeText
+			app.attachAssetInspectorLinks(ctx, insp, itemSel.TypeID, itemSel.IsBlueprintCopy)
 			m.Inspector = insp
 		}
 	}
 	return m
 }
 
-// sortAssetRows orders matrix candidates by the state's sort:
-// value (priced first, richest first), name, volume, or stacks
-// inside. Names break every tie so renders are stable.
-func sortAssetRows(rows []assetRowCand, by string) {
+// sortAssetRows orders matrix candidates by the state's sort and
+// direction: value (priced always before unpriced), name, volume,
+// quantity, or stacks inside. Names and item IDs break every tie
+// so renders and pagination boundaries are stable.
+func sortAssetRows(rows []assetRowCand, by, dir string) {
+	asc := dir == "asc"
 	sort.SliceStable(rows, func(i, j int) bool {
 		a, b := rows[i], rows[j]
 		switch by {
 		case "name":
+			la, lb := strings.ToLower(a.row.Name), strings.ToLower(b.row.Name)
+			if la != lb {
+				if asc {
+					return la < lb
+				}
+				return la > lb
+			}
 			if a.row.Name != b.row.Name {
-				return a.row.Name < b.row.Name
+				if asc {
+					return a.row.Name < b.row.Name
+				}
+				return a.row.Name > b.row.Name
+			}
+		case "qty":
+			if a.qty != b.qty {
+				if asc {
+					return a.qty < b.qty
+				}
+				return a.qty > b.qty
 			}
 		case "volume":
 			if a.volume != b.volume {
+				if asc {
+					return a.volume < b.volume
+				}
 				return a.volume > b.volume
 			}
 		case "stacks":
 			if a.row.Inside != b.row.Inside {
+				if asc {
+					return a.row.Inside < b.row.Inside
+				}
 				return a.row.Inside > b.row.Inside
 			}
 		default: // value
@@ -437,6 +574,9 @@ func sortAssetRows(rows []assetRowCand, by string) {
 				return a.hasValue
 			}
 			if a.value != b.value {
+				if asc {
+					return a.value < b.value
+				}
 				return a.value > b.value
 			}
 		}
@@ -551,7 +691,7 @@ func collectCharRows(cd *assetCharData, locFilter, canFilter int64, st assetPage
 // plainRowCand values a plain stack: its own quantity at the
 // house price, its own volume.
 func plainRowCand(it esi.Asset, division string, lk assetLookups, row assetMatrixRow) assetRowCand {
-	cand := assetRowCand{row: row, division: division}
+	cand := assetRowCand{row: row, qty: it.Quantity, division: division}
 	if unit, ok := lk.priceOf(it.TypeID); ok {
 		cand.value = unit * float64(it.Quantity)
 		cand.hasValue = true
@@ -566,7 +706,7 @@ func plainRowCand(it esi.Asset, division string, lk assetLookups, row assetMatri
 // loadout chips from what sits directly inside it, and the
 // hull-plus-contents value.
 func shipRowCand(cd *assetCharData, it esi.Asset, st assetPageState, lk assetLookups, row assetMatrixRow) assetRowCand {
-	cand := assetRowCand{row: row, division: "ships"}
+	cand := assetRowCand{row: row, qty: it.Quantity, division: "ships"}
 	value, priced, _ := cd.ix.subtreeValue(it, lk.priceOf)
 	if priced > 0 {
 		cand.value, cand.hasValue = value, true
@@ -681,7 +821,7 @@ func (app *Application) buildAssetInspector(ctx context.Context, cd *assetCharDa
 			sec.Note = fmt.Sprintf("%d Stacks", len(groups))
 		}
 		for _, g := range groups {
-			row := assetSlotRow{Name: cd.ix.nameOf(g.typeID), Qty: g.qty, Sub: g.sub}
+			row := assetSlotRow{TypeID: g.typeID, Name: cd.ix.nameOf(g.typeID), Qty: g.qty, Sub: g.sub}
 			if unit, ok := lk.priceOf(g.typeID); ok {
 				row.ValueText = assetISK(unit * float64(g.qty))
 			}
@@ -691,6 +831,7 @@ func (app *Application) buildAssetInspector(ctx context.Context, cd *assetCharDa
 	}
 
 	insp.EFT = app.assetEFT(ctx, cd, ship)
+	app.attachAssetInspectorLinks(ctx, insp, ship.TypeID, ship.IsBlueprintCopy)
 	return insp
 }
 
@@ -734,7 +875,13 @@ func (app *Application) buildAssetSearch(datas []*assetCharData, st assetPageSta
 			titles[e.LocationID] = e.Title
 		}
 	}
-	view := &assetSearch{Query: st.query, Only: !st.scopeAll}
+	view := &assetSearch{
+		Query:     st.query,
+		Only:      !st.scopeAll,
+		Sort:      st.sort,
+		SortDir:   st.dir,
+		SortHrefs: buildAssetSortHrefs(st),
+	}
 	hitChars := make(map[int64]bool)
 	var cands []assetRowCand
 	for _, cd := range datas {
@@ -754,7 +901,7 @@ func (app *Application) buildAssetSearch(datas []*assetCharData, st assetPageSta
 				Note:      assetNote(it),
 				ItemHref: st.href(map[string]string{
 					"item": strconv.FormatInt(it.ItemID, 10), "ship": "", "q": "",
-					"loc": st.viewLoc(),
+					"loc": st.viewLoc(), "page": "",
 				}),
 			}
 			row.Pip, row.PipClass = assetPip(lk, it.TypeID, row.GroupName)
@@ -767,7 +914,7 @@ func (app *Application) buildAssetSearch(datas []*assetCharData, st assetPageSta
 				}
 				row.Where = strings.Join(names, " › ")
 			}
-			cand := assetRowCand{row: row}
+			cand := assetRowCand{row: row, qty: it.Quantity}
 			if lk.shipTypes[it.TypeID] && len(containers) == 0 {
 				value, priced, _ := cd.ix.subtreeValue(it, lk.priceOf)
 				if priced > 0 {
@@ -778,7 +925,7 @@ func (app *Application) buildAssetSearch(datas []*assetCharData, st assetPageSta
 					cand.row.Assembled = true
 					cand.row.ShipHref = st.href(map[string]string{
 						"ship": strconv.FormatInt(it.ItemID, 10), "q": "",
-						"loc": st.viewLoc(),
+						"loc": st.viewLoc(), "page": "",
 					})
 				}
 			} else if unit, ok := lk.priceOf(it.TypeID); ok {
@@ -793,13 +940,27 @@ func (app *Application) buildAssetSearch(datas []*assetCharData, st assetPageSta
 	}
 	view.TotalStacks = len(cands)
 	view.Characters = len(hitChars)
-	sortAssetRows(cands, "value")
-	if len(cands) > maxMatrixRows {
-		view.MoreRows = len(cands) - maxMatrixRows
-		cands = cands[:maxMatrixRows]
+	sortAssetRows(cands, st.sort, st.dir)
+	pages := (len(cands) + maxMatrixRows - 1) / maxMatrixRows
+	if pages < 1 {
+		pages = 1
 	}
-	for _, c := range cands {
-		view.Rows = append(view.Rows, c.row)
+	page := st.page
+	if page < 1 {
+		page = 1
 	}
+	if page > pages {
+		page = pages
+	}
+	start := (page - 1) * maxMatrixRows
+	end := min(start+maxMatrixRows, len(cands))
+	if start < len(cands) {
+		for _, c := range cands[start:end] {
+			view.Rows = append(view.Rows, c.row)
+		}
+	}
+	view.Pager = buildPageNav(page, pages, len(cands), "assets-list-top", func(p int) string {
+		return st.href(map[string]string{"page": pageParam(p)})
+	})
 	return view
 }

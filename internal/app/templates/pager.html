@@ -1,0 +1,13 @@
+{{/* Reusable pagination controls (layout.css .l-pager): first, previous,
+     current page out of total pages, next, last. Links carry optional
+     data-land-target so swap.js scrolls straight back to the list's top
+     without reloading the page. */}}
+{{define "pager"}}{{if and . (gt .Pages 1)}}
+<nav class="l-pager" aria-label="Pagination">
+  {{if .FirstHref}}<a class="btn btn-quiet sm l-pager-btn" href="{{.FirstHref}}"{{if .LandTarget}} data-land-target="{{.LandTarget}}"{{end}} aria-label="First page" title="First page">«</a>{{else}}<span class="btn btn-quiet sm l-pager-btn is-disabled" aria-disabled="true" title="First page">«</span>{{end}}
+  {{if .PrevHref}}<a class="btn btn-quiet sm l-pager-btn" href="{{.PrevHref}}"{{if .LandTarget}} data-land-target="{{.LandTarget}}"{{end}} aria-label="Previous page" title="Previous page">‹</a>{{else}}<span class="btn btn-quiet sm l-pager-btn is-disabled" aria-disabled="true" title="Previous page">‹</span>{{end}}
+  <span class="l-pager-pos">Page {{.Page}} of {{.Pages}}</span>
+  {{if .NextHref}}<a class="btn btn-quiet sm l-pager-btn" href="{{.NextHref}}"{{if .LandTarget}} data-land-target="{{.LandTarget}}"{{end}} aria-label="Next page" title="Next page">›</a>{{else}}<span class="btn btn-quiet sm l-pager-btn is-disabled" aria-disabled="true" title="Next page">›</span>{{end}}
+  {{if .LastHref}}<a class="btn btn-quiet sm l-pager-btn" href="{{.LastHref}}"{{if .LandTarget}} data-land-target="{{.LandTarget}}"{{end}} aria-label="Last page" title="Last page">»</a>{{else}}<span class="btn btn-quiet sm l-pager-btn is-disabled" aria-disabled="true" title="Last page">»</span>{{end}}
+</nav>
+{{end}}{{end}}

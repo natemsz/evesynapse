@@ -267,3 +267,37 @@ func pricePercentileNR(sorted []float64, p float64) float64 {
 func bookSideBand90(side []bookOrder) (low90, high90 float64) {
 	return side[percentileIndexNR(len(side), 10)].Price, side[percentileIndexNR(len(side), 90)].Price
 }
+
+// medianBookPrice returns the median order price of a non-empty
+// price-ascending slice of bookOrder.
+func medianBookPrice(side []bookOrder) float64 {
+	n := len(side)
+	if n%2 == 1 {
+		return side[n/2].Price
+	}
+	return (side[n/2-1].Price + side[n/2].Price) / 2
+}
+
+// filterPlayerOrders keeps orders whose duration does not exceed
+// maxDays (player market orders cap at 90 days; CCP NPC-seeded orders
+// carry 365-day durations). Returns the original slice when every
+// order already qualifies.
+func filterPlayerOrders(side []bookOrder, maxDays int32) []bookOrder {
+	allPlayer := true
+	for _, o := range side {
+		if o.Duration > maxDays {
+			allPlayer = false
+			break
+		}
+	}
+	if allPlayer {
+		return side
+	}
+	out := make([]bookOrder, 0, len(side))
+	for _, o := range side {
+		if o.Duration <= maxDays {
+			out = append(out, o)
+		}
+	}
+	return out
+}

@@ -37,7 +37,7 @@
     <tbody>
     {{range $s.Rows}}
       <tr>
-        <td><span class="mk-station"><span class="mk-rank-in" aria-hidden="true">{{.Rank}}</span>{{placeLink .Station}}</span><svg class="l-meter mk-meter" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="{{.SharePct}}" height="4"/></svg></td>
+        <td><span class="mk-station"><span class="mk-rank-in" aria-hidden="true">{{.Rank}}</span>{{placeLink .Station}}</span><svg class="l-meter mk-meter" viewBox="0 0 100 4" preserveAspectRatio="none" role="img" aria-label="{{.SharePct}}% of top station"><title>{{.SharePct}}% of top station</title><rect x="0" y="0" width="{{.SharePct}}" height="4"/></svg></td>
         <td>{{.RegionName}}</td>
         <td class="mt-num">{{.Orders}}</td>
         <td class="mt-num">{{.OpenValue}}</td>
@@ -46,7 +46,7 @@
     </tbody>
   </table>
   </div>
-  <p class="prose">ISK. Open orders counts every open buy and sell order the latest sweep saw at the station; ISK on orders sums open value (price times remaining volume) for orders priced inside each item's 90% price band so outlier listings do not distort rankings. The bar sets each station against the top one. Visit a station to see its best prices and the spreads traders are working there.</p>
+  <p class="prose">ISK. Open orders counts every player buy and sell order (90-day duration or less; NPC-seeded orders are excluded) the latest sweep saw at the station; ISK on orders sums open value (price times remaining volume) for player orders priced inside each item's 90% price band and within 5x of its median price so outlier listings do not distort rankings. The bar under each station shows its share relative to the #1 station in the current ranking. Visit a station to see its best prices and the spreads traders are working there.</p>
 </section>
 {{else}}
 <p>Still gathering prices. The leaderboard fills in after the first region sweeps finish.</p>

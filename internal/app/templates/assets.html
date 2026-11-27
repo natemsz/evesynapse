@@ -79,11 +79,31 @@
 </tr>
 {{end}}
 
+{{define "assets-thead"}}
+<thead><tr>
+  <th{{if eq .Sort "name"}} aria-sort="{{if eq .SortDir "asc"}}ascending{{else}}descending{{end}}"{{end}}><a href="{{index .SortHrefs "name"}}"{{if eq .Sort "name"}} class="srt-on"{{end}}>Item / Hull</a></th>
+  <th{{if eq .Sort "stacks"}} aria-sort="{{if eq .SortDir "asc"}}ascending{{else}}descending{{end}}"{{end}}><a href="{{index .SortHrefs "stacks"}}"{{if eq .Sort "stacks"}} class="srt-on"{{end}}>Loadout / Contents</a></th>
+  <th class="amx-r"{{if eq .Sort "qty"}} aria-sort="{{if eq .SortDir "asc"}}ascending{{else}}descending{{end}}"{{end}}><a href="{{index .SortHrefs "qty"}}"{{if eq .Sort "qty"}} class="srt-on"{{end}}>Qty</a></th>
+  <th class="amx-r"{{if eq .Sort "volume"}} aria-sort="{{if eq .SortDir "asc"}}ascending{{else}}descending{{end}}"{{end}}><a href="{{index .SortHrefs "volume"}}"{{if eq .Sort "volume"}} class="srt-on"{{end}}>Volume</a></th>
+  <th class="amx-r"{{if eq .Sort "value"}} aria-sort="{{if eq .SortDir "asc"}}ascending{{else}}descending{{end}}"{{end}}><a href="{{index .SortHrefs "value"}}"{{if eq .Sort "value"}} class="srt-on"{{end}}>Est. value</a></th>
+</tr></thead>
+{{end}}
+
 {{define "assets-slotsec"}}
 <div class="slotsec">
   <h4>{{.Title}}{{if .Note}} <small>{{.Note}}</small>{{end}}</h4>
-  {{range .Rows}}<div class="modrow"><span class="modrow-name"><span class="mq">{{.Qty}} ×</span> {{.Name}}{{if .Sub}} <small>{{.Sub}}</small>{{end}}</span><span class="modrow-val">{{if .ValueText}}{{.ValueText}} ISK{{else}}<span class="muted">no price</span>{{end}}</span></div>{{end}}
+  {{range .Rows}}<div class="modrow"><span class="modrow-name"><span class="mq">{{.Qty}} ×</span> {{if .TypeID}}{{itemLink .TypeID .Name}}{{else}}{{.Name}}{{end}}{{if .Sub}} <small>{{.Sub}}</small>{{end}}</span><span class="modrow-val">{{if .ValueText}}{{.ValueText}} ISK{{else}}<span class="muted">no price</span>{{end}}</span></div>{{end}}
 </div>
+{{end}}
+
+{{define "assets-insp-links"}}
+{{if or .MarketHref .ItemHref .ContractsHref}}
+<div class="insp-links">
+  {{if .MarketHref}}<a class="btn small" href="{{.MarketHref}}">Market Details</a>{{end}}
+  {{if .ItemHref}}<a class="btn btn-quiet small" href="{{.ItemHref}}">Item Details</a>{{end}}
+  {{if .ContractsHref}}<a class="btn btn-quiet small" href="{{.ContractsHref}}">Contracts</a>{{end}}
+</div>
+{{end}}
 {{end}}
 
 {{define "content"}}
@@ -121,11 +141,12 @@
     <h2 class="amx-h">{{.TotalStacks}} {{if eq .TotalStacks 1}}stack{{else}}stacks{{end}} matching "{{.Query}}"{{if .Only}} on this character{{else}} across {{.Characters}} {{if eq .Characters 1}}character{{else}}characters{{end}}{{end}}</h2>
     {{template "assets-fchips" $.Assets}}
     {{if .Rows}}
+    <div class="amx-list-head" id="assets-list-top">{{if .Pager}}{{template "pager" .Pager}}{{end}}</div>
     <table class="amx-table" data-nosort>
-      <thead><tr><th>Item / Hull</th><th>Loadout / Contents</th><th class="amx-r">Qty</th><th class="amx-r">Volume</th><th class="amx-r">Est. value</th></tr></thead>
+      {{template "assets-thead" .}}
       <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
     </table>
-    {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks; the most valuable are shown.</p>{{end}}
+    {{if .Pager}}<div class="amx-list-foot">{{template "pager" .Pager}}</div>{{end}}
     {{else}}<p>No stacks matching "{{.Query}}"{{if .Only}} on this character{{else}} on any character{{end}}.</p>{{end}}
   {{else with .Matrix}}
     <nav class="crumbs" aria-label="Breadcrumb">
@@ -160,11 +181,12 @@
     </div>
     {{end}}
     {{if .Rows}}
+    <div class="amx-list-head" id="assets-list-top">{{if .Pager}}{{template "pager" .Pager}}{{end}}</div>
     <table class="amx-table" data-nosort>
-      <thead><tr><th><a href="{{index .SortHrefs "name"}}"{{if eq .Sort "name"}} class="srt-on"{{end}}>Item / Hull</a></th><th><a href="{{index .SortHrefs "stacks"}}"{{if eq .Sort "stacks"}} class="srt-on"{{end}}>Loadout / Contents</a></th><th class="amx-r">Qty</th><th class="amx-r"><a href="{{index .SortHrefs "volume"}}"{{if eq .Sort "volume"}} class="srt-on"{{end}}>Volume</a></th><th class="amx-r"><a href="{{index .SortHrefs "value"}}"{{if eq .Sort "value"}} class="srt-on"{{end}}>Est. value</a></th></tr></thead>
+      {{template "assets-thead" .}}
       <tbody>{{range .Rows}}{{template "assets-trow" .}}{{end}}</tbody>
     </table>
-    {{if .MoreRows}}<p class="amx-more">+ {{.MoreRows}} more stacks at this place; the most valuable are shown.</p>{{end}}
+    {{if .Pager}}<div class="amx-list-foot">{{template "pager" .Pager}}</div>{{end}}
     {{else}}<p>Nothing here under this division.</p>{{end}}
   {{end}}
   </section>
@@ -177,11 +199,13 @@
       <div class="insp-titles"><h3>{{.Name}}</h3><p class="amx-msub">{{if .TypeName}}{{.TypeName}} · {{end}}{{.GroupName}}</p>{{if .OwnerName}}<p class="amx-msub">{{.OwnerName}}</p>{{end}}</div>
       <a class="insp-x" href="{{.CloseHref}}" aria-label="Close the inspector">✕</a>
     </div>
+    {{template "assets-insp-links" .}}
     <dl class="insp-facts">
       <div><dt>Quantity</dt><dd>{{.QuantityText}} units</dd></div>
       <div><dt>Total stack volume</dt><dd>{{.VolumeText}}</dd></div>
       <div><dt>Estimated value</dt><dd>{{if .ValueText}}{{.ValueText}} ISK{{else}}no price{{end}}</dd></div>
     </dl>
+    {{with .Stats}}<div class="insp-stats"><h4>Stats</h4>{{template "item-basic-stats" .}}</div>{{end}}
     <div class="insp-foot"><span>Item #{{.ItemID}} in your snapshot</span><span>Packaged: {{.VolumeText}}</span></div>
     {{else}}
     <div class="insp-head">
@@ -189,10 +213,12 @@
       <div class="insp-titles"><h3>{{.Name}}</h3><p class="amx-msub">{{if .TypeName}}{{.TypeName}} · {{end}}{{.GroupName}}</p><p class="amx-msub">{{.OwnerName}} · {{.VolumeText}} packaged</p></div>
       <a class="insp-x" href="{{.CloseHref}}" aria-label="Close the inspector">✕</a>
     </div>
+    {{template "assets-insp-links" .}}
     <div class="estbar">
       <span class="estbar-l"><span class="estbar-lab">Hull + fitted estimate</span><span class="estbar-v">{{if .TotalText}}{{.TotalText}} ISK{{else}}no price{{end}}</span></span>
       <form method="post" action="/fittings/import/" class="insp-fitform"><textarea name="eft" hidden>{{.EFT}}</textarea><button type="submit" class="btn insp-eft">Open in fitting tool</button></form>
     </div>
+    {{with .Stats}}<div class="insp-stats"><h4>Hull stats</h4>{{template "item-basic-stats" .}}</div>{{end}}
     {{range .Sections}}{{template "assets-slotsec" .}}{{end}}
     {{if .PricedNote}}<p class="insp-note">{{.PricedNote}}</p>{{end}}
     <div class="insp-foot"><span>Item #{{.ItemID}} in your snapshot</span><span>Packaged: {{.VolumeText}}</span></div>

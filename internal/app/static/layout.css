@@ -475,6 +475,12 @@ a.l-stat:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent
 .l-meter rect { fill: var(--accent); }
 .l-meter.full rect { fill: var(--gold); }
 
+/* Reusable pagination controls (templates/pager.html). */
+.l-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.3rem; }
+.l-pager-btn { min-width: 2rem; padding: 0.25rem 0.5rem; justify-content: center; font-size: var(--fs-sm); line-height: 1.2; }
+.l-pager-btn.is-disabled { opacity: 0.35; pointer-events: none; }
+.l-pager-pos { padding: 0 0.45rem; color: var(--muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 /* Local time: the reader's own time beside an EVE time, written in
    by app.js; empty (and out of the way) without JS. */
 .l-local { color: var(--muted); font-size: var(--fs-xs); }

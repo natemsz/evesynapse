@@ -714,9 +714,10 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 		regionName, _ := marketRegionName(forge)
 		history := &marketItem{
 			TypeID: typeID, RegionID: forge, RegionName: regionName,
-			Anonymous: !data.LoggedIn,
+			HistoryPage: "item",
+			Anonymous:   !data.LoggedIn,
 		}
-		app.vizSetup(ctx, history, "")
+		app.vizSetup(ctx, history, r.URL.Query().Get("range"))
 		// The details page carries no scope control, so its
 		// margin reads the account-wide best skills and
 		// standings.

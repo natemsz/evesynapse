@@ -575,6 +575,127 @@ var (
 	resistKindOrder = map[string]int{"EM": 0, "Thermal": 1, "Kinetic": 2, "Explosive": 3}
 )
 
+// itemBasicStatLine is one fitting-tool styled stat row (glyph + label + value
+// or a 4-cell EM/TH/KIN/EXP resistance row), matching .fit-tip-line /
+// .fit-tip-res in style.css so inspectors reuse the fitting tool's styling.
+type itemBasicStatLine struct {
+	Label   string
+	Value   string
+	Kind    string
+	Layer   string
+	Resists []itemResistCell
+}
+
+// itemBasicStats is a compact, truncated stat summary for item inspectors:
+// slot counts and defense resists for ships, slot + fitting costs + top
+// attributes for modules/rigs/subsystems, and top attributes for charges,
+// drones, implants, and boosters. Nil when the type carries no stats.
+type itemBasicStats struct {
+	Slots   []itemSlotTile
+	Resists []itemResistRow
+	Slot    string
+	Lines   []itemBasicStatLine
+}
+
+// fittingCostKinds maps SDE fitting-section attribute names to the
+// fitting tool's glyph/color kinds.
+var fittingCostKinds = map[string]string{
+	"cpu":         "cpu",
+	"power":       "powergrid",
+	"upgradeCost": "calibration",
+}
+
+// buildItemBasicStats builds a compact stat summary from a type's stored
+// item sheet (1 primary-key read from sde_item_sheets), reusing itemSheetCore
+// and sheetTopRows so inspectors stay consistent with Item Details and the
+// fitting tool.
+func (app *Application) buildItemBasicStats(ctx context.Context, typeID int64) *itemBasicStats {
+	if typeID <= 0 {
+		return nil
+	}
+	_, v := app.itemSheetCore(ctx, typeID)
+	if v == nil {
+		return nil
+	}
+	out := &itemBasicStats{}
+	if v.IsShip {
+		out.Slots = v.Slots
+		out.Resists = v.Resists
+		for _, row := range sheetTopRows(v) {
+			if len(row.Res) > 0 {
+				continue
+			}
+			out.Lines = append(out.Lines, itemBasicStatLine{
+				Label: row.Label, Value: row.Value, Kind: row.Section,
+			})
+			if len(out.Lines) >= 4 {
+				break
+			}
+		}
+	} else {
+		for _, fg := range v.FitsTo {
+			if fg.Label == "Slot" && len(fg.Tags) > 0 {
+				out.Slot = fg.Tags[0].Label
+				break
+			}
+		}
+		for _, sec := range v.Sections {
+			if sec.Title != "Fitting" {
+				continue
+			}
+			for _, row := range sec.Rows {
+				kind, ok := fittingCostKinds[row.Name]
+				if !ok || zeroFigure(row.Value) {
+					continue
+				}
+				out.Lines = append(out.Lines, itemBasicStatLine{
+					Label: row.Label, Value: row.Value, Kind: kind,
+				})
+			}
+		}
+		for _, row := range sheetTopRows(v) {
+			if len(row.Res) == 4 && row.Layer != "" {
+				cells := make([]itemResistCell, 4)
+				for i, raw := range row.Res {
+					n, _ := strconv.ParseFloat(strings.TrimPrefix(raw, "+"), 64)
+					pct := math.Min(100, math.Abs(n))
+					txt := raw
+					if !strings.HasPrefix(txt, "+") {
+						txt = strconv.FormatFloat(math.Round(math.Abs(n)*10)/10, 'f', -1, 64)
+					}
+					cells[i] = itemResistCell{Kind: resistKinds[i], Pct: pct, Text: txt}
+				}
+				label := row.Label
+				switch row.Layer {
+				case "shield":
+					label = "Shield"
+				case "armor":
+					label = "Armor"
+				case "structure":
+					label = "Hull"
+				case "bonus":
+					label = "Resists"
+				}
+				out.Lines = append(out.Lines, itemBasicStatLine{
+					Label: label, Layer: row.Layer, Resists: cells,
+				})
+				continue
+			}
+			kind := row.Section
+			if gk := fitview.FitGlyphKind(row.Label); gk != "" {
+				kind = gk
+			}
+			out.Lines = append(out.Lines, itemBasicStatLine{
+				Label: row.Label, Value: row.Value, Kind: kind,
+			})
+		}
+	}
+	if len(out.Slots) == 0 && len(out.Resists) == 0 && out.Slot == "" && len(out.Lines) == 0 {
+		return nil
+	}
+	return out
+}
+
 // zeroFigure reports a formatted sheet value that says nothing: "0",
 // "0%", "0 HP" and the like.
 func zeroFigure(v string) bool {

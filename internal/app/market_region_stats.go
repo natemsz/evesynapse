@@ -459,22 +459,66 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	})
 
 	// Station leaderboard figures (P5), from the whole book: one row
-	// per station with the open-order count and the open ISK value
+	// per station with the player open-order count and open ISK value
 	// per side, so the leaderboard page never aggregates at render.
-	// Only orders priced inside each item's Low90 to High90 band count
-	// toward open value so outlier listings cannot distort rankings.
+	// NPC-seeded orders (duration > 90 days; EVE player orders cap at
+	// 90 days while NPC BPO and skillbook orders carry 365-day
+	// durations) are excluded so permanent NPC stock at empire school
+	// and shipyard stations cannot outrank real trading hubs. Only
+	// player orders priced inside each item's Low90..High90 band and
+	// within 5x of the median (plus The Forge median on thin books)
+	// count toward open value so outlier listings cannot distort
+	// rankings.
+	const maxPlayerOrderDuration = 90
 	type stationLeaderAccum struct {
 		sellOrders, buyOrders int64
 		sellValue, buyValue   float64
 	}
+	var forgeBook *hubBook
+	if regionID != defaultMarketRegion && regionID != globalMarketRegion {
+		forgeBook = app.heldHubBook(defaultMarketRegion)
+	}
 	leaderAcc := make(map[int64]*stationLeaderAccum)
-	for _, tb := range nb.types {
-		for _, side := range [][]bookOrder{tb.sells, tb.buys} {
+	for typeID, tb := range nb.types {
+		for sideIdx, side := range [][]bookOrder{tb.sells, tb.buys} {
 			if len(side) == 0 {
 				continue
 			}
-			low90, high90 := bookSideBand90(side)
-			for _, o := range side {
+			playerSide := filterPlayerOrders(side, maxPlayerOrderDuration)
+			if len(playerSide) == 0 {
+				continue
+			}
+			low90, high90 := bookSideBand90(playerSide)
+			if len(playerSide) >= 3 {
+				if med := medianBookPrice(playerSide); med > 0 {
+					if low90 < med/5 {
+						low90 = med / 5
+					}
+					if high90 > med*5 {
+						high90 = med * 5
+					}
+				}
+			}
+			if len(playerSide) < 10 && forgeBook != nil {
+				if ftb := forgeBook.types[typeID]; ftb != nil {
+					fside := ftb.sells
+					if sideIdx == 1 {
+						fside = ftb.buys
+					}
+					fplayer := filterPlayerOrders(fside, maxPlayerOrderDuration)
+					if len(fplayer) > 0 {
+						if fmed := medianBookPrice(fplayer); fmed > 0 {
+							if low90 < fmed/5 {
+								low90 = fmed / 5
+							}
+							if high90 > fmed*5 {
+								high90 = fmed * 5
+							}
+						}
+					}
+				}
+			}
+			for _, o := range playerSide {
 				if o.LocationID <= 0 {
 					continue
 				}

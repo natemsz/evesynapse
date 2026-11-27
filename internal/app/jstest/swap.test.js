@@ -74,9 +74,11 @@ test("content pages qualify, including public fits and query strings", function 
 
 function params(s) { return new URLSearchParams(s); }
 
-test("landingFor: an assets station pick lands at the top, a selection keeps the place", function () {
+test("landingFor: an assets station pick lands at the top, paging lands at the list top, a selection keeps the place", function () {
   assert.equal(swap.landingFor("/assets/", params(""), params("loc=5")), "top");
   assert.equal(swap.landingFor("/assets/", params("loc=5"), params("loc=0")), "top");
+  assert.equal(swap.landingFor("/assets/", params("loc=5"), params("loc=5&page=2")), "target:assets-list-top");
+  assert.equal(swap.landingFor("/assets/", params("loc=5&page=2"), params("loc=5")), "target:assets-list-top");
   assert.equal(swap.landingFor("/assets/", params("loc=5"), params("loc=5&ship=9")), "keep");
   // No loc and loc=0 spell the same place.
   assert.equal(swap.landingFor("/assets/", params(""), params("loc=0&ship=9")), "keep");

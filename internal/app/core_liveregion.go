@@ -75,6 +75,9 @@ func (app *Application) handleMarketHistoryFragment(w http.ResponseWriter, r *ht
 	}
 	regionName, _ := marketRegionName(regionID)
 	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName, Anonymous: app.userID(ctx) == 0}
+	if q.Get("page") == "item" {
+		item.HistoryPage = "item"
+	}
 	app.vizSetup(ctx, item, q.Get("range"))
 	// The poll URL carries the page's scope, so the re-rendered
 	// section quotes the same viewer as the page.
@@ -104,6 +107,9 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 	}
 	regionName, _ := marketRegionName(regionID)
 	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName, Anonymous: app.userID(ctx) == 0}
+	if q.Get("page") == "item" {
+		item.HistoryPage = "item"
+	}
 	app.vizSetup(ctx, item, q.Get("range"))
 	// The poll URL carries the page's scope, so the re-rendered
 	// margin quotes the same viewer as the page.

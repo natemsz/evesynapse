@@ -92,7 +92,7 @@
     <thead><tr><th class="card-title">Item</th><th>Store</th><th class="mt-num">Qty</th><th class="mt-num">LP</th><th class="mt-num">ISK</th><th class="opt">Also needs</th><th class="mt-num">Worth</th><th class="mt-num">ISK per LP</th><th class="mt-num">Sold per day</th></tr></thead>
     <tbody>
     {{range .Rows}}
-      <tr{{if .On}} class="yours"{{end}}>
+      <tr{{if .On}} class="yours"{{end}} data-row-sel data-sel="{{.Href}}">
         <td><span class="lp-item"><img src="{{.IconURL}}" alt="" width="28" height="28" loading="lazy" data-fallback-src="/static/img/item.svg"><a href="{{.Href}}" data-l-step="in">{{.Name}}</a></span></td>
         <td><a href="/market/lp/?region={{$.MarketLP.RegionID}}&amp;corp={{.StoreID}}">{{.Store}}</a></td>
         <td class="mt-num">{{.Quantity}}</td>
@@ -149,7 +149,10 @@
   <p class="insp-note">None of your pilots holds LP with this store.</p>
   {{end}}
   {{end}}
-  <p class="lp-links"><a class="btn btn-quiet" href="/market/?type={{.TypeID}}&amp;region={{$.MarketLP.RegionID}}">Market for {{.Name}}</a></p>
+  <div class="lp-links">
+    <a class="btn" href="/market/?type={{.TypeID}}&amp;region={{$.MarketLP.RegionID}}">Market Details</a>
+    <a class="btn btn-quiet" href="/items/type/{{.TypeID}}/">Item Details</a>
+  </div>
 </aside>
 <a class="l-scrim" href="{{$.MarketLP.ListHref}}" aria-label="Close the offer" tabindex="-1"></a>
 {{end}}

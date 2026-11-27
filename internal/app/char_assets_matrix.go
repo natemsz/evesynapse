@@ -138,6 +138,7 @@ type assetMatrixRow struct {
 // assetSlotRow is one grouped line of the inspector: a module type
 // and how many of it are fitted (or stacked, in the cargo section).
 type assetSlotRow struct {
+	TypeID    int64
 	Name      string
 	Qty       int64
 	ValueText string
@@ -157,20 +158,25 @@ type assetSlotSection struct {
 // for anything else, the summary panel (Fallback): where the
 // stack sits, how much of it there is, and what it is worth.
 type assetInspector struct {
-	ItemID     int64
-	Name       string
-	TypeName   string
-	GroupName  string
-	IconURL    string
-	Pip        string
-	PipClass   string
-	OwnerName  string
-	TotalText  string
-	PricedNote string
-	Sections   []assetSlotSection
-	EFT        string
-	CloseHref  string
-	VolumeText string
+	ItemID        int64
+	TypeID        int64
+	Name          string
+	TypeName      string
+	GroupName     string
+	IconURL       string
+	Pip           string
+	PipClass      string
+	OwnerName     string
+	TotalText     string
+	PricedNote    string
+	Sections      []assetSlotSection
+	EFT           string
+	CloseHref     string
+	VolumeText    string
+	MarketHref    string
+	ItemHref      string
+	ContractsHref string
+	Stats         *itemBasicStats
 	// The summary panel for a non-ship selection.
 	Fallback     bool
 	QuantityText string
@@ -199,8 +205,9 @@ type assetMatrix struct {
 	InCan      string // the drilled-into container's name, when in one
 	CanBack    string // href out of the container
 	Rows       []assetMatrixRow
-	MoreRows   int
+	Pager      *pageNav
 	Sort       string
+	SortDir    string // "asc" or "desc"
 	SortHrefs  map[string]string
 	Inspector  *assetInspector
 }
@@ -213,7 +220,10 @@ type assetSearch struct {
 	Characters  int // characters with at least one hit
 	Only        bool
 	Rows        []assetMatrixRow
-	MoreRows    int
+	Pager       *pageNav
+	Sort        string
+	SortDir     string
+	SortHrefs   map[string]string
 }
 
 // assetFilterChip is one saved quick filter on the page.
@@ -257,6 +267,17 @@ type assetPageState struct {
 	item     int64 // a plain stack selected for the inspector's summary panel
 	query    string
 	sort     string
+	dir      string // "asc" or "desc"
+	page     int    // 1-based page number
+	hasPage  bool   // true when ?page= was explicitly passed
+}
+
+// defaultAssetSortDir is the natural initial direction for each sort column.
+func defaultAssetSortDir(sortKey string) string {
+	if sortKey == "name" {
+		return "asc"
+	}
+	return "desc"
 }
 
 // inScope reports whether a character is in the page's scope.
@@ -352,8 +373,20 @@ func parseAssetPageState(q url.Values, characters []db.Character, active db.Char
 	st.item, _ = strconv.ParseInt(q.Get("item"), 10, 64)
 	st.query = strings.TrimSpace(q.Get("q"))
 	switch q.Get("sort") {
-	case "name", "volume", "stacks":
+	case "name", "volume", "stacks", "qty":
 		st.sort = q.Get("sort")
+	}
+	st.dir = defaultAssetSortDir(st.sort)
+	switch q.Get("dir") {
+	case "asc", "desc":
+		st.dir = q.Get("dir")
+	}
+	st.page = 1
+	if raw := strings.TrimSpace(q.Get("page")); raw != "" {
+		if p, err := strconv.Atoi(raw); err == nil && p >= 1 {
+			st.page = p
+			st.hasPage = true
+		}
 	}
 	return st
 }
@@ -371,7 +404,9 @@ func (st assetPageState) viewLoc() string {
 }
 
 // href builds a page URL from the state's canonical parameters
-// with mutations applied (a key set to "" is dropped).
+// with mutations applied (a key set to "" is dropped). Changing
+// the location, tab, container, scope, query, sort or direction
+// resets pagination to page 1 unless mut specifies "page".
 func (st assetPageState) href(mut map[string]string) string {
 	v := url.Values{}
 	if !st.scopeAll {
@@ -383,18 +418,60 @@ func (st assetPageState) href(mut map[string]string) string {
 	if st.tab != "all" {
 		v.Set("tab", st.tab)
 	}
-	if st.sort != "value" {
-		v.Set("sort", st.sort)
-	}
+	sortVal := st.sort
+	dirVal := st.dir
+	pageVal := st.page
 	if st.query != "" {
 		v.Set("q", st.query)
 	}
+	resetPage := false
 	for k, val := range mut {
-		if val == "" {
-			v.Del(k)
-		} else {
-			v.Set(k, val)
+		switch k {
+		case "sort":
+			if val == "" {
+				sortVal = "value"
+			} else {
+				sortVal = val
+			}
+			resetPage = true
+		case "dir":
+			dirVal = val
+			resetPage = true
+		case "page":
+			if val == "" {
+				pageVal = 1
+			} else if p, err := strconv.Atoi(val); err == nil && p >= 1 {
+				pageVal = p
+			}
+		default:
+			if k == "loc" || k == "tab" || k == "can" || k == "scope" || k == "q" {
+				resetPage = true
+			}
+			if val == "" {
+				v.Del(k)
+			} else {
+				v.Set(k, val)
+			}
 		}
+	}
+	if _, hasDir := mut["dir"]; !hasDir {
+		if _, hasSort := mut["sort"]; hasSort {
+			dirVal = defaultAssetSortDir(sortVal)
+		}
+	}
+	if resetPage {
+		if _, hasPage := mut["page"]; !hasPage {
+			pageVal = 1
+		}
+	}
+	if sortVal != "value" {
+		v.Set("sort", sortVal)
+	}
+	if dirVal != "" && dirVal != defaultAssetSortDir(sortVal) {
+		v.Set("dir", dirVal)
+	}
+	if pageVal > 1 {
+		v.Set("page", strconv.Itoa(pageVal))
 	}
 	if len(v) == 0 {
 		return "/assets/"

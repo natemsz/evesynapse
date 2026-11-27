@@ -311,7 +311,7 @@
         <p class="mt-regions-toggle"><small>{{if $item.AllRegions}}Cheapest typical sell first. <a href="/market/?type={{$item.TypeID}}&amp;region={{$item.RegionID}}">Hub regions only</a>{{else}}<a href="/market/?type={{$item.TypeID}}&amp;region={{$item.RegionID}}&amp;regions=all">Show every region</a>{{end}}</small></p>
         <div class="tw">
         <table>
-          <thead><tr><th>Region</th><th class="num">Typical sell</th><th class="num">Typical buy</th><th class="num">7 days</th><th>Updated</th></tr></thead>
+          <thead><tr><th>Region</th><th class="num">Typical sell</th><th class="num">Typical buy</th><th class="num" title="Last 7 days average typical sell vs prior 7 days">Sell, 7d</th><th>Updated</th></tr></thead>
           <tbody>
             {{range $item.RegionStats}}
             <tr{{if .Active}} data-mkt-region="{{.RegionID}}"{{end}}>
@@ -329,6 +329,7 @@
           </tbody>
         </table>
         </div>
+        <p class="prose">Typical prices are the median of open orders in each region (every order counts once). Sell, 7d compares the last 7 days' typical sell average against the prior 7 days, which can differ from the recorded-trade change in the trading snapshot.</p>
       </section>
       {{end}}
 
@@ -562,7 +563,7 @@
     </tbody>
   </table>
   </div>
-  <p class="prose">From recorded daily trades in {{.RegionName}} plus the hub station's best orders. Margin is after broker fees and sales tax.</p>
+  <p class="prose">From recorded daily trades in {{.RegionName}} (changes compare the latest recorded day against 7 and 30 days earlier) plus the hub station's best orders. Margin is after broker fees and sales tax.</p>
   {{end}}
 </div>
 {{end}}

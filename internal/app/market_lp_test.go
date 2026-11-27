@@ -165,6 +165,9 @@ func TestMarketLPFiltersAndExports(t *testing.T) {
 	}
 	for _, want := range []string{
 		`class="l-console lp" data-depth="2"`,
+		`data-row-sel data-sel="/market/lp/?`,
+		`>Market Details</a>`,
+		`href="/items/type/100/">Item Details</a>`,
 		`<span class="dir-val">3,700 LP</span>`,
 		`Pilot One 2,500 · Pilot Two 1,200`,
 		`<dt>Redemptions it covers</dt><dd>3</dd>`,

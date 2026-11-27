@@ -15,12 +15,48 @@ import sys
 
 UNRELEASED_MARKER = "## [Unreleased]\n\n"
 DATED_HEADING_RE = re.compile(r"^(## \[v[^\]]+\]) - \d{4}-\d{2}-\d{2}$", re.M)
+SELF_UPDATE_RE = re.compile(
+    r"^(?:docs\(changelog\):\s*)?(?:updated?\s+changelog(?:\.md)?(?:\s+and\s+embedded\s+changelog)?|review\s+changelog)\s+(?:for|to)\s+(?:version\s+)?v?\d+\.\d+",
+    re.I,
+)
+
+
+def is_self_update_bullet(line: str) -> bool:
+    stripped = line.lstrip()
+    if not (stripped.startswith("* ") or stripped.startswith("- ")):
+        return False
+    return bool(SELF_UPDATE_RE.match(stripped[2:].strip()))
+
+
+def strip_self_updates(text: str) -> str:
+    """Drop automated changelog-update bullets and any category headings left empty."""
+    lines = [ln for ln in text.splitlines() if not is_self_update_bullet(ln)]
+    kept: list[str] = []
+    i = 0
+    while i < len(lines):
+        if lines[i].lstrip().startswith("### "):
+            j = i + 1
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if j >= len(lines) or lines[j].lstrip().startswith(("## ", "### ", "**Full Changelog**")):
+                i = j
+                continue
+        kept.append(lines[i])
+        i += 1
+    collapsed: list[str] = []
+    for ln in kept:
+        if not ln.strip() and (not collapsed or not collapsed[-1].strip()):
+            continue
+        collapsed.append(ln)
+    while collapsed and not collapsed[-1].strip():
+        collapsed.pop()
+    return "\n".join(collapsed)
 
 
 def clean_notes(raw: str) -> str:
     text = raw.replace("\r\n", "\n").strip()
     lines = [ln for ln in text.splitlines() if not ln.lstrip().startswith("<!--")]
-    return "\n".join(lines).strip()
+    return strip_self_updates("\n".join(lines)).strip()
 
 
 def stamp_text(existing: str, version: str, raw_notes: str, date: str) -> tuple[str, bool]:

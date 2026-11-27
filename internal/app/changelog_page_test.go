@@ -113,6 +113,11 @@ If this is your first install, use the installer.
 ### 🐛 Bug Fixes
 * Fix LOW_RAM_MODE startup flag by @bob in #201
 
+### Other Changes
+* Update changelog for v1.1.2.1 by @alice in #202
+* Updated Changelog to version 1.1.2.0 by @alice in #203
+* docs(changelog): review changelog for v1.1.2.0 by @github-actions[bot] in #204
+
 ## [v1.1.2.1]
 
 ## What's Changed
@@ -159,6 +164,9 @@ If this is your first install, use the installer.
 		"v0.1.2.1",
 		"Automated build of EveSynapse",
 		"No changes recorded for this release window.",
+		"Update changelog for v1.1.2.1",
+		"Updated Changelog to version 1.1.2.0",
+		"review changelog for v1.1.2.0",
 	} {
 		if strings.Contains(body, forbid) {
 			t.Errorf("1.1.2.x consolidated body unexpectedly contains %q", forbid)

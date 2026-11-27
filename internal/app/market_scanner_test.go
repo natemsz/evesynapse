@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"evesynapse/internal/app/scanner"
 	"fmt"
 	"net/http"
@@ -22,7 +23,7 @@ import (
 // daily volume for one (region, type) the way a completed sweep
 // leaves it in market_region_stats (schema 035): the figure the
 // scanner reads, never re-averaging market_history per render.
-func seedScannerVolume(t *testing.T, q *db.Queries, regionID, typeID int64, avgDailyVolume float64) {
+func seedScannerVolume(t *testing.T, conn *sql.DB, q *db.Queries, regionID, typeID int64, avgDailyVolume float64) {
 	t.Helper()
 	ctx := context.Background()
 	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
@@ -30,6 +31,11 @@ func seedScannerVolume(t *testing.T, q *db.Queries, regionID, typeID int64, avgD
 		UpdatedAt: time.Now().UTC(),
 	}); err != nil {
 		t.Fatalf("seed region volume type %d: %v", typeID, err)
+	}
+	if avgDailyVolume > 0 {
+		if _, err := conn.ExecContext(ctx, `UPDATE market_region_stats SET isk_traded_7d = 200000000 WHERE region_id = $1 AND type_id = $2`, regionID, typeID); err != nil {
+			t.Fatalf("seed region isk_traded_7d type %d: %v", typeID, err)
+		}
 	}
 }
 
@@ -151,9 +157,28 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 			t.Fatalf("seed station stat: %v", err)
 		}
 	}
-	seedScannerVolume(t, q, 10000002, 34, 20)
-	seedScannerVolume(t, q, 10000002, 35, 100)
-	seedScannerVolume(t, q, 10000002, 36, 100)
+	seedScannerVolume(t, conn, q, 10000002, 34, 20)
+	seedScannerVolume(t, conn, q, 10000002, 35, 100)
+	seedScannerVolume(t, conn, q, 10000002, 36, 100)
+
+	// Thin ISK item clears unit volume (20/day) and spread, but sits
+	// below The Forge's 100M ISK/day default floor until minisk=0.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO sde_types (type_id, name, group_id) VALUES (37, 'Thin Spreader', 18)`); err != nil {
+		t.Fatalf("seed thin type: %v", err)
+	}
+	if err := q.UpsertMarketStationStat(ctx, db.UpsertMarketStationStatParams{
+		LocationID: stationA, RegionID: 10000002, TypeID: 37, BestSell: 10, BestBuy: 4, TypicalSell: 10, TypicalBuy: 4, SellOrders: 5, BuyOrders: 5, SellVolume: 100, BuyVolume: 50, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed thin station stat: %v", err)
+	}
+	if err := q.UpsertMarketRegionStat(ctx, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 37, AvgDailyVolume: 20, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("seed thin region stat: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, `UPDATE market_region_stats SET isk_traded_7d = 500000 WHERE region_id = 10000002 AND type_id = 37`); err != nil {
+		t.Fatalf("seed thin isk_traded_7d: %v", err)
+	}
 
 	view := scanner.BuildView(ctx, app, url.Values{})
 	if !view.HasData || len(view.Rows) != 2 {
@@ -167,6 +192,12 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 	}
 	if view.Rows[0].Station.Name != "Jita 4 - Moon 4 - Caldari Navy Assembly Plant" || view.Rows[0].Station.StationID != stationA {
 		t.Fatalf("scanner station: %+v, want the seeded Jita station linked", view.Rows[0].Station)
+	}
+
+	// Clearing minisk admits the thin-ISK item.
+	view = scanner.BuildView(ctx, app, url.Values{"minisk": {"0"}})
+	if len(view.Rows) != 3 {
+		t.Fatalf("minisk=0 rows: %d, want 3 (including thin item)", len(view.Rows))
 	}
 
 	// Filters: a 200% spread floor drops everything; a sold-per-day
@@ -196,7 +227,7 @@ func TestScannerMathFiltersSortAndCap(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("seed cap stat: %v", err)
 		}
-		seedScannerVolume(t, q, 10000002, typeID, 10)
+		seedScannerVolume(t, conn, q, 10000002, typeID, 10)
 	}
 	view = scanner.BuildView(ctx, app, url.Values{})
 	if len(view.Rows) != scannerRowCap {
@@ -248,6 +279,9 @@ func TestScannerSuppressesThinAndImplausibleBooks(t *testing.T) {
 			AvgDailyVolume: 40000, UpdatedAt: now,
 		}); err != nil {
 			t.Fatalf("seed region stat type %d: %v", typeID, err)
+		}
+		if _, err := conn.ExecContext(ctx, `UPDATE market_region_stats SET isk_traded_7d = 200000000 WHERE region_id = 10000002 AND type_id = $1`, typeID); err != nil {
+			t.Fatalf("seed region isk_traded_7d type %d: %v", typeID, err)
 		}
 	}
 	for _, seed := range []db.UpsertMarketStationStatParams{
@@ -317,7 +351,7 @@ func TestScannerPageRendersStoredRowsZeroOutbound(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed structure stat: %v", err)
 	}
-	seedScannerVolume(t, q, 10000002, 34, 20)
+	seedScannerVolume(t, conn, q, 10000002, 34, 20)
 
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 	code, body := getPage(t, app, cookie, "/market/scanner/?region=10000002")
@@ -329,7 +363,7 @@ func TestScannerPageRendersStoredRowsZeroOutbound(t *testing.T) {
 		"Tritanium",
 		"Jita 4 - Moon 4 - Caldari Navy Assembly Plant",
 		"Player structure",
-		"Sold per day in The Forge",
+		"Sold per day in The Forge (region)",
 		"Prices as of",
 		"/market/?type=34",
 		"/station/?station=60003760",
@@ -401,7 +435,7 @@ func TestScannerProfitRankingAndCapInSQL(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("seed rank stat: %v", err)
 		}
-		seedScannerVolume(t, q, 10000002, typeID, 10)
+		seedScannerVolume(t, conn, q, 10000002, typeID, 10)
 	}
 
 	view := scanner.BuildView(ctx, app, url.Values{})

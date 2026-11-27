@@ -90,8 +90,8 @@ func seedTradeIdeasScanner(t *testing.T, conn *sql.DB, q *db.Queries) {
 			t.Fatalf("seed station stat: %v", err)
 		}
 	}
-	seedScannerVolume(t, q, 10000002, 34, 20)
-	seedScannerVolume(t, q, 10000002, 35, 100)
+	seedScannerVolume(t, conn, q, 10000002, 34, 20)
+	seedScannerVolume(t, conn, q, 10000002, 35, 100)
 }
 
 func TestTradeIdeasCSVBounded(t *testing.T) {
@@ -198,7 +198,7 @@ func TestTradeIdeasCSVRowCap(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("seed stat: %v", err)
 		}
-		seedScannerVolume(t, q, 10000002, typeID, 10)
+		seedScannerVolume(t, conn, q, 10000002, typeID, 10)
 	}
 	text, ok := tradeideas.BuildCSV(context.Background(), app, csvRows)
 	if !ok {

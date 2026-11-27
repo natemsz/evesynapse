@@ -1069,6 +1069,7 @@ FROM (
       AND ss.buy_orders >= 3
       AND (ss.typical_sell - ss.typical_buy) / ss.typical_buy * 100 >= sqlc.arg(min_spread)
       AND COALESCE(rs.avg_daily_volume, 0) >= sqlc.arg(min_volume)::bigint
+      AND (sqlc.arg(min_isk)::double precision <= 0 OR COALESCE(rs.isk_traded_7d, 0) >= sqlc.arg(min_isk)::double precision)
       AND LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) > 0
       AND (COALESCE(rs.typical_sell, 0) <= 0 OR ss.typical_sell <= rs.typical_sell * 10)
       AND (COALESCE(rs.typical_buy, 0) <= 0 OR ss.typical_buy * 10 >= rs.typical_buy)
@@ -1124,6 +1125,7 @@ FROM (
       AND (sqlc.arg(include_lowball)::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
       AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= sqlc.arg(min_margin)
       AND d.avg_daily_volume >= sqlc.arg(min_volume)::bigint
+      AND (sqlc.arg(min_isk)::double precision <= 0 OR d.isk_traded_7d >= sqlc.arg(min_isk)::double precision)
       AND LEAST(d.avg_daily_volume, o.sell_volume::double precision) > 0
       AND o.updated_at >= sqlc.arg(cutoff) AND d.updated_at >= sqlc.arg(cutoff)
 ) ranked
@@ -1207,23 +1209,100 @@ FROM agg
 WHERE s.region_id = sqlc.arg(region_id) AND s.type_id = sqlc.arg(type_id);
 -- name: RefreshMarketRegionStatAvgVolumes :execrows
 -- RefreshMarketRegionStatAvgVolume for several types of one region in
--- one statement, touching only rows whose figure changed: the
--- tradefinder's self-heal for pending routes whose history is stored
--- but whose sold-per-day figure has not caught up.
-UPDATE market_region_stats s SET avg_daily_volume = v.avg_daily_volume
-FROM (
-    SELECT h.type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
+-- one statement, updating traded-volume, traded medians, hold days,
+-- and mover-activity metrics for rows whose figures changed.
+WITH hr AS (
+    SELECT m.type_id,
+           CASE WHEN MAX(m.date)::date >= (now() AT TIME ZONE 'UTC')::date - 2
+                 AND MAX(m.date)::date <= (now() AT TIME ZONE 'UTC')::date
+                THEN MAX(m.date)::date
+                ELSE (now() AT TIME ZONE 'UTC')::date - 1
+           END AS ref_date,
+           MAX(m.date)::date AS max_date
+    FROM market_history m
+    WHERE m.region_id = sqlc.arg(region_id) AND m.type_id = ANY(sqlc.arg(type_ids)::bigint[])
+    GROUP BY m.type_id
+),
+agg AS (
+    SELECT h.type_id,
+           COALESCE(AVG(h.volume) FILTER (WHERE h.date >= to_char(hr.max_date - 6, 'YYYY-MM-DD')), 0)::double precision AS avg_daily_volume,
+           COALESCE(AVG(h.volume) FILTER (WHERE h.date >= to_char(hr.max_date - 29, 'YYYY-MM-DD')), 0)::double precision AS avg_daily_volume_30d,
+           COALESCE(SUM(h.volume::double precision * h.average)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS isk_traded_7d,
+           COALESCE(SUM(h.order_count::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS avg_orders_7d,
+           COALESCE(SUM(h.volume::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS avg_vol_7d,
+           COALESCE(SUM(h.volume::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 30.0 AS avg_vol_30d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY h.average)
+               FILTER (WHERE h.average > 0 AND h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_7d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY h.average)
+               FILTER (WHERE h.average > 0 AND h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_30d
     FROM market_history h
-    JOIN (
-        SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
-        FROM market_history m
-        WHERE m.region_id = sqlc.arg(region_id) AND m.type_id = ANY(sqlc.arg(type_ids)::bigint[])
-        GROUP BY m.type_id
-    ) w ON w.type_id = h.type_id
-    WHERE h.region_id = sqlc.arg(region_id) AND h.type_id = ANY(sqlc.arg(type_ids)::bigint[]) AND h.date >= w.window_start
+    JOIN hr ON hr.type_id = h.type_id
+    WHERE h.region_id = sqlc.arg(region_id)
+      AND h.type_id = ANY(sqlc.arg(type_ids)::bigint[])
+      AND h.date >= to_char(LEAST(hr.ref_date - 29, hr.max_date - 29), 'YYYY-MM-DD')
     GROUP BY h.type_id
+),
+hold AS (
+    SELECT h.type_id,
+           COUNT(*) FILTER (WHERE
+               (agg.sell_median_7d > agg.sell_median_30d
+                AND h.average >= agg.sell_median_30d + 0.5 * (agg.sell_median_7d - agg.sell_median_30d))
+            OR (agg.sell_median_7d < agg.sell_median_30d
+                AND h.average <= agg.sell_median_30d + 0.5 * (agg.sell_median_7d - agg.sell_median_30d))
+           )::bigint AS hold_days
+    FROM market_history h
+    JOIN hr ON hr.type_id = h.type_id
+    JOIN agg ON agg.type_id = h.type_id
+    WHERE h.region_id = sqlc.arg(region_id)
+      AND h.type_id = ANY(sqlc.arg(type_ids)::bigint[])
+      AND h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD')
+      AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')
+      AND h.average > 0
+      AND agg.sell_median_7d > 0
+      AND agg.sell_median_30d > 0
+    GROUP BY h.type_id
+)
+UPDATE market_region_stats s SET
+    avg_daily_volume     = v.avg_daily_volume,
+    avg_daily_volume_30d = v.avg_daily_volume_30d,
+    sell_median_7d       = v.sell_median_7d,
+    sell_median_30d      = v.sell_median_30d,
+    mover_chg_7v30       = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN (v.sell_median_7d - v.sell_median_30d) / v.sell_median_30d * 100.0 END,
+    mover_hold_days      = v.hold_days,
+    isk_traded_7d        = v.isk_traded_7d,
+    avg_orders_7d        = v.avg_orders_7d,
+    avg_vol_7d           = v.avg_vol_7d,
+    avg_vol_30d          = v.avg_vol_30d,
+    mover_score          = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN ABS((v.sell_median_7d - v.sell_median_30d) / v.sell_median_30d * 100.0) * LN(1.0 + GREATEST(v.isk_traded_7d, 0)) END,
+    isk_move_7d          = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN ABS(v.sell_median_7d - v.sell_median_30d) * GREATEST(v.avg_vol_7d, 0)
+                                ELSE 0 END,
+    daily_spread_profit  = CASE WHEN s.typical_buy > 0 AND s.typical_sell > s.typical_buy
+                                THEN (s.typical_sell - s.typical_buy) * LEAST(GREATEST(v.avg_vol_7d, 0), s.sell_volume::double precision, s.buy_volume::double precision)
+                                ELSE 0 END
+FROM (
+    SELECT a.type_id, a.avg_daily_volume, a.avg_daily_volume_30d,
+           a.sell_median_7d, a.sell_median_30d,
+           a.isk_traded_7d, a.avg_orders_7d, a.avg_vol_7d, a.avg_vol_30d,
+           COALESCE(hd.hold_days, 0)::bigint AS hold_days
+    FROM agg a
+    LEFT JOIN hold hd ON hd.type_id = a.type_id
 ) v
-WHERE s.region_id = sqlc.arg(region_id) AND s.type_id = v.type_id AND s.avg_daily_volume <> v.avg_daily_volume;
+WHERE s.region_id = sqlc.arg(region_id)
+  AND s.type_id = v.type_id
+  AND (
+      s.avg_daily_volume <> v.avg_daily_volume
+      OR s.isk_traded_7d <> v.isk_traded_7d
+      OR s.avg_orders_7d <> v.avg_orders_7d
+      OR s.sell_median_7d <> v.sell_median_7d
+      OR s.sell_median_30d <> v.sell_median_30d
+  );
 -- name: ListCheapestSellStations :many
 -- Per-type cheapest-sell station rows for a bounded type list:
 -- the tradefinder's "cheapest at" hints without pulling the
@@ -1579,6 +1658,8 @@ LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.t
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
   AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8
+  AND (sqlc.arg(min_isk)::float8 <= 0 OR COALESCE(rs.isk_traded_7d, gs.isk_traded_7d, 0) >= sqlc.arg(min_isk)::float8)
+  AND (sqlc.arg(min_trades)::float8 <= 0 OR COALESCE(rs.avg_orders_7d, gs.avg_orders_7d, 0) >= sqlc.arg(min_trades)::float8)
 ORDER BY
   -- Best match (a name search's default): the exact name, then names
   -- that start with the words, then a word in the name that starts
@@ -1615,7 +1696,9 @@ LEFT JOIN market_region_stats rs ON rs.region_id = sqlc.arg(region_id)::bigint A
 LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.type_id AND rs.type_id IS NULL
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND (sqlc.arg(name_like)::text = '' OR t.name ILIKE sqlc.arg(name_like)::text)
-  AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8;
+  AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= sqlc.arg(min_volume)::float8
+  AND (sqlc.arg(min_isk)::float8 <= 0 OR COALESCE(rs.isk_traded_7d, gs.isk_traded_7d, 0) >= sqlc.arg(min_isk)::float8)
+  AND (sqlc.arg(min_trades)::float8 <= 0 OR COALESCE(rs.avg_orders_7d, gs.avg_orders_7d, 0) >= sqlc.arg(min_trades)::float8);
 -- name: UpdateOrderLifecycleBook :exec
 -- The order-health pass's verdict on one open order's station book
 -- (schema 105): beaten state and count, when it was beaten, what

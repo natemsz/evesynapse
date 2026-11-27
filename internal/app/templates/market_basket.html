@@ -61,7 +61,7 @@
   </section>
   <section class="l-panel s4">
     <h3 class="bk-sub">Moving outside it</h3>
-    {{if .Outside}}<ul class="bk-mv">{{range .Outside}}<li><span class="bk-mv-name"><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <small>unit {{.Unit}} ISK</small></span><span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span>{{if $v.Own}}<form method="post" action="/market/baskets/{{$v.Basket.ID}}/add" class="mbk-add-form"><input type="hidden" name="type" value="{{.TypeID}}"><button class="btn btn-quiet" type="submit">Add</button></form>{{end}}</li>{{end}}</ul><p class="bk-note"><small>Similar items not in the basket, biggest moves first.</small></p>{{else}}<p><small>No similar items outside the basket moved enough to show.</small></p>{{end}}
+    {{if .Outside}}<ul class="bk-mv">{{range .Outside}}<li><span class="bk-mv-name"><a href="/market/?type={{.TypeID}}&amp;region={{$v.RegionID}}">{{.Name}}</a> <small>unit {{.Unit}} ISK</small></span><span class="mt-chg {{.Chg.Dir}}">{{.Chg.Text}}</span>{{if $v.Own}}<form method="post" action="/market/baskets/{{$v.Basket.ID}}/add" class="mbk-add-form"><input type="hidden" name="type" value="{{.TypeID}}"><button class="btn btn-quiet" type="submit">Add</button></form>{{end}}</li>{{end}}</ul><p class="bk-note"><small>Similar active items not in the basket, ranked by price move and ISK traded.</small></p>{{else}}<p><small>No similar items outside the basket moved enough to show.</small></p>{{end}}
   </section>
 </div>
 

@@ -35,6 +35,7 @@ import (
 	"evesynapse/internal/esi"
 	"evesynapse/internal/ideas"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 	"evesynapse/internal/tradefees"
 )
 
@@ -233,7 +234,8 @@ func BuildCSVRows(ctx context.Context, deps module.Deps, limit int) ([]ideas.Row
 	opp, err := q.ListScannerOpportunities(ctx, db.ListScannerOpportunitiesParams{
 		RegionID:  forgeRegionID,
 		MinSpread: minSpread,
-		MinVolume: 1,
+		MinVolume: 0,
+		MinIsk:    float64(markethistory.DefaultMinISK(forgeRegionID)),
 		RowCap:    rowCap,
 	})
 	if err != nil {

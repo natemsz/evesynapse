@@ -62,6 +62,7 @@ import (
 	db "evesynapse/internal/db/sqlc"
 	"evesynapse/internal/esi"
 	"evesynapse/internal/logging"
+	"evesynapse/internal/markethistory"
 	"evesynapse/internal/tradefees"
 )
 
@@ -132,7 +133,10 @@ type tradefinderView struct {
 	DestName      string
 	Regions       []module.RegionChoice
 	MinMargin     string // margin-% floor as typed (echoed in the form)
-	MinVolume     int64  // sold-per-day floor from the filter
+	MinISK        int64  // destination 7-day average ISK-traded/day floor
+	MinISKParam   string
+	MinISKChoices []markethistory.ISKFloorChoice
+	MinVolume     int64  // optional sold-per-day floor from ?minvol=
 	Scope         string // the raw ?scope= value, carried by the filter form
 	Selector      *module.ScopeSelector
 	Lowball       bool   // include long-shot routes (hidden by default)
@@ -233,7 +237,8 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 			minMargin = v
 		}
 	}
-	minVolume := int64(1)
+	minISK, minISKParam := markethistory.ResolveMinISK(module.QueryValue(q, "minisk"), destID)
+	minVolume := int64(0)
 	if raw := module.QueryValue(q, "minvol"); raw != "" {
 		if v, err := strconv.ParseInt(raw, 10, 64); err == nil && v >= 0 {
 			minVolume = v
@@ -244,15 +249,18 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 	includeLowball := module.QueryValue(q, "lowball") == "1"
 
 	view := &tradefinderView{
-		OriginID:   originID,
-		OriginName: originName,
-		DestID:     destID,
-		DestName:   destName,
-		SameRegion: originID == destID,
-		MinMargin:  strconv.FormatFloat(minMargin, 'f', -1, 64),
-		MinVolume:  minVolume,
-		Lowball:    includeLowball,
-		Scope:      module.QueryValue(q, "scope"),
+		OriginID:      originID,
+		OriginName:    originName,
+		DestID:        destID,
+		DestName:      destName,
+		SameRegion:    originID == destID,
+		MinMargin:     strconv.FormatFloat(minMargin, 'f', -1, 64),
+		MinISK:        minISK,
+		MinISKParam:   minISKParam,
+		MinISKChoices: markethistory.ISKFloorChoices(minISKParam),
+		MinVolume:     minVolume,
+		Lowball:       includeLowball,
+		Scope:         module.QueryValue(q, "scope"),
 	}
 	// The pricer resolves the viewer once for the render: the
 	// scope control above the list, and the per-leg rates below.
@@ -315,6 +323,7 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 		IncludeLowball: lowballParam,
 		MinMargin:      minMargin,
 		MinVolume:      minVolume,
+		MinIsk:         float64(minISK),
 		Cutoff:         time.Now().UTC().Add(-tradefinderMaxStatAge),
 		RowCap:         int64(tradefinderRowCap),
 	})

@@ -58,7 +58,7 @@ func (q *Queries) CloseOrderLifecycle(ctx context.Context, arg CloseOrderLifecyc
 const countMarketBrowseTypes = `-- name: CountMarketBrowseTypes :one
 WITH RECURSIVE tree AS (
     SELECT g.market_group_id FROM sde_market_groups g
-    WHERE ($4::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $4::bigint
+    WHERE ($6::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $6::bigint
     UNION ALL
     SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
 )
@@ -68,12 +68,16 @@ LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.t
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND ($2::text = '' OR t.name ILIKE $2::text)
   AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= $3::float8
+  AND ($4::float8 <= 0 OR COALESCE(rs.isk_traded_7d, gs.isk_traded_7d, 0) >= $4::float8)
+  AND ($5::float8 <= 0 OR COALESCE(rs.avg_orders_7d, gs.avg_orders_7d, 0) >= $5::float8)
 `
 
 type CountMarketBrowseTypesParams struct {
 	RegionID  int64   `json:"region_id"`
 	NameLike  string  `json:"name_like"`
 	MinVolume float64 `json:"min_volume"`
+	MinIsk    float64 `json:"min_isk"`
+	MinTrades float64 `json:"min_trades"`
 	GroupID   int64   `json:"group_id"`
 }
 
@@ -82,6 +86,8 @@ func (q *Queries) CountMarketBrowseTypes(ctx context.Context, arg CountMarketBro
 		arg.RegionID,
 		arg.NameLike,
 		arg.MinVolume,
+		arg.MinIsk,
+		arg.MinTrades,
 		arg.GroupID,
 	)
 	var count int64
@@ -1644,7 +1650,7 @@ func (q *Queries) ListMarketBookOrders(ctx context.Context, arg ListMarketBookOr
 const listMarketBrowseTypes = `-- name: ListMarketBrowseTypes :many
 WITH RECURSIVE tree AS (
     SELECT g.market_group_id FROM sde_market_groups g
-    WHERE ($10::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $10::bigint
+    WHERE ($12::bigint = 0 AND g.parent_group_id = 0) OR g.market_group_id = $12::bigint
     UNION ALL
     SELECT c.market_group_id FROM sde_market_groups c JOIN tree t ON c.parent_group_id = t.market_group_id
 )
@@ -1661,36 +1667,40 @@ LEFT JOIN market_region_stats gs ON gs.region_id = 19000001 AND gs.type_id = t.t
 WHERE t.published = 1 AND t.market_group_id IN (SELECT market_group_id FROM tree)
   AND ($2::text = '' OR t.name ILIKE $2::text)
   AND COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) >= $3::float8
+  AND ($4::float8 <= 0 OR COALESCE(rs.isk_traded_7d, gs.isk_traded_7d, 0) >= $4::float8)
+  AND ($5::float8 <= 0 OR COALESCE(rs.avg_orders_7d, gs.avg_orders_7d, 0) >= $5::float8)
 ORDER BY
   -- Best match (a name search's default): the exact name, then names
   -- that start with the words, then a word in the name that starts
   -- with them, then any name holding them; blueprints after their
   -- items unless the search asks for one; then what trades the most
   -- ISK a day.
-  CASE WHEN $4::text = 'match' THEN
-    CASE WHEN lower(t.name) = $5::text THEN 0
-         WHEN lower(t.name) LIKE $6::text THEN 1
-         WHEN strpos(' ' || regexp_replace(lower(t.name), '[^a-z0-9]+', ' ', 'g'), ' ' || $7::text) > 0 THEN 2
+  CASE WHEN $6::text = 'match' THEN
+    CASE WHEN lower(t.name) = $7::text THEN 0
+         WHEN lower(t.name) LIKE $8::text THEN 1
+         WHEN strpos(' ' || regexp_replace(lower(t.name), '[^a-z0-9]+', ' ', 'g'), ' ' || $9::text) > 0 THEN 2
          ELSE 3 END END,
-  CASE WHEN $4::text = 'match' AND strpos($5::text, 'blueprint') = 0 AND lower(t.name) LIKE '% blueprint' THEN 1 END NULLS FIRST,
-  CASE WHEN $4::text = 'match' THEN NULLIF(COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) * COALESCE(rs.typical_sell, gs.typical_sell, 0), 0) END DESC NULLS LAST,
-  CASE WHEN $4::text = 'name' THEN t.name END,
-  CASE WHEN $4::text = 'price' THEN COALESCE(rs.typical_sell, gs.typical_sell) END DESC NULLS LAST,
-  CASE WHEN $4::text = 'cheap' THEN NULLIF(COALESCE(rs.typical_sell, gs.typical_sell), 0) END ASC NULLS LAST,
-  CASE WHEN $4::text = 'buy' THEN COALESCE(rs.typical_buy, gs.typical_buy) END DESC NULLS LAST,
-  CASE WHEN $4::text = 'buycheap' THEN NULLIF(COALESCE(rs.typical_buy, gs.typical_buy), 0) END ASC NULLS LAST,
-  CASE WHEN $4::text = 'rising' THEN COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) END DESC NULLS LAST,
-  CASE WHEN $4::text = 'falling' THEN COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) END ASC NULLS LAST,
-  CASE WHEN $4::text = 'volume' THEN COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d) END DESC NULLS LAST,
-  CASE WHEN $4::text = 'volatile' THEN COALESCE(rs.volatility_30d, gs.volatility_30d) END DESC NULLS LAST,
+  CASE WHEN $6::text = 'match' AND strpos($7::text, 'blueprint') = 0 AND lower(t.name) LIKE '% blueprint' THEN 1 END NULLS FIRST,
+  CASE WHEN $6::text = 'match' THEN NULLIF(COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d, 0) * COALESCE(rs.typical_sell, gs.typical_sell, 0), 0) END DESC NULLS LAST,
+  CASE WHEN $6::text = 'name' THEN t.name END,
+  CASE WHEN $6::text = 'price' THEN COALESCE(rs.typical_sell, gs.typical_sell) END DESC NULLS LAST,
+  CASE WHEN $6::text = 'cheap' THEN NULLIF(COALESCE(rs.typical_sell, gs.typical_sell), 0) END ASC NULLS LAST,
+  CASE WHEN $6::text = 'buy' THEN COALESCE(rs.typical_buy, gs.typical_buy) END DESC NULLS LAST,
+  CASE WHEN $6::text = 'buycheap' THEN NULLIF(COALESCE(rs.typical_buy, gs.typical_buy), 0) END ASC NULLS LAST,
+  CASE WHEN $6::text = 'rising' THEN COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) END DESC NULLS LAST,
+  CASE WHEN $6::text = 'falling' THEN COALESCE(rs.sell_chg_7d, gs.sell_chg_7d) END ASC NULLS LAST,
+  CASE WHEN $6::text = 'volume' THEN COALESCE(rs.avg_daily_volume_30d, gs.avg_daily_volume_30d) END DESC NULLS LAST,
+  CASE WHEN $6::text = 'volatile' THEN COALESCE(rs.volatility_30d, gs.volatility_30d) END DESC NULLS LAST,
   t.name, t.type_id
-LIMIT $9::bigint OFFSET $8::bigint
+LIMIT $11::bigint OFFSET $10::bigint
 `
 
 type ListMarketBrowseTypesParams struct {
 	RegionID    int64   `json:"region_id"`
 	NameLike    string  `json:"name_like"`
 	MinVolume   float64 `json:"min_volume"`
+	MinIsk      float64 `json:"min_isk"`
+	MinTrades   float64 `json:"min_trades"`
 	Sort        string  `json:"sort"`
 	MatchName   string  `json:"match_name"`
 	MatchPrefix string  `json:"match_prefix"`
@@ -1723,6 +1733,8 @@ func (q *Queries) ListMarketBrowseTypes(ctx context.Context, arg ListMarketBrows
 		arg.RegionID,
 		arg.NameLike,
 		arg.MinVolume,
+		arg.MinIsk,
+		arg.MinTrades,
 		arg.Sort,
 		arg.MatchName,
 		arg.MatchPrefix,
@@ -3619,18 +3631,20 @@ FROM (
       AND ss.buy_orders >= 3
       AND (ss.typical_sell - ss.typical_buy) / ss.typical_buy * 100 >= $2
       AND COALESCE(rs.avg_daily_volume, 0) >= $3::bigint
+      AND ($4::double precision <= 0 OR COALESCE(rs.isk_traded_7d, 0) >= $4::double precision)
       AND LEAST(COALESCE(rs.avg_daily_volume, 0), ss.sell_volume::double precision, ss.buy_volume::double precision) > 0
       AND (COALESCE(rs.typical_sell, 0) <= 0 OR ss.typical_sell <= rs.typical_sell * 10)
       AND (COALESCE(rs.typical_buy, 0) <= 0 OR ss.typical_buy * 10 >= rs.typical_buy)
 ) ranked
 ORDER BY profit DESC, type_id, location_id
-LIMIT $4::bigint
+LIMIT $5::bigint
 `
 
 type ListScannerOpportunitiesParams struct {
 	RegionID  int64   `json:"region_id"`
 	MinSpread float64 `json:"min_spread"`
 	MinVolume int64   `json:"min_volume"`
+	MinIsk    float64 `json:"min_isk"`
 	RowCap    int64   `json:"row_cap"`
 }
 
@@ -3665,6 +3679,7 @@ func (q *Queries) ListScannerOpportunities(ctx context.Context, arg ListScannerO
 		arg.RegionID,
 		arg.MinSpread,
 		arg.MinVolume,
+		arg.MinIsk,
 		arg.RowCap,
 	)
 	if err != nil {
@@ -4076,11 +4091,12 @@ FROM (
       AND ($4::bigint = 1 OR d.typical_sell <= o.typical_sell * 10)
       AND (d.typical_sell - o.typical_sell) / o.typical_sell * 100 >= $5
       AND d.avg_daily_volume >= $6::bigint
+      AND ($7::double precision <= 0 OR d.isk_traded_7d >= $7::double precision)
       AND LEAST(d.avg_daily_volume, o.sell_volume::double precision) > 0
-      AND o.updated_at >= $7 AND d.updated_at >= $7
+      AND o.updated_at >= $8 AND d.updated_at >= $8
 ) ranked
 ORDER BY profit DESC, type_id
-LIMIT $8::bigint
+LIMIT $9::bigint
 `
 
 type ListTradefinderRoutesParams struct {
@@ -4090,6 +4106,7 @@ type ListTradefinderRoutesParams struct {
 	IncludeLowball int64     `json:"include_lowball"`
 	MinMargin      float64   `json:"min_margin"`
 	MinVolume      int64     `json:"min_volume"`
+	MinIsk         float64   `json:"min_isk"`
 	Cutoff         time.Time `json:"cutoff"`
 	RowCap         int64     `json:"row_cap"`
 }
@@ -4125,6 +4142,7 @@ func (q *Queries) ListTradefinderRoutes(ctx context.Context, arg ListTradefinder
 		arg.IncludeLowball,
 		arg.MinMargin,
 		arg.MinVolume,
+		arg.MinIsk,
 		arg.Cutoff,
 		arg.RowCap,
 	)
@@ -4362,20 +4380,98 @@ func (q *Queries) RefreshMarketRegionStatAvgVolume(ctx context.Context, arg Refr
 }
 
 const refreshMarketRegionStatAvgVolumes = `-- name: RefreshMarketRegionStatAvgVolumes :execrows
-UPDATE market_region_stats s SET avg_daily_volume = v.avg_daily_volume
-FROM (
-    SELECT h.type_id, CAST(AVG(h.volume) AS DOUBLE PRECISION) AS avg_daily_volume
+WITH hr AS (
+    SELECT m.type_id,
+           CASE WHEN MAX(m.date)::date >= (now() AT TIME ZONE 'UTC')::date - 2
+                 AND MAX(m.date)::date <= (now() AT TIME ZONE 'UTC')::date
+                THEN MAX(m.date)::date
+                ELSE (now() AT TIME ZONE 'UTC')::date - 1
+           END AS ref_date,
+           MAX(m.date)::date AS max_date
+    FROM market_history m
+    WHERE m.region_id = $1 AND m.type_id = ANY($2::bigint[])
+    GROUP BY m.type_id
+),
+agg AS (
+    SELECT h.type_id,
+           COALESCE(AVG(h.volume) FILTER (WHERE h.date >= to_char(hr.max_date - 6, 'YYYY-MM-DD')), 0)::double precision AS avg_daily_volume,
+           COALESCE(AVG(h.volume) FILTER (WHERE h.date >= to_char(hr.max_date - 29, 'YYYY-MM-DD')), 0)::double precision AS avg_daily_volume_30d,
+           COALESCE(SUM(h.volume::double precision * h.average)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS isk_traded_7d,
+           COALESCE(SUM(h.order_count::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS avg_orders_7d,
+           COALESCE(SUM(h.volume::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 7.0 AS avg_vol_7d,
+           COALESCE(SUM(h.volume::double precision)
+               FILTER (WHERE h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision / 30.0 AS avg_vol_30d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY h.average)
+               FILTER (WHERE h.average > 0 AND h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_7d,
+           COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY h.average)
+               FILTER (WHERE h.average > 0 AND h.date >= to_char(hr.ref_date - 29, 'YYYY-MM-DD') AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')), 0)::double precision AS sell_median_30d
     FROM market_history h
-    JOIN (
-        SELECT m.type_id, to_char(MAX(m.date)::date - INTERVAL '6 days', 'YYYY-MM-DD') AS window_start
-        FROM market_history m
-        WHERE m.region_id = $1 AND m.type_id = ANY($2::bigint[])
-        GROUP BY m.type_id
-    ) w ON w.type_id = h.type_id
-    WHERE h.region_id = $1 AND h.type_id = ANY($2::bigint[]) AND h.date >= w.window_start
+    JOIN hr ON hr.type_id = h.type_id
+    WHERE h.region_id = $1
+      AND h.type_id = ANY($2::bigint[])
+      AND h.date >= to_char(LEAST(hr.ref_date - 29, hr.max_date - 29), 'YYYY-MM-DD')
     GROUP BY h.type_id
+),
+hold AS (
+    SELECT h.type_id,
+           COUNT(*) FILTER (WHERE
+               (agg.sell_median_7d > agg.sell_median_30d
+                AND h.average >= agg.sell_median_30d + 0.5 * (agg.sell_median_7d - agg.sell_median_30d))
+            OR (agg.sell_median_7d < agg.sell_median_30d
+                AND h.average <= agg.sell_median_30d + 0.5 * (agg.sell_median_7d - agg.sell_median_30d))
+           )::bigint AS hold_days
+    FROM market_history h
+    JOIN hr ON hr.type_id = h.type_id
+    JOIN agg ON agg.type_id = h.type_id
+    WHERE h.region_id = $1
+      AND h.type_id = ANY($2::bigint[])
+      AND h.date >= to_char(hr.ref_date - 6, 'YYYY-MM-DD')
+      AND h.date <= to_char(hr.ref_date, 'YYYY-MM-DD')
+      AND h.average > 0
+      AND agg.sell_median_7d > 0
+      AND agg.sell_median_30d > 0
+    GROUP BY h.type_id
+)
+UPDATE market_region_stats s SET
+    avg_daily_volume     = v.avg_daily_volume,
+    avg_daily_volume_30d = v.avg_daily_volume_30d,
+    sell_median_7d       = v.sell_median_7d,
+    sell_median_30d      = v.sell_median_30d,
+    mover_chg_7v30       = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN (v.sell_median_7d - v.sell_median_30d) / v.sell_median_30d * 100.0 END,
+    mover_hold_days      = v.hold_days,
+    isk_traded_7d        = v.isk_traded_7d,
+    avg_orders_7d        = v.avg_orders_7d,
+    avg_vol_7d           = v.avg_vol_7d,
+    avg_vol_30d          = v.avg_vol_30d,
+    mover_score          = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN ABS((v.sell_median_7d - v.sell_median_30d) / v.sell_median_30d * 100.0) * LN(1.0 + GREATEST(v.isk_traded_7d, 0)) END,
+    isk_move_7d          = CASE WHEN v.sell_median_7d > 0 AND v.sell_median_30d > 0
+                                THEN ABS(v.sell_median_7d - v.sell_median_30d) * GREATEST(v.avg_vol_7d, 0)
+                                ELSE 0 END,
+    daily_spread_profit  = CASE WHEN s.typical_buy > 0 AND s.typical_sell > s.typical_buy
+                                THEN (s.typical_sell - s.typical_buy) * LEAST(GREATEST(v.avg_vol_7d, 0), s.sell_volume::double precision, s.buy_volume::double precision)
+                                ELSE 0 END
+FROM (
+    SELECT a.type_id, a.avg_daily_volume, a.avg_daily_volume_30d,
+           a.sell_median_7d, a.sell_median_30d,
+           a.isk_traded_7d, a.avg_orders_7d, a.avg_vol_7d, a.avg_vol_30d,
+           COALESCE(hd.hold_days, 0)::bigint AS hold_days
+    FROM agg a
+    LEFT JOIN hold hd ON hd.type_id = a.type_id
 ) v
-WHERE s.region_id = $1 AND s.type_id = v.type_id AND s.avg_daily_volume <> v.avg_daily_volume
+WHERE s.region_id = $1
+  AND s.type_id = v.type_id
+  AND (
+      s.avg_daily_volume <> v.avg_daily_volume
+      OR s.isk_traded_7d <> v.isk_traded_7d
+      OR s.avg_orders_7d <> v.avg_orders_7d
+      OR s.sell_median_7d <> v.sell_median_7d
+      OR s.sell_median_30d <> v.sell_median_30d
+  )
 `
 
 type RefreshMarketRegionStatAvgVolumesParams struct {
@@ -4384,9 +4480,8 @@ type RefreshMarketRegionStatAvgVolumesParams struct {
 }
 
 // RefreshMarketRegionStatAvgVolume for several types of one region in
-// one statement, touching only rows whose figure changed: the
-// tradefinder's self-heal for pending routes whose history is stored
-// but whose sold-per-day figure has not caught up.
+// one statement, updating traded-volume, traded medians, hold days,
+// and mover-activity metrics for rows whose figures changed.
 func (q *Queries) RefreshMarketRegionStatAvgVolumes(ctx context.Context, arg RefreshMarketRegionStatAvgVolumesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, refreshMarketRegionStatAvgVolumes, arg.RegionID, arg.TypeIds)
 	if err != nil {

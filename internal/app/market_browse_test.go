@@ -132,6 +132,35 @@ func TestMarketBrowseTreeRendersCacheOnly(t *testing.T) {
 		t.Fatal("leaf listing leaked a type below the published/marketable floor")
 	}
 
+	// Rising, falling, and volatile sorts apply the shared activity floors
+	// by default, hiding thinly traded items until floors=0 clears them.
+	if _, err := conn.ExecContext(ctx, `
+		INSERT INTO sde_types (type_id, name, group_id, market_group_id, published) VALUES
+		  (590, 'Fixture Liquid Hull', 25, 405, 1);
+		INSERT INTO market_region_stats (region_id, type_id, typical_sell, typical_buy, sell_chg_7d, volatility_30d, avg_daily_volume_30d, isk_traded_7d, avg_orders_7d, updated_at) VALUES
+		  (10000002, 587, 1000, 900, 95.0, 42.0, 5, 500000, 2, now()),
+		  (10000002, 590, 1000000, 950000, 15.0, 12.0, 200, 200000000, 25, now());
+	`); err != nil {
+		t.Fatalf("seed browse stats: %v", err)
+	}
+	for _, sortKey := range []string{"rising", "falling", "volatile"} {
+		code, body = getPage(t, app, cookie, "/market/?group=405&sort="+sortKey)
+		if code != http.StatusOK {
+			t.Fatalf("GET /market/?group=405&sort=%s: status %d", sortKey, code)
+		}
+		if !strings.Contains(body, "Fixture Liquid Hull") || strings.Contains(body, "Fixture Rifter") {
+			t.Fatalf("sort=%s default floor: want Liquid Hull only, got Rifter=%v Liquid=%v",
+				sortKey, strings.Contains(body, "Fixture Rifter"), strings.Contains(body, "Fixture Liquid Hull"))
+		}
+		mustContain(t, "/market/ sort="+sortKey, body, "Show all items", "floors=0")
+
+		code, body = getPage(t, app, cookie, "/market/?group=405&sort="+sortKey+"&floors=0")
+		if code != http.StatusOK {
+			t.Fatalf("GET /market/?group=405&sort=%s&floors=0: status %d", sortKey, code)
+		}
+		mustContain(t, "/market/ sort="+sortKey+" cleared", body, "Fixture Rifter", "Fixture Liquid Hull", "Apply activity floor")
+	}
+
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("market browse handlers made %d outbound calls, want 0", got)
 	}

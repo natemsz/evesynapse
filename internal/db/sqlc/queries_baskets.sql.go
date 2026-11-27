@@ -328,7 +328,8 @@ func (q *Queries) ListMarketBasketMovers(ctx context.Context, arg ListMarketBask
 }
 
 const listMarketBasketOutsideMovers = `-- name: ListMarketBasketOutsideMovers :many
-SELECT s.type_id, s.typical_sell, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d, s.avg_daily_volume_30d
+SELECT s.type_id, s.typical_sell, s.sell_chg_1d, s.sell_chg_7d, s.sell_chg_30d,
+       s.mover_chg_7v30, s.avg_daily_volume_30d, s.isk_traded_7d, s.avg_orders_7d, s.mover_score
 FROM market_region_stats s
 JOIN sde_types t ON t.type_id = s.type_id
 WHERE s.region_id = $1
@@ -337,16 +338,28 @@ WHERE s.region_id = $1
       JOIN sde_types bt ON bt.type_id = bi.type_id
       WHERE bi.basket_id = $2 AND bt.market_group_id > 0)
   AND s.type_id NOT IN (SELECT bi.type_id FROM market_basket_items bi WHERE bi.basket_id = $2)
-  AND s.sell_orders >= 5
-  AND (CASE $3::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END) IS NOT NULL
-ORDER BY ABS(CASE $3::int WHEN 1 THEN s.sell_chg_1d WHEN 30 THEN s.sell_chg_30d ELSE s.sell_chg_7d END) DESC, s.type_id
+  AND s.typical_sell > 0
+  AND s.isk_traded_7d >= $3::double precision
+  AND s.avg_orders_7d >= $4::double precision
+  AND (CASE $5::int
+       WHEN 1 THEN CASE WHEN s.sell_chg_1d IS NOT NULL AND s.sell_chg_1d <> 0 THEN ABS(s.sell_chg_1d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
+       WHEN 30 THEN CASE WHEN s.sell_chg_30d IS NOT NULL AND s.sell_chg_30d <> 0 THEN ABS(s.sell_chg_30d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0)) END
+       ELSE CASE WHEN s.mover_score IS NOT NULL AND s.mover_score > 0 THEN s.mover_score END
+       END) IS NOT NULL
+ORDER BY (CASE $5::int
+          WHEN 1 THEN ABS(s.sell_chg_1d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0))
+          WHEN 30 THEN ABS(s.sell_chg_30d) * LN(1.0 + GREATEST(s.isk_traded_7d, 0))
+          ELSE s.mover_score
+          END) DESC, s.type_id
 LIMIT 10
 `
 
 type ListMarketBasketOutsideMoversParams struct {
-	RegionID int64 `json:"region_id"`
-	BasketID int64 `json:"basket_id"`
-	Period   int32 `json:"period"`
+	RegionID  int64   `json:"region_id"`
+	BasketID  int64   `json:"basket_id"`
+	MinIsk    float64 `json:"min_isk"`
+	MinTrades float64 `json:"min_trades"`
+	Period    int32   `json:"period"`
 }
 
 type ListMarketBasketOutsideMoversRow struct {
@@ -355,15 +368,26 @@ type ListMarketBasketOutsideMoversRow struct {
 	SellChg1d         sql.NullFloat64 `json:"sell_chg_1d"`
 	SellChg7d         sql.NullFloat64 `json:"sell_chg_7d"`
 	SellChg30d        sql.NullFloat64 `json:"sell_chg_30d"`
+	MoverChg7v30      sql.NullFloat64 `json:"mover_chg_7v30"`
 	AvgDailyVolume30d float64         `json:"avg_daily_volume_30d"`
+	IskTraded7d       float64         `json:"isk_traded_7d"`
+	AvgOrders7d       float64         `json:"avg_orders_7d"`
+	MoverScore        sql.NullFloat64 `json:"mover_score"`
 }
 
 // The biggest movers outside a basket: types in the same market
-// groups as its items, in its region, that it does not hold, ranked
-// by the size of their typical-sell change over 1, 7 or 30 days,
-// with the same depth floor the Trends screen uses.
+// groups as its items, in its region, that it does not hold, gated
+// by the shared Trends activity floors (7-day average ISK traded
+// and daily trade count) and ranked by mover_score (or the same
+// volume-weighted move score for 1-day and 30-day windows).
 func (q *Queries) ListMarketBasketOutsideMovers(ctx context.Context, arg ListMarketBasketOutsideMoversParams) ([]ListMarketBasketOutsideMoversRow, error) {
-	rows, err := q.db.Query(ctx, listMarketBasketOutsideMovers, arg.RegionID, arg.BasketID, arg.Period)
+	rows, err := q.db.Query(ctx, listMarketBasketOutsideMovers,
+		arg.RegionID,
+		arg.BasketID,
+		arg.MinIsk,
+		arg.MinTrades,
+		arg.Period,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +401,11 @@ func (q *Queries) ListMarketBasketOutsideMovers(ctx context.Context, arg ListMar
 			&i.SellChg1d,
 			&i.SellChg7d,
 			&i.SellChg30d,
+			&i.MoverChg7v30,
 			&i.AvgDailyVolume30d,
+			&i.IskTraded7d,
+			&i.AvgOrders7d,
+			&i.MoverScore,
 		); err != nil {
 			return nil, err
 		}

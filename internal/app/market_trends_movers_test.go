@@ -30,7 +30,6 @@ func TestTrendsIngestRankingAndWhatChangedFilter(t *testing.T) {
 	transport := &regionBookTransport{books: map[int64][][]esi.MarketOrder{}}
 	app, _, q := buildCorpTestApp(t, transport)
 	ctx := context.Background()
-	marketTrendsCache = newViewCache[marketTrendsView](30*time.Second, 128)
 
 	const (
 		forge  int64 = 10000002
@@ -82,12 +81,12 @@ func TestTrendsIngestRankingAndWhatChangedFilter(t *testing.T) {
 		}
 	}
 
-	// 1. Alpha Confirmed Multi (Forge + Domain): baseline 100, last 5 days 140 (+40%),
+	// 1. Alpha Confirmed Multi (Forge + Domain): baseline 100, last 5 history days 140 (+40%),
 	//    7d vol 2,000,000 * 140 = 280M ISK/day, 30 trades/day, 7d vol > 30d vol.
 	for d := 29; d >= 1; d-- {
 		p := 100.0
 		vol := int64(1_000_000)
-		if d <= 4 {
+		if d <= 5 {
 			p = 140.0
 			vol = 2_000_000
 		}
@@ -95,19 +94,19 @@ func TestTrendsIngestRankingAndWhatChangedFilter(t *testing.T) {
 		seedHist(forge, typeConfirmedMulti, d, p, vol, 30)
 
 		dp := 100.0
-		if d <= 4 {
+		if d <= 5 {
 			dp = 125.0
 		}
 		seedDaily(domain, typeConfirmedMulti, d, dp, dp*0.95)
 		seedHist(domain, typeConfirmedMulti, d, dp, 300_000, 15)
 	}
 
-	// 2. Beta Confirmed Single (Forge only): baseline 100, last 5 days 120 (+20%),
+	// 2. Beta Confirmed Single (Forge only): baseline 100, last 5 history days 120 (+20%),
 	//    200M ISK/day, 20 trades/day; flat in Domain.
 	for d := 29; d >= 1; d-- {
 		p := 100.0
 		vol := int64(1_500_000)
-		if d <= 4 {
+		if d <= 5 {
 			p = 120.0
 			vol = 1_700_000
 		}
@@ -129,15 +128,15 @@ func TestTrendsIngestRankingAndWhatChangedFilter(t *testing.T) {
 		seedHist(forge, typeManipulated, d, 100.0, 10_000, 2)
 	}
 
-	// 4. Delta Short Hold (Forge): baseline 100, only 3 days (today, -1, -2) at 150
-	//    (and missing days -3..-6 so median_7d = 150 but hold_days = 3 < 4).
-	for d := 29; d >= 7; d-- {
+	// 4. Delta Short Hold (Forge): baseline 100, only 3 days (-1, -2, -3) at 150
+	//    (and missing days -4..-7 in history so median_7d = 150 but hold_days = 3 < 4).
+	for d := 29; d >= 8; d-- {
 		seedDaily(forge, typeShortHold, d, 100.0, 95.0)
+		seedHist(forge, typeShortHold, d, 100.0, 1_500_000, 25)
 	}
-	seedDaily(forge, typeShortHold, 2, 150.0, 140.0)
-	seedDaily(forge, typeShortHold, 1, 150.0, 140.0)
-	for d := 29; d >= 1; d-- {
-		seedHist(forge, typeShortHold, d, 150.0, 1_500_000, 25)
+	for d := 3; d >= 1; d-- {
+		seedDaily(forge, typeShortHold, d, 150.0, 140.0)
+		seedHist(forge, typeShortHold, d, 150.0, 3_000_000, 40)
 	}
 
 	// 5. Epsilon Low Vol Ratio (Forge): baseline 100, last 5 days 135 (+35%),
@@ -145,7 +144,7 @@ func TestTrendsIngestRankingAndWhatChangedFilter(t *testing.T) {
 	for d := 29; d >= 1; d-- {
 		p := 100.0
 		vol := int64(4_000_000)
-		if d <= 4 {
+		if d <= 5 {
 			p = 135.0
 		}
 		if d <= 7 {
@@ -155,26 +154,26 @@ func TestTrendsIngestRankingAndWhatChangedFilter(t *testing.T) {
 		seedHist(forge, typeFallingVol, d, p, vol, 20)
 	}
 
-	// 6. Zeta Spread Leader (Forge): modest +10% move (100 -> 110), 180M ISK/day,
-	//    25 trades/day, wide profitable spread (sell 110, buy 80) and deep book.
+	// 6. Zeta Spread Leader (Forge): modest +10% move (100 -> 110) over 5 days,
+	//    180M ISK/day, 25 trades/day, wide profitable spread (sell 110, buy 80) and deep book.
 	for d := 29; d >= 1; d-- {
 		p := 100.0
-		if d <= 4 {
+		if d <= 5 {
 			p = 110.0
 		}
 		seedDaily(forge, typeSpreadLeader, d, p, 80.0)
-		seedHist(forge, typeSpreadLeader, d, 110.0, 1_700_000, 25)
+		seedHist(forge, typeSpreadLeader, d, p, 1_700_000, 25)
 	}
 
 	// 7. Eta Domain Mover (Domain only): 35M ISK/day (clears Domain's 20M default),
 	//    15 trades/day, baseline 100 -> 130 for 5 days.
 	for d := 29; d >= 1; d-- {
 		p := 100.0
-		if d <= 4 {
+		if d <= 5 {
 			p = 130.0
 		}
 		seedDaily(domain, typeDomainOnly, d, p, p*0.95)
-		seedHist(domain, typeDomainOnly, d, 130.0, 300_000, 15)
+		seedHist(domain, typeDomainOnly, d, p, 300_000, 15)
 	}
 
 	makeOrders := func(baseID, typeID int64, sell, buy float64, vol int64) []esi.MarketOrder {
@@ -222,9 +221,17 @@ func TestTrendsIngestRankingAndWhatChangedFilter(t *testing.T) {
 	if !stAlpha.MoverScore.Valid || stAlpha.MoverScore.Float64 <= 0 {
 		t.Errorf("alpha mover_score = %+v, want > 0", stAlpha.MoverScore)
 	}
+	if stAlpha.SellMedian7d != 140 || stAlpha.SellMedian30d != 100 {
+		t.Errorf("alpha history medians = (7d=%.2f, 30d=%.2f), want (140, 100)", stAlpha.SellMedian7d, stAlpha.SellMedian30d)
+	}
 	wantScore := math.Abs(stAlpha.MoverChg7v30.Float64) * math.Log1p(stAlpha.IskTraded7d)
 	if math.Abs(stAlpha.MoverScore.Float64-wantScore) > 1e-6 {
 		t.Errorf("alpha mover_score = %v, want %v", stAlpha.MoverScore.Float64, wantScore)
+	}
+	// Watchlist watchMove reads the same stored mover_chg_7v30 change.
+	wm := app.watchMove(ctx, typeConfirmedMulti, forge)
+	if !wm.Has7 || math.Abs(wm.Chg7-40.0) > 1e-6 {
+		t.Errorf("watchMove(alpha) = %+v, want Has7=true Chg7=40.0", wm)
 	}
 
 	stGamma, err := q.GetMarketRegionStat(ctx, db.GetMarketRegionStatParams{RegionID: forge, TypeID: typeManipulated})
@@ -352,8 +359,17 @@ func TestTrendsIngestRankingAndWhatChangedFilter(t *testing.T) {
 	if len(wDefault.Rising) == 0 || wDefault.Rising[0].TypeID != typeConfirmedMulti {
 		t.Fatalf("default movers rising = %+v, want Alpha Confirmed Multi first", wDefault.Rising)
 	}
+	if len(wDefault.Moves) == 0 || wDefault.Moves[0].TypeID != typeConfirmedMulti {
+		t.Fatalf("default movers tall Moves = %+v, want Alpha Confirmed Multi first from stored table", wDefault.Moves)
+	}
 	if wDefault.Rising[0].HubBadge != "+1 hub" {
 		t.Errorf("default movers top HubBadge = %q, want +1 hub", wDefault.Rising[0].HubBadge)
+	}
+	// Tall-only form reads directly from the stored combined bucket without needing Rising/Falling.
+	tallIn := &widgetInput{Opts: def.defaultOptions(), Forms: []string{"tall"}}
+	wTall := buildMoversWidget(ctx, app, tallIn).(*moversWidgetView)
+	if !wTall.Any() || len(wTall.Moves) == 0 || wTall.Moves[0].TypeID != typeConfirmedMulti {
+		t.Errorf("tall-only movers = %+v, want Moves populated with Alpha first", wTall)
 	}
 	for _, r := range wDefault.Rising {
 		if r.TypeID == typeManipulated || r.TypeID == typeShortHold || r.TypeID == typeFallingVol {

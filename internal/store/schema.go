@@ -1116,6 +1116,11 @@ var pgScanDScanRowsSchema string
 //go:embed schema_pg/188_market_movers_metrics.sql
 var pgMarketMoversMetricsSchema string
 
+// Step 189: precomputed ranked movers table for Trends and Market Movers.
+//
+//go:embed schema_pg/189_market_movers_ranked.sql
+var pgMarketMoversRankedSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1332,6 +1337,7 @@ func schemaSteps() []schemaStep {
 		{186, "doctrine_fit_search", pgDoctrineFitSearchSchema, ""},
 		{187, "scan_dscan_rows", pgScanDScanRowsSchema, ""},
 		{188, "market_movers_metrics", pgMarketMoversMetricsSchema, ""},
+		{189, "market_movers_ranked", pgMarketMoversRankedSchema, ""},
 	}
 }
 

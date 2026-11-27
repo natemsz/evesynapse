@@ -74,7 +74,7 @@
   </tbody>
 </table>
 </div>
-<p class="prose tr-note">What each sweep finds against the day before, kept for 30 days. A price move counts at 10% or more and at three times the item's usual daily swing. Filtered by your active ISK traded/day and trades/day floors (switch Rank by to Raw % move to see every item regardless of activity).</p>
+<p class="prose tr-note">Detected at each sweep by comparing the 7-day traded median against the 30-day traded median (and supply and spread against the trailing 7-day baseline), kept for 30 days. Only items clearing the hub ISK traded/day and trades/day floors are recorded; price moves require at least 10% in The Forge, 15% in Domain and Sinq Laison, or 20% in Heimatar and Metropolis, plus three times the item's daily swing.</p>
 {{else}}
 <p class="tr-note">Nothing in {{.RegionName}} cleared those filters in that span. Try a lower ISK traded/day or trades/day floor, or switch Rank by to Raw % move.</p>
 {{end}}
@@ -91,7 +91,7 @@
     {{if .RawMode}}
     <span class="fchip tr-chip">All gates off · warning signs shown</span>
     {{else if eq .Sort "confirmed"}}
-    <span class="fchip tr-chip">ISK/day >= {{.MinISKLabel}} · Trades/day >= {{.MinTrades}} · 4+ of 7d held · 7d vol >= 30d</span>
+    <span class="fchip tr-chip">ISK/day >= {{.MinISKLabel}} · Trades/day >= {{.MinTrades}}{{if and (ne .Mode "volatile") (eq .Period 7)}} · 4+ of 7d held{{end}} · 7d vol >= 30d</span>
     {{else}}
     <span class="fchip tr-chip">ISK/day >= {{.MinISKLabel}} · Trades/day >= {{.MinTrades}}</span>
     {{end}}
@@ -163,7 +163,7 @@
   {{if .RawMode}}
   <p class="prose tr-note">Raw % mode removes every volume, ISK, trade-count, and persistence gate so you can inspect thin or manipulated markets directly. Warning badges flag items with under 10 trades/day, a widening spread, or a move seen in only one trade hub.</p>
   {{else}}
-  <p class="prose tr-note">Prices in ISK. Volume-confirmed moves score the 7-day vs 30-day median daily price move weighted by 7-day average daily ISK traded, requiring at least 4 of 7 days held and 7-day volume at or above the 30-day average. 7-day rolling changes compare the current 7-day average sell price to the prior 7 days. Badges mark moves confirmed in at least one other trade hub.</p>
+  <p class="prose tr-note">Prices in ISK. Volume-confirmed moves score the 7-day vs 30-day median daily traded price move from market history weighted by 7-day average daily ISK traded, requiring at least 4 of 7 days held and 7-day volume at or above the 30-day average. 7-day rolling changes compare the current 7-day average typical sell to the prior 7 days. Badges mark moves confirmed in at least one other trade hub.</p>
   {{end}}
   {{else}}
   <p class="tr-note">Nothing in {{.RegionName}} clears those filters. Try a lower ISK traded/day or trades/day floor, or switch Rank by to Raw % move.</p>

@@ -1,11 +1,12 @@
 # EveSynapse robots.txt
-# Public surfaces: the landing page, the public fits browser
-# (/fittings/public/, anonymous as of this build), the fitting
-# simulator (/fittings/, anonymous with All-V skills), and the
-# item browser and ship pages (/items/, /ships/), the build planner
-# (/planner/), the PI planner (/industry/pi/) and the Intel pages
-# (/intel/). Everything else requires
-# EVE SSO and redirects to login regardless.
+# Public surfaces: the landing page, public fits (/fittings/public/),
+# the fitting simulator (/fittings/), items and ships (/items/, /ships/),
+# market tools (/market/), public contracts (/contracts/search/), the
+# universe map (/map/), planners (/planner/, /industry/pi/), Intel pages
+# (/intel/), public entity pages (/pilot/, /corporation/, /alliance/,
+# /system/, /region/, /station/, /structure/), and info pages (/about/,
+# /license/, /changelog/, /report/). Everything else requires EVE SSO
+# and redirects to login regardless.
 
 User-agent: Googlebot
 Allow: /
@@ -63,9 +64,28 @@ Allow: /fittings/$
 Allow: /fittings/public/
 Allow: /items/
 Allow: /ships/
+Allow: /market/
+Allow: /contracts/search/
+Allow: /map/
 Allow: /planner/
 Allow: /industry/pi/
 Allow: /intel/
+Allow: /pilot/
+Allow: /corporation/
+Allow: /alliance/
+Allow: /system/
+Allow: /region/
+Allow: /station/
+Allow: /structure/
+Allow: /about/
+Allow: /license/
+Allow: /changelog/
+Allow: /report/
+Allow: /static/
+Allow: /favicon.ico
+Allow: /sitemap.xml
+Disallow: /market/stream
+Disallow: /intel/kills/stream
 Disallow: /intel/*?*
 Disallow: /pilot/*?*
 Disallow: /

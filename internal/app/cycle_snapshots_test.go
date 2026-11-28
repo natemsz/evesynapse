@@ -157,3 +157,53 @@ func TestWarmContractItemsStopsOnServerError(t *testing.T) {
 		t.Fatalf("asked %d times after a 520, want 1", n)
 	}
 }
+
+// TestWarmCorpContractItemsOneCharacterPerCorporation: characters of
+// one corporation share its contract list, so within a cycle only one
+// of them asks the corporation's items endpoint, and a 520 from it
+// keeps every character of that corporation off it past the cycle.
+func TestWarmCorpContractItemsOneCharacterPerCorporation(t *testing.T) {
+	const corpID = 98000077
+	ctx := context.Background()
+	setup := func(transport http.RoundTripper) (*Application, db.Character, db.Character) {
+		app, _, q := buildCorpTestApp(t, transport)
+		user, err := q.CreateUser(ctx)
+		if err != nil {
+			t.Fatalf("create user: %v", err)
+		}
+		chA := seedCharacter(t, q, user.ID, fixtureCharA, "Corp Contracts A")
+		chB := seedCharacter(t, q, user.ID, fixtureCharB, "Corp Contracts B")
+		for _, id := range []int64{fixtureCharA, fixtureCharB} {
+			if err := q.UpsertCharacterCorporation(ctx, db.UpsertCharacterCorporationParams{CharacterID: id, CorporationID: corpID, UpdatedAt: time.Now().UTC()}); err != nil {
+				t.Fatalf("seed corporation: %v", err)
+			}
+			seedSnapshot(t, q, id, esi.SnapCorpContracts, esi.Contracts{
+				{ContractID: 301, Status: "outstanding"},
+				{ContractID: 302, Status: "outstanding"},
+			})
+		}
+		return app, chA, chB
+	}
+
+	refusing := &countingTransport{}
+	app, chA, chB := setup(refusing)
+	app.warmCorpContractItems(ctx, chA)
+	asked := refusing.calls.Load()
+	if asked == 0 {
+		t.Fatal("the first character never asked for the corporation's items")
+	}
+	app.warmCorpContractItems(ctx, chB)
+	if n := refusing.calls.Load(); n != asked {
+		t.Fatalf("a second character of the corporation asked again in the same cycle: %d calls, want %d", n, asked)
+	}
+
+	spam := &conStopSpammingTransport{}
+	app, chA, _ = setup(spam)
+	app.warmCorpContractItems(ctx, chA)
+	if n := spam.calls.Load(); n != 1 {
+		t.Fatalf("asked %d times after a 520, want 1", n)
+	}
+	if app.corpContractWarm.claim(corpID, time.Now().Add(2*corpContractWarmEvery)) {
+		t.Fatal("the corporation was open to warming again a cycle after a 520")
+	}
+}

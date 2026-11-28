@@ -248,11 +248,11 @@ func (app *Application) buildMarketTrendsView(ctx context.Context, q map[string]
 		MinTrades: defaultMoversMinTrades,
 	}
 	if id, err := strconv.ParseInt(get("region"), 10, 64); err == nil {
-		if _, ok := marketRegionName(id); ok {
+		if _, ok := app.marketRegionName(ctx, id); ok {
 			view.RegionID = id
 		}
 	}
-	view.RegionName, _ = marketRegionName(view.RegionID)
+	view.RegionName, _ = app.marketRegionName(ctx, view.RegionID)
 	switch get("mode") {
 	case "rising", "falling", "volatile", "changes":
 		view.Mode = get("mode")

@@ -219,7 +219,7 @@ func (app *Application) noteSweepWindowClean(regionID int64) {
 // marketRegionLabel names a region for logs; hub IDs resolve to
 // their marketRegions name, anything else is just the ID.
 func marketRegionLabel(regionID int64) string {
-	if name, ok := marketRegionName(regionID); ok {
+	if name, ok := marketStaticRegionName(regionID); ok {
 		return name
 	}
 	return strconv.FormatInt(regionID, 10)
@@ -1006,7 +1006,7 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	// short mutex so concurrent hub sweeps see each other's committed
 	// moves without deadlocking across regions.
 	if len(res.changed) > 0 {
-		if _, isHub := marketRegionName(regionID); isHub {
+		if marketHubRegion(regionID) {
 			app.hubConfirmMu.Lock()
 			if _, err := app.queries.RefreshMarketHubConfirmation(ctx, db.RefreshMarketHubConfirmationParams{
 				HubRegions: marketHubRegionIDs(), TypeIds: scope,

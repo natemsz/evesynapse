@@ -93,13 +93,13 @@ func hubShortName(name string) string {
 // parseHubValue reads a hub parameter: a region id, or a hub
 // name in any case ("Domain", "the forge", "Jita" for The
 // Forge's hub station's region).
-func (app *page) parseHubValue(raw string) (int64, string, bool) {
+func (app *page) parseHubValue(ctx context.Context, raw string) (int64, string, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return 0, "", false
 	}
 	if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-		if name, ok := app.deps.MarketRegionName(id); ok {
+		if name, ok := app.deps.MarketRegionName(ctx, id); ok {
 			return id, name, true
 		}
 		return 0, "", false
@@ -137,10 +137,10 @@ func clampPercent(p float64) float64 {
 
 // basisFromValues reads hub/mode/pct parameters over a base
 // basis: any parameter present and valid overrides its field.
-func (app *page) basisFromValues(base pricingBasis, q url.Values) pricingBasis {
+func (app *page) basisFromValues(ctx context.Context, base pricingBasis, q url.Values) pricingBasis {
 	out := base
 	if raw := q.Get("hub"); raw != "" {
-		if id, name, ok := app.parseHubValue(raw); ok {
+		if id, name, ok := app.parseHubValue(ctx, raw); ok {
 			out.RegionID, out.HubName = id, name
 		}
 	}
@@ -165,21 +165,21 @@ func (app *page) basisFromValues(base pricingBasis, q url.Values) pricingBasis {
 	}
 	if out.RegionID == 0 {
 		out.RegionID = app.deps.DefaultMarketRegion()
-		if name, ok := app.deps.MarketRegionName(out.RegionID); ok {
+		if name, ok := app.deps.MarketRegionName(ctx, out.RegionID); ok {
 			out.HubName = name
 		}
 	}
 	if out.HubName == "" {
-		if name, ok := app.deps.MarketRegionName(out.RegionID); ok {
+		if name, ok := app.deps.MarketRegionName(ctx, out.RegionID); ok {
 			out.HubName = name
 		}
 	}
 	return out
 }
 
-func (app *page) defaultBasis() pricingBasis {
+func (app *page) defaultBasis(ctx context.Context) pricingBasis {
 	id := app.deps.DefaultMarketRegion()
-	name, _ := app.deps.MarketRegionName(id)
+	name, _ := app.deps.MarketRegionName(ctx, id)
 	return pricingBasis{RegionID: id, HubName: name, Mode: module.AppraisalModeSell, Percent: 100}
 }
 
@@ -188,27 +188,27 @@ func (app *page) defaultBasis() pricingBasis {
 func (app *page) rememberedBasis(ctx context.Context, r *http.Request, userID int64) pricingBasis {
 	if userID > 0 {
 		if pref, err := app.queries.GetUserAppraisalPref(ctx, userID); err == nil {
-			return app.basisFromValues(app.defaultBasis(), url.Values{
+			return app.basisFromValues(ctx, app.defaultBasis(ctx), url.Values{
 				"hub":  {strconv.FormatInt(pref.HubRegion, 10)},
 				"mode": {pref.Mode},
 				"pct":  {strconv.FormatFloat(pref.Percent, 'f', -1, 64)},
 			})
 		}
-		return app.defaultBasis()
+		return app.defaultBasis(ctx)
 	}
 	if c, err := r.Cookie(anonBasisCookie); err == nil && c.Value != "" {
 		if secret, err := app.anonHistorySecret(ctx); err == nil {
 			if payload, ok := module.VerifySignedValue(secret, c.Value); ok {
 				parts := strings.Split(payload, "|")
 				if len(parts) == 3 {
-					return app.basisFromValues(app.defaultBasis(), url.Values{
+					return app.basisFromValues(ctx, app.defaultBasis(ctx), url.Values{
 						"hub": {parts[0]}, "mode": {parts[1]}, "pct": {parts[2]},
 					})
 				}
 			}
 		}
 	}
-	return app.defaultBasis()
+	return app.defaultBasis(ctx)
 }
 
 // rememberBasis stores the basis just used.

@@ -910,7 +910,7 @@ func (app *page) buildResult(ctx context.Context, snap *snapshot) *resultView {
 	}
 	basis := snap.Basis.basis()
 	if basis.HubName == "" {
-		if name, ok := app.deps.MarketRegionName(basis.RegionID); ok {
+		if name, ok := app.deps.MarketRegionName(ctx, basis.RegionID); ok {
 			basis.HubName = name
 		}
 	}
@@ -1283,14 +1283,14 @@ func (app *page) storedResult(ctx context.Context, row db.UserAppraisal) (*resul
 // saved table ("The Forge • Typical sell"), from the snapshot
 // the list query already read, no extra read. Snapshots
 // stored before the basis was kept have none to show.
-func (app *page) savedBasisText(row db.UserAppraisal) string {
+func (app *page) savedBasisText(ctx context.Context, row db.UserAppraisal) string {
 	snap := storedSnapshot(row)
 	if snap == nil || snap.Basis.RegionID == 0 {
 		return ""
 	}
 	b := snap.Basis.basis()
 	if b.HubName == "" {
-		if name, ok := app.deps.MarketRegionName(b.RegionID); ok {
+		if name, ok := app.deps.MarketRegionName(ctx, b.RegionID); ok {
 			b.HubName = name
 		}
 	}
@@ -1313,7 +1313,7 @@ func (app *page) savedList(ctx context.Context, userID int64) []savedRow {
 			ID: row.ID, Created: row.CreatedAt.Format("Jan 2, 2006, 3:04 PM"),
 			Total: esi.FormatISK(row.TotalValue), Priced: row.PricedLines, TotalLn: row.TotalLines,
 			ShareURL: "/market/appraise/s/" + row.ShareToken + "/",
-			Basis:    app.savedBasisText(row), Failed: row.TotalValue == 0,
+			Basis:    app.savedBasisText(ctx, row), Failed: row.TotalValue == 0,
 		})
 	}
 	return out
@@ -1347,7 +1347,7 @@ func (app *page) anonSavedList(ctx context.Context, tokens []string) []savedRow 
 			ID: row.ID, Created: row.CreatedAt.Format("Jan 2, 2006, 3:04 PM"),
 			Total: esi.FormatISK(row.TotalValue), Priced: row.PricedLines, TotalLn: row.TotalLines,
 			ShareURL: "/market/appraise/s/" + row.ShareToken + "/", Anon: true,
-			Basis: app.savedBasisText(row), Failed: row.TotalValue == 0,
+			Basis: app.savedBasisText(ctx, row), Failed: row.TotalValue == 0,
 		})
 	}
 	return out
@@ -1374,7 +1374,7 @@ func (app *page) handleAppraisePage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 	userID := app.deps.UserID(ctx)
-	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.URL.Query())
+	basis := app.basisFromValues(ctx, app.rememberedBasis(ctx, r, userID), r.URL.Query())
 	view := app.consoleView(data, basis)
 	if userID > 0 {
 		view.Saved = app.savedList(ctx, userID)
@@ -1423,7 +1423,7 @@ func (app *page) handleAppraiseSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/market/appraise/", http.StatusSeeOther)
 		return
 	}
-	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.Form)
+	basis := app.basisFromValues(ctx, app.rememberedBasis(ctx, r, userID), r.Form)
 	snap, err := app.computeAppraisal(ctx, input, basis, r.FormValue("exclude"), parseMultiplier(r.FormValue("multiplier")))
 	if err != nil {
 		logging.Errorf("appraisal: compute: %v", err)
@@ -1505,7 +1505,7 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	data := &PageData{ShellData: app.deps.PublicShell(ctx)}
 	userID := app.deps.UserID(ctx)
-	basis := app.basisFromValues(app.rememberedBasis(ctx, r, userID), r.URL.Query())
+	basis := app.basisFromValues(ctx, app.rememberedBasis(ctx, r, userID), r.URL.Query())
 	token := chi.URLParam(r, "token")
 	row, err := app.queries.GetUserAppraisalByShareToken(ctx, token)
 	if err != nil {
@@ -1538,7 +1538,7 @@ func (app *page) handleAppraiseShare(w http.ResponseWriter, r *http.Request) {
 		res.CanDelete = true
 		res.DeleteURL = "/market/appraise/" + strconv.FormatInt(row.ID, 10) + "/delete"
 	}
-	view := app.consoleView(data, app.storedBasis(row))
+	view := app.consoleView(data, app.storedBasis(ctx, row))
 	view.Result = res
 	data.Appraise = view
 	app.deps.Render(ctx, w, http.StatusOK, "market_appraise.html", data)
@@ -1576,12 +1576,12 @@ func (app *page) handleAppraiseDeleteAnon(w http.ResponseWriter, r *http.Request
 
 // storedBasis reads a stored row's recorded basis, default
 // when its snapshot predates basis recording.
-func (app *page) storedBasis(row db.UserAppraisal) pricingBasis {
+func (app *page) storedBasis(ctx context.Context, row db.UserAppraisal) pricingBasis {
 	var snap snapshot
 	if err := json.Unmarshal(row.Snapshot, &snap); err == nil {
 		b := snap.Basis.basis()
 		if b.HubName == "" {
-			if name, ok := app.deps.MarketRegionName(b.RegionID); ok {
+			if name, ok := app.deps.MarketRegionName(ctx, b.RegionID); ok {
 				b.HubName = name
 			}
 		}
@@ -1589,7 +1589,7 @@ func (app *page) storedBasis(row db.UserAppraisal) pricingBasis {
 			return b
 		}
 	}
-	return app.defaultBasis()
+	return app.defaultBasis(ctx)
 }
 
 // storedExclude reads a stored row's recorded exclusion
@@ -1630,7 +1630,7 @@ func (app *page) handleAppraiseReprice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = r.ParseForm()
-	basis := app.basisFromValues(app.storedBasis(row), r.Form)
+	basis := app.basisFromValues(ctx, app.storedBasis(ctx, row), r.Form)
 	snap, err := app.computeAppraisal(ctx, row.InputText, basis, app.storedExclude(row), app.storedMultiplier(row))
 	if err != nil {
 		logging.Errorf("appraisal: reprice %d: %v", id, err)
@@ -1660,7 +1660,7 @@ func (app *page) handleAppraiseRepriceToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	_ = r.ParseForm()
-	basis := app.basisFromValues(app.storedBasis(row), r.Form)
+	basis := app.basisFromValues(ctx, app.storedBasis(ctx, row), r.Form)
 	snap, err := app.computeAppraisal(ctx, row.InputText, basis, app.storedExclude(row), app.storedMultiplier(row))
 	if err != nil {
 		logging.Errorf("appraisal: reprice share: %v", err)

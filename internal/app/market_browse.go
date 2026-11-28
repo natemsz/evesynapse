@@ -113,7 +113,7 @@ func (app *Application) handleMarketBrowseFragment(w http.ResponseWriter, r *htt
 	ctx := r.Context()
 	region := defaultMarketRegion
 	if id, err := strconv.ParseInt(r.URL.Query().Get("region"), 10, 64); err == nil {
-		if _, ok := marketRegionName(id); ok {
+		if _, ok := app.marketRegionName(ctx, id); ok {
 			region = id
 		}
 	}
@@ -135,7 +135,7 @@ func (app *Application) handleMarketBrowseChildren(w http.ResponseWriter, r *htt
 	ctx := r.Context()
 	region := defaultMarketRegion
 	if id, err := strconv.ParseInt(r.URL.Query().Get("region"), 10, 64); err == nil {
-		if _, ok := marketRegionName(id); ok {
+		if _, ok := app.marketRegionName(ctx, id); ok {
 			region = id
 		}
 	}
@@ -314,7 +314,7 @@ func (app *Application) buildMarketBrowse(ctx context.Context, region int64, q u
 
 func (app *Application) buildMarketBrowseFresh(ctx context.Context, region int64, q url.Values) *marketBrowseView {
 	view := &marketBrowseView{Region: region, Sort: "name", Page: 1}
-	view.RegionName, _ = marketRegionName(region)
+	view.RegionName, _ = app.marketRegionName(ctx, region)
 	view.GroupID, _ = strconv.ParseInt(q.Get("group"), 10, 64)
 	view.Query = strings.TrimSpace(q.Get("bq"))
 	if len([]rune(view.Query)) > 60 {

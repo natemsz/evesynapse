@@ -711,7 +711,7 @@ func (app *Application) handleItemType(w http.ResponseWriter, r *http.Request) {
 			// can ask for its history and fill in when it lands.
 			forge = defaultMarketRegion
 		}
-		regionName, _ := marketRegionName(forge)
+		regionName, _ := app.marketRegionName(ctx, forge)
 		history := &marketItem{
 			TypeID: typeID, RegionID: forge, RegionName: regionName,
 			HistoryPage: "item",

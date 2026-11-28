@@ -139,12 +139,12 @@ func (app *page) buildScannerView(ctx context.Context, q map[string][]string) *s
 	regionID := app.deps.DefaultMarketRegion()
 	if raw := module.QueryValue(q, "region"); raw != "" {
 		if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			if _, ok := app.deps.MarketRegionName(id); ok {
+			if _, ok := app.deps.MarketRegionName(ctx, id); ok {
 				regionID = id
 			}
 		}
 	}
-	regionName, _ := app.deps.MarketRegionName(regionID)
+	regionName, _ := app.deps.MarketRegionName(ctx, regionID)
 
 	minISK, minISKParam := markethistory.ResolveMinISK(module.QueryValue(q, "minisk"), regionID)
 	minVolume := int64(0)

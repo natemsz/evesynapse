@@ -1323,7 +1323,11 @@ type Deps interface {
 	// one market that is not a place: global-market types
 	// (PLEX) trade there instead of in any hub region.
 	GlobalMarketRegion() int64
-	MarketRegionName(id int64) (string, bool)
+	// MarketRegionName names a region the market may show; false for any
+	// other region. MarketHubRegion reports whether id is one of the
+	// trade hubs (the global market is not).
+	MarketRegionName(ctx context.Context, id int64) (string, bool)
+	MarketHubRegion(id int64) bool
 	// QueueHistoryWant asks the worker for a type's price history in a
 	// region at the page-want priority; nothing is fetched here.
 	QueueHistoryWant(ctx context.Context, regionID, typeID int64) error

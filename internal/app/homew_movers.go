@@ -99,10 +99,10 @@ func (v *moversWidgetView) Lists() int {
 
 func buildMoversWidget(ctx context.Context, app *Application, in *widgetInput) any {
 	regionID, _ := strconv.ParseInt(in.Opts.Get("region"), 10, 64)
-	region, ok := marketRegionName(regionID)
+	region, ok := app.marketRegionName(ctx, regionID)
 	if !ok {
 		regionID = defaultMarketRegion
-		region, _ = marketRegionName(regionID)
+		region, _ = app.marketRegionName(ctx, regionID)
 	}
 	show := in.Opts.Get("show")
 	if show == "" {

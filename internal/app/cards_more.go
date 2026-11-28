@@ -272,7 +272,7 @@ func (app *Application) marketCardJob(ctx context.Context, typeID, regionID int6
 	if err != nil {
 		return cardJob{}, false
 	}
-	regionName, ok := marketRegionName(regionID)
+	regionName, ok := app.marketRegionName(ctx, regionID)
 	if !ok {
 		return cardJob{}, false
 	}

@@ -102,7 +102,7 @@ func (app *Application) handleMarketBasketItemsJSON(w http.ResponseWriter, r *ht
 // items the builder just picked, in the builder's region.
 func (app *Application) handleMarketBasketPrices(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	regionID := basketRegion(r.URL.Query().Get("region"))
+	regionID := app.basketRegion(ctx, r.URL.Query().Get("region"))
 	var ids []int64
 	for _, raw := range strings.Split(r.URL.Query().Get("types"), ",") {
 		if id, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64); err == nil && id > 0 {
@@ -164,7 +164,7 @@ func (app *Application) handleMarketBasketCreateAPI(w http.ResponseWriter, r *ht
 		return
 	}
 	regionID := in.Region
-	if _, ok := marketRegionName(regionID); !ok {
+	if _, ok := app.marketRegionName(ctx, regionID); !ok {
 		regionID = defaultMarketRegion
 	}
 	id, err := app.queries.CreateMarketBasket(ctx, db.CreateMarketBasketParams{
@@ -180,7 +180,7 @@ func (app *Application) handleMarketBasketCreateAPI(w http.ResponseWriter, r *ht
 		basketJSONError(w, http.StatusInternalServerError, "Saved the basket, but not its items. Try editing it.")
 		return
 	}
-	regionName, _ := marketRegionName(regionID)
+	regionName, _ := app.marketRegionName(ctx, regionID)
 	writeBasketJSON(w, http.StatusCreated, map[string]any{
 		"id": id, "name": name, "region_name": regionName, "items": len(in.Items),
 	})

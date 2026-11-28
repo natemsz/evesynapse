@@ -165,11 +165,11 @@ func (app *Application) buildMarketLPView(ctx context.Context, q map[string][]st
 	}
 	view := &marketLPView{RegionID: defaultMarketRegion, MinVolume: 10, Instant: get("side") == "buy"}
 	if id, err := strconv.ParseInt(get("region"), 10, 64); err == nil {
-		if _, ok := marketRegionName(id); ok {
+		if marketHubRegion(id) {
 			view.RegionID = id
 		}
 	}
-	view.RegionName, _ = marketRegionName(view.RegionID)
+	view.RegionName, _ = app.marketRegionName(ctx, view.RegionID)
 	if v, err := strconv.ParseInt(get("minvol"), 10, 64); err == nil && v >= 0 {
 		view.MinVolume = v
 	}

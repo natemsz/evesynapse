@@ -175,7 +175,7 @@ func (app *Application) warmMarketHistory(ctx context.Context, allowance *fetchB
 			if err := app.refreshMarketMoversRanked(ctx, regionID, now); err != nil {
 				logging.Errorf("worker: market history: refresh ranked movers for region %d: %v", regionID, err)
 			}
-			if _, isHub := marketRegionName(regionID); isHub {
+			if marketHubRegion(regionID) {
 				hubTouched = true
 			}
 		}

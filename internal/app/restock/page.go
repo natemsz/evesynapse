@@ -58,19 +58,19 @@ type restockView struct {
 	Short      int // targets with a shortfall
 }
 
-func (app *page) restockRegion(raw string) (int64, string) {
+func (app *page) restockRegion(ctx context.Context, raw string) (int64, string) {
 	if id, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64); err == nil && id != 0 {
-		if name, ok := app.deps.MarketRegionName(id); ok {
+		if name, ok := app.deps.MarketRegionName(ctx, id); ok {
 			return id, name
 		}
 	}
 	id := app.deps.DefaultMarketRegion()
-	name, _ := app.deps.MarketRegionName(id)
+	name, _ := app.deps.MarketRegionName(ctx, id)
 	return id, name
 }
 
-func (app *page) restockRedirectURL(raw string) string {
-	id, _ := app.restockRegion(raw)
+func (app *page) restockRedirectURL(ctx context.Context, raw string) string {
+	id, _ := app.restockRegion(ctx, raw)
 	if id != app.deps.DefaultMarketRegion() {
 		return "/market/restock/?region=" + strconv.FormatInt(id, 10)
 	}
@@ -96,7 +96,7 @@ func (app *page) handleRestock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *page) buildRestockView(ctx context.Context, r *http.Request) *restockView {
-	regionID, regionName := app.restockRegion(r.URL.Query().Get("region"))
+	regionID, regionName := app.restockRegion(ctx, r.URL.Query().Get("region"))
 	regions := make([]module.RegionChoice, 0, len(app.deps.MarketRegions()))
 	for _, reg := range app.deps.MarketRegions() {
 		regions = append(regions, module.RegionChoice{
@@ -260,7 +260,7 @@ func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 	targetQty, _ := strconv.ParseInt(r.Form.Get("target_qty"), 10, 64)
 	marginPct, _ := strconv.ParseFloat(r.Form.Get("min_margin_pct"), 64)
 	if typeID <= 0 || targetQty < 0 {
-		http.Redirect(w, r, app.restockRedirectURL(r.Form.Get("region")), http.StatusSeeOther)
+		http.Redirect(w, r, app.restockRedirectURL(ctx, r.Form.Get("region")), http.StatusSeeOther)
 		return
 	}
 	if err := app.queries.UpsertRestockTarget(ctx, db.UpsertRestockTargetParams{
@@ -271,7 +271,7 @@ func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		logging.Errorf("restock: upsert target user %d type %d: %v", userID, typeID, err)
 	}
-	http.Redirect(w, r, app.restockRedirectURL(r.Form.Get("region")), http.StatusSeeOther)
+	http.Redirect(w, r, app.restockRedirectURL(ctx, r.Form.Get("region")), http.StatusSeeOther)
 }
 
 // restockTypeByName resolves the add form's item box when no pick
@@ -317,5 +317,5 @@ func (app *page) handleRestockDelete(w http.ResponseWriter, r *http.Request) {
 			logging.Errorf("restock: delete target user %d type %d: %v", userID, typeID, err)
 		}
 	}
-	http.Redirect(w, r, app.restockRedirectURL(r.Form.Get("region")), http.StatusSeeOther)
+	http.Redirect(w, r, app.restockRedirectURL(ctx, r.Form.Get("region")), http.StatusSeeOther)
 }

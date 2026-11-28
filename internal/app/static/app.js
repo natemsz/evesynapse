@@ -1783,6 +1783,9 @@
           input.focus();
           input.setSelectionRange(stash.caret, stash.caret);
         } catch (e) { /* the box keeps the browser's default focus */ }
+        // The swap replaced the box and its suggestion list: ask
+        // again for the text in it, so the suggestions show.
+        input.dispatchEvent(new Event("input"));
       }
       var last = input.value;
       var timer = null;

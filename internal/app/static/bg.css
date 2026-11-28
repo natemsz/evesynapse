@@ -198,6 +198,8 @@ html[data-backdrop="glow"] body::before {
 }
 .legal-text {
   white-space: pre-wrap;
+  /* The texts' long rule lines have no spaces to break at. */
+  overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   line-height: 1.55;

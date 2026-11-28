@@ -6513,6 +6513,7 @@ button.gn-title:hover .gn-more, button.gn-title:focus-visible .gn-more { color: 
    bar showing its weight against the largest row. */
 .dirlist { display: flex; flex-direction: column; gap: 0.35rem; }
 .diritem { display: block; min-width: 0; padding: 0.55rem 0.7rem; border: 1px solid transparent; border-radius: var(--r-sm); color: var(--text); text-decoration: none; }
+.diritem[hidden] { display: none; }
 .diritem:hover { background: var(--glass); }
 .diritem.on { background: var(--glass); border-color: var(--gold); }
 .dir-top { display: flex; align-items: center; gap: 0.5rem; }

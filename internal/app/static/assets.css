@@ -140,6 +140,10 @@
    a card grid above the table, containers as full-width rows, and
    the table keeps Item, Qty and Value. */
 @container console (width < 46rem) {
+  /* The search takes its own row under the back link and the
+     character picker. */
+  .amx-tools { order: 1; flex: 1 1 100%; }
+  .amx-scope { flex-basis: 12rem; }
   .mships { display: block; margin-top: 0.9rem; }
   .mships-h { margin: 0 0 0.5rem; font-size: var(--fs-md); }
   /* As many cards across as fit: two on a phone, more as it widens. */

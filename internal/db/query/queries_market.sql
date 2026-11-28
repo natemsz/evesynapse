@@ -650,8 +650,9 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        mover_score, isk_move_7d, daily_spread_profit, spread_pct, spread_widened, confirmed_hubs
 FROM market_region_stats
 WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
--- All swept region stats for the in-memory stat pack snapshot
--- (market_stat_pack.go): loaded once at startup and kept resident.
+-- Swept region stats for the in-memory stat pack snapshot
+-- (market_stat_pack.go), for the regions it holds: loaded once at
+-- startup and kept resident.
 -- name: ListStatPackRegionStats :many
 SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, avg_daily_volume,
        sell_avg, sell_max, sell_p5, sell_stddev, buy_avg, buy_min, buy_p5, buy_stddev,
@@ -661,15 +662,8 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        sell_avg_7d, sell_median_7d, sell_median_30d, mover_chg_7v30, mover_hold_days,
        isk_traded_7d, avg_orders_7d, avg_vol_7d, avg_vol_30d,
        mover_score, isk_move_7d, daily_spread_profit, spread_pct, spread_widened, confirmed_hubs
-FROM market_region_stats;
--- All station stats for the in-memory stat pack snapshot.
--- name: ListStatPackStationStats :many
-SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy
-FROM market_station_stats;
--- All recorded best beats for the in-memory stat pack snapshot.
--- name: ListStatPackBestBeats :many
-SELECT location_id, region_id, type_id, is_buy_order, at
-FROM market_best_beats;
+FROM market_region_stats
+WHERE region_id = ANY($1::bigint[]);
 -- name: ListMarketRegionAvgVolumes :many
 -- The sold-per-day figure each of a region's stats rows carries:
 -- kept current at history ingest (RefreshMarketRegionStatAvgVolume),
@@ -692,6 +686,12 @@ JOIN (
 WHERE h.region_id = sqlc.arg(region_id) AND h.type_id = ANY(sqlc.arg(type_ids)::bigint[])
   AND h.date >= w.window_start
 GROUP BY h.type_id;
+-- name: PruneMarketRegionStatsDaily :exec
+-- Drops one region's daily stat rows older than the kept window
+-- (day is YYYY-MM-DD text, so text order is date order); the
+-- (region_id, day) index serves it.
+DELETE FROM market_region_stats_daily
+WHERE region_id = sqlc.arg(region_id) AND day < sqlc.arg(before)::text;
 -- name: UpsertMarketRegionStatDaily :exec
 INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)

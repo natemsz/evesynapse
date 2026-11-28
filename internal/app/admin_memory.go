@@ -123,8 +123,8 @@ func (app *Application) refreshMemoryBreakdown(now time.Time) {
 	app.statPackIdx.mu.RLock()
 	if s := app.statPackIdx.snap; s != nil {
 		parts = append(parts, surface{"stats", "Market stat pack",
-			fmt.Sprintf("%s region rows, %s station rows, %s fallback rows, %s best beats, %s estimates",
-				n(len(s.regionStats)), n(len(s.stationStats)), n(len(s.fallbacks)), n(len(s.beats)), n(len(s.estimates))),
+			fmt.Sprintf("%s region rows, %s fallback rows, %s estimates",
+				n(len(s.regionStats)), n(len(s.fallbacks)), n(len(s.estimates))),
 			memsize.Of(s)})
 	}
 	app.statPackIdx.mu.RUnlock()

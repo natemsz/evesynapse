@@ -226,15 +226,14 @@ func marketRegionLabel(regionID int64) string {
 }
 
 // regionStoreResult is what one stored sweep wrote: whether it was a
-// full write, the items written and the items removed, and the
-// station rows written, which the stat pack takes in place.
+// full write, the items written and the items removed, and how many
+// station rows it wrote.
 type regionStoreResult struct {
 	full        bool
 	written     int
 	stationRows int
 	changed     []int64
 	gone        []int64
-	stations    []db.MarketStationStat
 }
 
 // regionTypeStats is one item's region figures from its book.
@@ -609,6 +608,9 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 		if err := qtx.DeleteMarketBookOrdersByRegion(ctx, regionID); err != nil {
 			return res, err
 		}
+		if err := pruneDailyStats(ctx, qtx, regionID, now); err != nil {
+			return res, fmt.Errorf("prune daily stats: %w", err)
+		}
 	} else {
 		if len(res.gone) > 0 {
 			if _, err := tx.Exec(ctx, `DELETE FROM market_region_stats WHERE region_id = $1 AND type_id = ANY($2::bigint[])`, regionID, res.gone); err != nil {
@@ -837,13 +839,6 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 			buyOrds[i] = sacc.BuyOrders
 			sellVols[i] = sacc.SellVolume
 			buyVols[i] = sacc.BuyVolume
-			res.stations = append(res.stations, db.MarketStationStat{
-				LocationID: k.LocationID, RegionID: regionID, TypeID: k.TypeID,
-				BestSell: sacc.BestSell, BestBuy: sacc.BestBuy,
-				SellOrders: sacc.SellOrders, BuyOrders: sacc.BuyOrders,
-				SellVolume: sacc.SellVolume, BuyVolume: sacc.BuyVolume,
-				TypicalSell: sacc.TypicalSell, TypicalBuy: sacc.TypicalBuy, UpdatedAt: now,
-			})
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, typical_sell, typical_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)
@@ -1018,6 +1013,17 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	}
 	app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")
 	return res, nil
+}
+
+// marketDailyKeepDays is how many days of daily stat rows each region
+// keeps; older rows go on the region's first full write of a day.
+const marketDailyKeepDays = 400
+
+// pruneDailyStats drops regionID's daily stat rows older than
+// marketDailyKeepDays before now.
+func pruneDailyStats(ctx context.Context, q *db.Queries, regionID int64, now time.Time) error {
+	before := now.UTC().AddDate(0, 0, -marketDailyKeepDays).Format("2006-01-02")
+	return q.PruneMarketRegionStatsDaily(ctx, db.PruneMarketRegionStatsDailyParams{RegionID: regionID, Before: before})
 }
 
 // refreshMarketMoversRankedTx replaces one region's pre-ranked mover rows

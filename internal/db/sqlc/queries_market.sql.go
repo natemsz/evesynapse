@@ -3830,46 +3830,6 @@ func (q *Queries) ListScannerOpportunities(ctx context.Context, arg ListScannerO
 	return items, nil
 }
 
-const listStatPackBestBeats = `-- name: ListStatPackBestBeats :many
-SELECT location_id, region_id, type_id, is_buy_order, at
-FROM market_best_beats
-`
-
-type ListStatPackBestBeatsRow struct {
-	LocationID int64     `json:"location_id"`
-	RegionID   int64     `json:"region_id"`
-	TypeID     int64     `json:"type_id"`
-	IsBuyOrder int64     `json:"is_buy_order"`
-	At         time.Time `json:"at"`
-}
-
-// All recorded best beats for the in-memory stat pack snapshot.
-func (q *Queries) ListStatPackBestBeats(ctx context.Context) ([]ListStatPackBestBeatsRow, error) {
-	rows, err := q.db.Query(ctx, listStatPackBestBeats)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListStatPackBestBeatsRow
-	for rows.Next() {
-		var i ListStatPackBestBeatsRow
-		if err := rows.Scan(
-			&i.LocationID,
-			&i.RegionID,
-			&i.TypeID,
-			&i.IsBuyOrder,
-			&i.At,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listStatPackFallbackStats = `-- name: ListStatPackFallbackStats :many
 SELECT region_id, type_id, median_sell, fivepct_sell, median_buy, fivepct_buy, sell_orders, buy_orders, sell_volume, buy_volume, source, orderset_id, source_asof, fetched_at,
        wavg_sell, min_sell, max_sell, stddev_sell, wavg_buy, min_buy, max_buy, stddev_buy
@@ -3929,12 +3889,14 @@ SELECT region_id, type_id, best_sell, typical_sell, sell_band, best_buy, typical
        isk_traded_7d, avg_orders_7d, avg_vol_7d, avg_vol_30d,
        mover_score, isk_move_7d, daily_spread_profit, spread_pct, spread_widened, confirmed_hubs
 FROM market_region_stats
+WHERE region_id = ANY($1::bigint[])
 `
 
-// All swept region stats for the in-memory stat pack snapshot
-// (market_stat_pack.go): loaded once at startup and kept resident.
-func (q *Queries) ListStatPackRegionStats(ctx context.Context) ([]MarketRegionStat, error) {
-	rows, err := q.db.Query(ctx, listStatPackRegionStats)
+// Swept region stats for the in-memory stat pack snapshot
+// (market_stat_pack.go), for the regions it holds: loaded once at
+// startup and kept resident.
+func (q *Queries) ListStatPackRegionStats(ctx context.Context, dollar_1 []int64) ([]MarketRegionStat, error) {
+	rows, err := q.db.Query(ctx, listStatPackRegionStats, dollar_1)
 	if err != nil {
 		return nil, err
 	}
@@ -3994,45 +3956,6 @@ func (q *Queries) ListStatPackRegionStats(ctx context.Context) ([]MarketRegionSt
 			&i.SpreadPct,
 			&i.SpreadWidened,
 			&i.ConfirmedHubs,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listStatPackStationStats = `-- name: ListStatPackStationStats :many
-SELECT location_id, region_id, type_id, best_sell, best_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at, typical_sell, typical_buy
-FROM market_station_stats
-`
-
-// All station stats for the in-memory stat pack snapshot.
-func (q *Queries) ListStatPackStationStats(ctx context.Context) ([]MarketStationStat, error) {
-	rows, err := q.db.Query(ctx, listStatPackStationStats)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []MarketStationStat
-	for rows.Next() {
-		var i MarketStationStat
-		if err := rows.Scan(
-			&i.LocationID,
-			&i.RegionID,
-			&i.TypeID,
-			&i.BestSell,
-			&i.BestBuy,
-			&i.SellOrders,
-			&i.BuyOrders,
-			&i.SellVolume,
-			&i.BuyVolume,
-			&i.UpdatedAt,
-			&i.TypicalSell,
-			&i.TypicalBuy,
 		); err != nil {
 			return nil, err
 		}
@@ -4355,6 +4278,24 @@ type PruneMarketChangesParams struct {
 
 func (q *Queries) PruneMarketChanges(ctx context.Context, arg PruneMarketChangesParams) error {
 	_, err := q.db.Exec(ctx, pruneMarketChanges, arg.RegionID, arg.BeforeDay)
+	return err
+}
+
+const pruneMarketRegionStatsDaily = `-- name: PruneMarketRegionStatsDaily :exec
+DELETE FROM market_region_stats_daily
+WHERE region_id = $1 AND day < $2::text
+`
+
+type PruneMarketRegionStatsDailyParams struct {
+	RegionID int64  `json:"region_id"`
+	Before   string `json:"before"`
+}
+
+// Drops one region's daily stat rows older than the kept window
+// (day is YYYY-MM-DD text, so text order is date order); the
+// (region_id, day) index serves it.
+func (q *Queries) PruneMarketRegionStatsDaily(ctx context.Context, arg PruneMarketRegionStatsDailyParams) error {
+	_, err := q.db.Exec(ctx, pruneMarketRegionStatsDaily, arg.RegionID, arg.Before)
 	return err
 }
 

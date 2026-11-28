@@ -38,24 +38,26 @@ type statPackKey struct {
 	typeID   int64
 }
 
-type beatRecord struct {
-	LocationID int64
-	RegionID   int64
-	TypeID     int64
-	IsBuyOrder int64
-	At         time.Time
-}
-
 // statPackSnapshot is the in-memory copy of the market derived stat
-// pack: swept region stats, station stats, and beats held in RAM
+// pack for the regions statPackRegion names: their swept region
+// stats, the true-value estimates and the fallback rows, held in RAM
 // and served without touching Postgres on render.
 type statPackSnapshot struct {
-	regionStats  map[statPackKey]db.MarketRegionStat
-	byType       map[int64][]db.MarketRegionStat
-	stationStats map[stationKey]db.MarketStationStat
-	beats        []beatRecord
-	estimates    map[int64]db.TrueValue
-	fallbacks    map[statPackKey]db.MarketStatsFallback
+	regionStats map[statPackKey]db.MarketRegionStat
+	estimates   map[int64]db.TrueValue
+	fallbacks   map[statPackKey]db.MarketStatsFallback
+}
+
+// statPackRegion reports whether the resident stat pack holds a
+// region: the trade hubs and the global market. Any other region
+// reads its stored rows through SQL.
+func statPackRegion(id int64) bool {
+	return marketHubRegion(id) || id == globalMarketRegion
+}
+
+// statPackRegionIDs lists the regions statPackRegion names.
+func statPackRegionIDs() []int64 {
+	return append(marketHubRegionIDs(), globalMarketRegion)
 }
 
 // statPackIndexState holds the Application's resident snapshot and
@@ -93,17 +95,9 @@ func (app *Application) kickStatPackBuild() {
 // buildStatPack reads the market derived tables and swaps the
 // in-memory snapshot whole.
 func (app *Application) buildStatPack(ctx context.Context) error {
-	regionRows, err := app.queries.ListStatPackRegionStats(ctx)
+	regionRows, err := app.queries.ListStatPackRegionStats(ctx, statPackRegionIDs())
 	if err != nil {
 		return fmt.Errorf("stat pack: region stats: %w", err)
-	}
-	stationRows, err := app.queries.ListStatPackStationStats(ctx)
-	if err != nil {
-		return fmt.Errorf("stat pack: station stats: %w", err)
-	}
-	beatRows, err := app.queries.ListStatPackBestBeats(ctx)
-	if err != nil {
-		return fmt.Errorf("stat pack: best beats: %w", err)
 	}
 	tvRows, err := app.queries.ListTrueValues(ctx)
 	if err != nil {
@@ -115,29 +109,12 @@ func (app *Application) buildStatPack(ctx context.Context) error {
 	}
 
 	snap := &statPackSnapshot{
-		regionStats:  make(map[statPackKey]db.MarketRegionStat, len(regionRows)),
-		byType:       make(map[int64][]db.MarketRegionStat),
-		stationStats: make(map[stationKey]db.MarketStationStat, len(stationRows)),
-		beats:        make([]beatRecord, len(beatRows)),
-		estimates:    make(map[int64]db.TrueValue, len(tvRows)),
-		fallbacks:    make(map[statPackKey]db.MarketStatsFallback, len(fbRows)),
+		regionStats: make(map[statPackKey]db.MarketRegionStat, len(regionRows)),
+		estimates:   make(map[int64]db.TrueValue, len(tvRows)),
+		fallbacks:   make(map[statPackKey]db.MarketStatsFallback, len(fbRows)),
 	}
 	for _, r := range regionRows {
-		k := statPackKey{regionID: r.RegionID, typeID: r.TypeID}
-		snap.regionStats[k] = r
-		snap.byType[r.TypeID] = append(snap.byType[r.TypeID], r)
-	}
-	for _, s := range stationRows {
-		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
-	}
-	for i, b := range beatRows {
-		snap.beats[i] = beatRecord{
-			LocationID: b.LocationID,
-			RegionID:   b.RegionID,
-			TypeID:     b.TypeID,
-			IsBuyOrder: b.IsBuyOrder,
-			At:         b.At,
-		}
+		snap.regionStats[statPackKey{regionID: r.RegionID, typeID: r.TypeID}] = r
 	}
 	for _, tv := range tvRows {
 		snap.estimates[tv.TypeID] = tv
@@ -196,17 +173,12 @@ func (app *Application) noteStatPackTrueValue(row db.TrueValue) {
 // never serves staler data than SQL even before a full backstop rebuild
 // runs.
 func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int64) {
-	if app.cfg.lowRAMMode {
+	if app.cfg.lowRAMMode || !statPackRegion(regionID) {
 		return
 	}
 	rRows, err := app.queries.ListMarketRegionStatsByRegion(ctx, regionID)
 	if err != nil {
 		logging.Warnf("stat pack: refresh region %d stats: %v", regionID, err)
-		return
-	}
-	sRows, err := app.queries.ListMarketStationStatsByRegion(ctx, regionID)
-	if err != nil {
-		logging.Warnf("stat pack: refresh region %d station stats: %v", regionID, err)
 		return
 	}
 
@@ -237,18 +209,6 @@ func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int6
 	for _, r := range rRows {
 		snap.regionStats[statPackKey{regionID: r.RegionID, typeID: r.TypeID}] = r
 	}
-	snap.byType = make(map[int64][]db.MarketRegionStat, len(snap.regionStats))
-	for _, r := range snap.regionStats {
-		snap.byType[r.TypeID] = append(snap.byType[r.TypeID], r)
-	}
-	for k, s := range snap.stationStats {
-		if s.RegionID == regionID {
-			delete(snap.stationStats, k)
-		}
-	}
-	for _, s := range sRows {
-		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
-	}
 	idx.stale = false
 	idx.mu.Unlock()
 	// The snapshot is current; fan the refreshed rows out to the
@@ -262,11 +222,10 @@ func (app *Application) refreshStatPackRegion(ctx context.Context, regionID int6
 
 // refreshStatPackTypes updates the resident snapshot after a sweep
 // that wrote only some items: the written items' region rows are
-// read back (their trend figures are derived in SQL), their station
-// rows come from the sweep itself, and the removed items leave. The
-// rest of the snapshot is untouched.
-func (app *Application) refreshStatPackTypes(ctx context.Context, regionID int64, changed, gone []int64, stations []db.MarketStationStat) {
-	if app.cfg.lowRAMMode {
+// read back (their trend figures are derived in SQL) and the removed
+// items leave. The rest of the snapshot is untouched.
+func (app *Application) refreshStatPackTypes(ctx context.Context, regionID int64, changed, gone []int64) {
+	if app.cfg.lowRAMMode || !statPackRegion(regionID) {
 		return
 	}
 	var rRows []db.MarketRegionStat
@@ -283,7 +242,7 @@ func (app *Application) refreshStatPackTypes(ctx context.Context, regionID int64
 		}
 	}
 
-	if !app.patchStatPackTypes(regionID, changed, gone, rRows, stations) {
+	if !app.patchStatPackTypes(regionID, gone, rRows) {
 		return // no snapshot yet: the first build reads the stored rows whole
 	}
 	// As after a full region refresh: fan the written rows out to the
@@ -296,7 +255,7 @@ func (app *Application) refreshStatPackTypes(ctx context.Context, regionID int64
 // patchStatPackTypes applies refreshStatPackTypes' rows to the
 // resident snapshot under its lock, reporting false when no snapshot
 // has landed yet.
-func (app *Application) patchStatPackTypes(regionID int64, changed, gone []int64, rRows []db.MarketRegionStat, stations []db.MarketStationStat) bool {
+func (app *Application) patchStatPackTypes(regionID int64, gone []int64, rRows []db.MarketRegionStat) bool {
 	idx := &app.statPackIdx
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
@@ -304,40 +263,11 @@ func (app *Application) patchStatPackTypes(regionID int64, changed, gone []int64
 	if snap == nil {
 		return false
 	}
-	touched := make(map[int64]bool, len(changed)+len(gone))
-	for _, t := range changed {
-		touched[t] = true
-	}
 	for _, t := range gone {
-		touched[t] = true
 		delete(snap.regionStats, statPackKey{regionID: regionID, typeID: t})
 	}
 	for _, r := range rRows {
 		snap.regionStats[statPackKey{regionID: r.RegionID, typeID: r.TypeID}] = r
-	}
-	for t := range touched {
-		var list []db.MarketRegionStat
-		for _, r := range snap.byType[t] {
-			if r.RegionID != regionID {
-				list = append(list, r)
-			}
-		}
-		if r, ok := snap.regionStats[statPackKey{regionID: regionID, typeID: t}]; ok {
-			list = append(list, r)
-		}
-		if len(list) == 0 {
-			delete(snap.byType, t)
-		} else {
-			snap.byType[t] = list
-		}
-	}
-	for k, s := range snap.stationStats {
-		if s.RegionID == regionID && touched[k.TypeID] {
-			delete(snap.stationStats, k)
-		}
-	}
-	for _, s := range stations {
-		snap.stationStats[stationKey{LocationID: s.LocationID, TypeID: s.TypeID}] = s
 	}
 	return true
 }
@@ -379,8 +309,14 @@ func (app *Application) loadStatPacks(ctx context.Context, regionID int64, typeI
 		return out, nil
 	}
 
+	// The pack holds only statPackRegion's regions; SQL serves any
+	// other region whole.
 	servedFromMem := false
-	if snap := app.statPackSnapshot(); snap != nil {
+	var snap *statPackSnapshot
+	if statPackRegion(regionID) {
+		snap = app.statPackSnapshot()
+	}
+	if snap != nil {
 		idx := &app.statPackIdx
 		idx.mu.RLock()
 		if s := idx.snap; s != nil {

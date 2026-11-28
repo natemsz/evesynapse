@@ -1108,3 +1108,41 @@ func TestRegionSweepWindowDropsAndRecovers(t *testing.T) {
 		t.Fatalf("window grew past the full window: %d, want %d", got, sweepPageWindow)
 	}
 }
+
+// TestDailyStatsPruneKeeps400Days pins the daily stat window: a prune
+// drops a region's rows older than 400 days and keeps younger ones,
+// and never touches another region's rows.
+func TestDailyStatsPruneKeeps400Days(t *testing.T) {
+	app, _, q := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	now := time.Date(2026, 11, 28, 12, 0, 0, 0, time.UTC)
+	day := func(back int) string { return now.AddDate(0, 0, -back).Format("2006-01-02") }
+	for _, r := range []struct {
+		region int64
+		day    string
+	}{{10000002, day(399)}, {10000002, day(401)}, {10000043, day(500)}} {
+		if _, err := app.db.ExecContext(ctx, `INSERT INTO market_region_stats_daily (region_id, type_id, day) VALUES ($1, 34, $2)`, r.region, r.day); err != nil {
+			t.Fatalf("seed daily row: %v", err)
+		}
+	}
+	if err := pruneDailyStats(ctx, q, 10000002, now); err != nil {
+		t.Fatalf("pruneDailyStats: %v", err)
+	}
+	var kept []string
+	rows, err := app.db.QueryContext(ctx, `SELECT region_id || ':' || day FROM market_region_stats_daily ORDER BY region_id, day`)
+	if err != nil {
+		t.Fatalf("read daily rows: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		kept = append(kept, k)
+	}
+	want := []string{"10000002:" + day(399), "10000043:" + day(500)}
+	if strings.Join(kept, ",") != strings.Join(want, ",") {
+		t.Fatalf("daily rows after prune = %v, want %v", kept, want)
+	}
+}

@@ -215,7 +215,7 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 	originID := app.deps.DefaultMarketRegion()
 	if raw := module.QueryValue(q, "origin"); raw != "" {
 		if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			if _, ok := app.deps.MarketRegionName(id); ok {
+			if _, ok := app.deps.MarketRegionName(ctx, id); ok {
 				originID = id
 			}
 		}
@@ -223,13 +223,13 @@ func (app *page) buildTradefinderView(ctx context.Context, q map[string][]string
 	destID := defaultTradefinderDestination
 	if raw := module.QueryValue(q, "destination"); raw != "" {
 		if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			if _, ok := app.deps.MarketRegionName(id); ok {
+			if _, ok := app.deps.MarketRegionName(ctx, id); ok {
 				destID = id
 			}
 		}
 	}
-	originName, _ := app.deps.MarketRegionName(originID)
-	destName, _ := app.deps.MarketRegionName(destID)
+	originName, _ := app.deps.MarketRegionName(ctx, originID)
+	destName, _ := app.deps.MarketRegionName(ctx, destID)
 
 	minMargin := defaultTradefinderMinMarginPct
 	if raw := module.QueryValue(q, "minmargin"); raw != "" {

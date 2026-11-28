@@ -73,7 +73,7 @@ func (app *Application) attachIndustry(ctx context.Context, view *profitView, us
 		view.Regions = append(view.Regions, profitRegionChoice{ID: r.ID, Name: r.Name, Selected: r.ID == prefs.IndustryRegion})
 	}
 	view.IndustrySideBuy = prefs.IndustrySide == module.AppraisalModeBuy
-	view.IndustryRegion, _ = marketRegionName(prefs.IndustryRegion)
+	view.IndustryRegion, _ = app.marketRegionName(ctx, prefs.IndustryRegion)
 	rows, err := app.queries.ListIndustrySummary(ctx, db.ListIndustrySummaryParams{PoolKind: poolKind, PoolIds: poolIDs, RowCap: industryRowCap})
 	if err != nil {
 		return err

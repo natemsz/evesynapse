@@ -447,7 +447,7 @@ func (app *Application) attachAllRegionStats(ctx context.Context, item *marketIt
 		if name == "" {
 			name = "Region " + strconv.FormatInt(id, 10)
 		}
-		_, hub := marketRegionName(id)
+		hub := marketHubRegion(id)
 		row := marketRegionStatRow{
 			RegionID: id, RegionName: name, HasData: true, Hub: hub,
 			Active: id == item.RegionID, Age: ageText(now, res.AsOf),

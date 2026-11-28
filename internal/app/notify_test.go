@@ -330,7 +330,7 @@ func TestNotifyWatchGlobalTypeReadsGlobalRegion(t *testing.T) {
 	if n := f.pass(now.Add(time.Minute)); n != 1 {
 		t.Fatalf("after the jump: %d notification(s) %q, want 1", n, f.titles())
 	}
-	if got := f.titles()[0]; !strings.Contains(got, "in Global market") {
+	if got := f.titles()[0]; !strings.Contains(got, "in Global PLEX market") {
 		t.Fatalf("the alert names the wrong market: %q", got)
 	}
 }

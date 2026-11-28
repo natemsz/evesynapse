@@ -76,10 +76,10 @@ type lpWidgetView struct {
 func buildLPWidget(ctx context.Context, app *Application, in *widgetInput) any {
 	v := &lpWidgetView{Empty: wEmpty{Text: "Loyalty points have not loaded yet.", Step: "Open the LP stores", Href: "/market/lp/"}}
 	regionID, _ := strconv.ParseInt(in.Opts.Get("region"), 10, 64)
-	regionName, ok := marketRegionName(regionID)
+	regionName, ok := app.marketRegionName(ctx, regionID)
 	if !ok {
 		regionID = defaultMarketRegion
-		regionName, _ = marketRegionName(regionID)
+		regionName, _ = app.marketRegionName(ctx, regionID)
 	}
 	byCorp := map[int64]*lpCorpRow{}
 	var total int64

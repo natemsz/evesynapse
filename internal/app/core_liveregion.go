@@ -70,10 +70,10 @@ func (app *Application) handleMarketHistoryFragment(w http.ResponseWriter, r *ht
 		http.Error(w, "bad history fragment request", http.StatusBadRequest)
 		return
 	}
-	if _, ok := marketRegionName(regionID); !ok {
+	if _, ok := app.marketRegionName(ctx, regionID); !ok {
 		regionID = defaultMarketRegion
 	}
-	regionName, _ := marketRegionName(regionID)
+	regionName, _ := app.marketRegionName(ctx, regionID)
 	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName, Anonymous: app.userID(ctx) == 0}
 	if q.Get("page") == "item" {
 		item.HistoryPage = "item"
@@ -102,10 +102,10 @@ func (app *Application) handleMarketTraderFragment(w http.ResponseWriter, r *htt
 		http.Error(w, "bad trader fragment request", http.StatusBadRequest)
 		return
 	}
-	if _, ok := marketRegionName(regionID); !ok {
+	if _, ok := app.marketRegionName(ctx, regionID); !ok {
 		regionID = defaultMarketRegion
 	}
-	regionName, _ := marketRegionName(regionID)
+	regionName, _ := app.marketRegionName(ctx, regionID)
 	item := &marketItem{TypeID: typeID, RegionID: regionID, RegionName: regionName, Anonymous: app.userID(ctx) == 0}
 	if q.Get("page") == "item" {
 		item.HistoryPage = "item"

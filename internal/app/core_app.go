@@ -1749,7 +1749,11 @@ func (app *Application) DefaultMarketRegion() int64 { return defaultMarketRegion
 
 func (app *Application) GlobalMarketRegion() int64 { return globalMarketRegion }
 
-func (app *Application) MarketRegionName(id int64) (string, bool) { return marketRegionName(id) }
+func (app *Application) MarketRegionName(ctx context.Context, id int64) (string, bool) {
+	return app.marketRegionName(ctx, id)
+}
+
+func (app *Application) MarketHubRegion(id int64) bool { return marketHubRegion(id) }
 
 func (app *Application) QueueHistoryWant(ctx context.Context, regionID, typeID int64) error {
 	return app.queries.UpsertMarketHistoryWant(ctx, db.UpsertMarketHistoryWantParams{

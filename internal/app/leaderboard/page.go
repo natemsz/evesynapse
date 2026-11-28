@@ -83,7 +83,7 @@ func (app *page) buildLeaderboardView(ctx context.Context, q url.Values) *leader
 		view.Sort = "orders"
 	}
 	if regionID, err := strconv.ParseInt(q.Get("region"), 10, 64); err == nil && regionID != 0 {
-		if _, ok := app.deps.MarketRegionName(regionID); ok {
+		if _, ok := app.deps.MarketRegionName(ctx, regionID); ok {
 			view.RegionID = regionID
 		}
 	}
@@ -121,7 +121,7 @@ func (app *page) buildLeaderboardView(ctx context.Context, q url.Values) *leader
 	}
 	stationMemo := make(map[int64]module.PlaceRef)
 	for _, row := range rows {
-		regionName, ok := app.deps.MarketRegionName(row.RegionID)
+		regionName, ok := app.deps.MarketRegionName(ctx, row.RegionID)
 		if !ok {
 			continue
 		}

@@ -62,12 +62,12 @@ func TestHomeWatchlistGlobalTypeReadsGlobalRegion(t *testing.T) {
 	lines := app.briefingMarketLines(ctx, bundles, map[int64]bool{}, map[int64]string{}, shared, now, 0, notifyPrefs{})
 	found := false
 	for _, l := range lines {
-		if strings.Contains(l.html, "in Global market") {
+		if strings.Contains(l.html, "in Global PLEX market") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("briefing lines = %v, want a watch-move line naming the Global market", lines)
+		t.Fatalf("briefing lines = %v, want a watch-move line naming the Global PLEX market", lines)
 	}
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("home watchlist reads made %d outbound calls, want 0", got)

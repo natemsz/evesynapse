@@ -117,7 +117,7 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 	}
 	own := 0
 	for _, b := range rows {
-		row := basketListRow(b.ID, b.Name, b.RegionID, !b.UserID.Valid, b.ItemCount)
+		row := app.basketListRow(ctx, b.ID, b.Name, b.RegionID, !b.UserID.Valid, b.ItemCount)
 		if b.ValueDay != "" {
 			row.Value = esi.FormatISK(b.ValueSell)
 			row.ValueShort = iskCompact(b.ValueSell)
@@ -163,8 +163,8 @@ func (app *Application) handleMarketBaskets(w http.ResponseWriter, r *http.Reque
 	app.render(ctx, w, http.StatusOK, "market_baskets.html", data)
 }
 
-func basketListRow(id int64, name string, regionID int64, preset bool, items int64) marketBasketListRow {
-	regionName, _ := marketRegionName(regionID)
+func (app *Application) basketListRow(ctx context.Context, id int64, name string, regionID int64, preset bool, items int64) marketBasketListRow {
+	regionName, _ := app.marketRegionName(ctx, regionID)
 	return marketBasketListRow{ID: id, Name: name, RegionName: regionName, Preset: preset, Items: items}
 }
 
@@ -232,7 +232,7 @@ func (app *Application) buildBasketView(ctx context.Context, b db.MarketBasket, 
 	if err != nil {
 		logging.Errorf("baskets: items of %d: %v", b.ID, err)
 	}
-	row := basketListRow(b.ID, b.Name, b.RegionID, !b.UserID.Valid, int64(len(items)))
+	row := app.basketListRow(ctx, b.ID, b.Name, b.RegionID, !b.UserID.Valid, int64(len(items)))
 	view.Basket = &row
 
 	// The stored figures (schema 123): worth, changes and deltas.
@@ -429,7 +429,7 @@ func (app *Application) handleMarketBasketCreate(w http.ResponseWriter, r *http.
 		return
 	}
 	name := basketName(r.Form.Get("name"))
-	regionID := basketRegion(r.Form.Get("region"))
+	regionID := app.basketRegion(ctx, r.Form.Get("region"))
 	lines := parseBasketLines(r.Form.Get("items"))
 	if from := r.Form.Get("from"); from != "" {
 		src, ok := app.loadBasketFor(ctx, from, userID)
@@ -508,7 +508,7 @@ func (app *Application) handleMarketBasketEdit(w http.ResponseWriter, r *http.Re
 		}
 	}
 	if err := app.queries.UpdateMarketBasket(ctx, db.UpdateMarketBasketParams{
-		ID: b.ID, UserID: b.UserID, Name: name, RegionID: basketRegion(r.Form.Get("region")),
+		ID: b.ID, UserID: b.UserID, Name: name, RegionID: app.basketRegion(ctx, r.Form.Get("region")),
 	}); err != nil {
 		logging.Errorf("baskets: update %d: %v", b.ID, err)
 		back("Couldn't save the basket right now.")
@@ -517,7 +517,7 @@ func (app *Application) handleMarketBasketEdit(w http.ResponseWriter, r *http.Re
 	if !hasItems {
 		// A new region reprices the basket: its values and figures
 		// are rebuilt from that region's stored rows.
-		if region := basketRegion(r.Form.Get("region")); region != b.RegionID {
+		if region := app.basketRegion(ctx, r.Form.Get("region")); region != b.RegionID {
 			if err := app.rebuildBasketValues(ctx, b.ID); err != nil {
 				logging.Errorf("baskets: reprice %d: %v", b.ID, err)
 			}
@@ -609,9 +609,9 @@ func basketName(raw string) string {
 	return name
 }
 
-func basketRegion(raw string) int64 {
+func (app *Application) basketRegion(ctx context.Context, raw string) int64 {
 	if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
-		if _, ok := marketRegionName(id); ok {
+		if _, ok := app.marketRegionName(ctx, id); ok {
 			return id
 		}
 	}

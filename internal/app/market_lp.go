@@ -285,7 +285,7 @@ func (app *Application) markLPRegionRefreshed(regionID int64) {
 // region sweep calls it inside the transaction that replaces the
 // region's stats.
 func (app *Application) refreshLPOfferValues(ctx context.Context, q *db.Queries, regionID int64, now time.Time) error {
-	if _, ok := marketRegionName(regionID); !ok {
+	if !marketHubRegion(regionID) {
 		return nil // the global book carries no LP products
 	}
 	if err := q.DeleteOrphanLPOfferValuesByRegion(ctx, regionID); err != nil {
@@ -305,7 +305,7 @@ func (app *Application) refreshLPOfferValues(ctx context.Context, q *db.Queries,
 // refreshLPOfferValuesForTypes revalues only the offers whose product
 // or a required item moved in the sweep, skipping unchanged rows.
 func (app *Application) refreshLPOfferValuesForTypes(ctx context.Context, q *db.Queries, regionID int64, typeIDs []int64, now time.Time) error {
-	if _, ok := marketRegionName(regionID); !ok {
+	if !marketHubRegion(regionID) {
 		return nil
 	}
 	if len(typeIDs) == 0 {

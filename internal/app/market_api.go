@@ -139,7 +139,7 @@ func (app *Application) apiRegion(ctx context.Context, raw string) (int64, bool)
 	if err != nil || id <= 0 {
 		return 0, false
 	}
-	if _, ok := marketRegionName(id); ok || id == globalMarketRegion {
+	if _, ok := app.marketRegionName(ctx, id); ok {
 		return id, true
 	}
 	rows, err := app.queries.ListSDERegionNames(ctx, []int64{id})

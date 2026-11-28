@@ -182,7 +182,7 @@ func (app *Application) handleProfitPrefs(w http.ResponseWriter, r *http.Request
 	was := app.profitPrefsFor(ctx, userID)
 	region := was.IndustryRegion
 	if id, err := strconv.ParseInt(r.Form.Get("industry_region"), 10, 64); err == nil {
-		if _, ok := marketRegionName(id); ok && id != globalMarketRegion {
+		if marketHubRegion(id) {
 			region = id
 		}
 	}

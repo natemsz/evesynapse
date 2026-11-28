@@ -87,7 +87,7 @@ func (app *Application) priceSparkPairs(ctx context.Context, keys []sparkKey) ma
 			logging.Errorf("market: price sparks for region %d: %v", regionID, err)
 			continue
 		}
-		regionName, _ := marketRegionName(regionID)
+		regionName, _ := app.marketRegionName(ctx, regionID)
 		for _, r := range rows {
 			if r.SellSpark30d == "" {
 				continue

@@ -83,9 +83,21 @@ func marketRegionForType(typeID, regionID int64) int64 {
 	return regionID
 }
 
-func marketRegionName(id int64) (string, bool) {
+// marketHubRegion reports whether id is one of the five trade hubs.
+// The global market is not a hub.
+func marketHubRegion(id int64) bool {
+	switch id {
+	case 10000002, 10000043, 10000032, 10000030, 10000042:
+		return true
+	}
+	return false
+}
+
+// marketStaticRegionName names a trade hub or the global market from
+// constants, with no lookup.
+func marketStaticRegionName(id int64) (string, bool) {
 	if id == globalMarketRegion {
-		return "Global market", true
+		return "Global PLEX market", true
 	}
 	for _, r := range marketRegions {
 		if r.ID == id {
@@ -93,6 +105,13 @@ func marketRegionName(id int64) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// marketRegionName names a region the market may show: the five trade
+// hubs by their short names and the global PLEX market. The bool is
+// false for any other region.
+func (app *Application) marketRegionName(ctx context.Context, id int64) (string, bool) {
+	return marketStaticRegionName(id)
 }
 
 // marketMatch is one search result line (links to the item view).
@@ -407,7 +426,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 		Region: defaultMarketRegion,
 	}
 	if rid, err := strconv.ParseInt(q.Get("region"), 10, 64); err == nil {
-		if _, ok := marketRegionName(rid); ok {
+		if _, ok := app.marketRegionName(ctx, rid); ok {
 			view.Region = rid
 		}
 	}
@@ -453,7 +472,7 @@ func (app *Application) handleMarket(w http.ResponseWriter, r *http.Request) {
 			view.Item.ScopeParam = scope.param()
 			// The item view shares with its card; it names no
 			// canonical, since /market/ alone is not this view.
-			regionName, _ := marketRegionName(view.Region)
+			regionName, _ := app.marketRegionName(ctx, view.Region)
 			data.HeadMeta = app.HeadMeta(module.PageMeta{
 				Title:       item.Name + " · Market",
 				Description: item.Name + " in " + regionName + ": swept orders, best prices, spread and price history.",
@@ -1022,7 +1041,7 @@ func (app *Application) loadMarketItem(ctx context.Context, typeID, regionID int
 			item.Breadcrumbs = app.marketTypeBreadcrumbs(ctx, t.MarketGroupID)
 		}
 	}
-	item.RegionName, _ = marketRegionName(regionID)
+	item.RegionName, _ = app.marketRegionName(ctx, regionID)
 	// A global-market type (PLEX) has one market; no regions to switch.
 	for _, reg := range marketRegions {
 		if globalMarketTypes[typeID] {
@@ -1415,7 +1434,7 @@ func (app *Application) orderLocation(ctx context.Context, locationID, systemID 
 // hubs by their short names, anything else from the SDE region
 // table, and a placeholder for ids neither knows.
 func (app *Application) marketRegionLabel(ctx context.Context, regionID int64) string {
-	if name, ok := marketRegionName(regionID); ok {
+	if name, ok := app.marketRegionName(ctx, regionID); ok {
 		return name
 	}
 	if row, err := app.queries.GetSDERegion(ctx, regionID); err == nil && row.Name != "" {

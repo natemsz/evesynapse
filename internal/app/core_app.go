@@ -204,6 +204,9 @@ type Application struct {
 	// and the search box's nudge) on their own, so a name being
 	// typed resolves within a moment whatever holds fetchMu.
 	nameFetchMu sync.Mutex
+	// corpContractWarm lets one character at a time warm a
+	// corporation's contract item lists (economy_worker.go).
+	corpContractWarm corpWarmGate
 	// nameNudge wakes the urgent drain's name lookup the moment a
 	// search notes a name no local tier knows (search.go).
 	nameNudge chan struct{}

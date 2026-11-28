@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	json "github.com/goccy/go-json"
+	"sync"
 	"time"
 
 	db "evesynapse/internal/db/sqlc"
@@ -82,6 +83,52 @@ func (app *Application) fetchCharKind(ctx context.Context, ch db.Character, kind
 // per worker cycle.
 const maxContractItemsPerCycle = 100
 
+// corpContractWarmEvery is how often one corporation's contract item
+// lists are warmed: one character's pass, however many of the
+// corporation's characters are linked. ESI throttles the corporation
+// items endpoint (520 ConStopSpamming) when several characters each
+// spend a full per-character allowance on it in the same minute.
+const corpContractWarmEvery = time.Minute
+
+// corpContractWarmHold is how long a corporation's item warming rests
+// after its items endpoint answers with a server error such as 520
+// ConStopSpamming, a throttle that lasts hours: asking again sooner
+// only spends ESI error budget.
+const corpContractWarmHold = time.Hour
+
+// corpWarmGate records, per corporation, when its contract item
+// lists may next be warmed. The zero value is ready to use.
+type corpWarmGate struct {
+	mu   sync.Mutex
+	next map[int64]time.Time
+}
+
+// claim reports whether a character may warm corpID's item lists
+// now, and if so keeps every other character off it for
+// corpContractWarmEvery.
+func (g *corpWarmGate) claim(corpID int64, now time.Time) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if now.Before(g.next[corpID]) {
+		return false
+	}
+	if g.next == nil {
+		g.next = map[int64]time.Time{}
+	}
+	g.next[corpID] = now.Add(corpContractWarmEvery)
+	return true
+}
+
+// hold keeps every character off corpID's item lists until until.
+func (g *corpWarmGate) hold(corpID int64, until time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.next == nil {
+		g.next = map[int64]time.Time{}
+	}
+	g.next[corpID] = until
+}
+
 // contractItemsErrorBudgetReserve is the remaining ESI error budget
 // under which contract item warming stops for the cycle: the item
 // lists are a warm-up and wait, core sync keeps the budget.
@@ -93,27 +140,30 @@ const contractItemsErrorBudgetReserve = 40
 // stored and whether ESI's error limit stopped the pass. Deleted
 // contracts are skipped (their item endpoint is gone for good).
 func (app *Application) warmContractItems(ctx context.Context, ch db.Character) (fetched int, limited bool) {
-	return app.warmContractItemsOf(ctx, ch, esi.SnapContracts, func(contractID int64) ([]byte, error) {
+	return app.warmContractItemsOf(ctx, ch, esi.SnapContracts, 0, func(contractID int64) ([]byte, error) {
 		return app.esi.FetchContractItems(ctx, ch, contractID)
 	})
 }
 
 // warmCorpContractItems is warmContractItems for the contracts of the
 // character's corporation (the corp_contracts snapshot), read through
-// the corporation's items endpoint into the same store.
+// the corporation's items endpoint into the same store. One character
+// at a time warms a corporation (corpWarmGate).
 func (app *Application) warmCorpContractItems(ctx context.Context, ch db.Character) (fetched int, limited bool) {
 	corpID, ok := app.corpIDForCharacter(ctx, ch)
 	if !ok {
 		return 0, false
 	}
-	return app.warmContractItemsOf(ctx, ch, esi.SnapCorpContracts, func(contractID int64) ([]byte, error) {
+	return app.warmContractItemsOf(ctx, ch, esi.SnapCorpContracts, corpID, func(contractID int64) ([]byte, error) {
 		return app.esi.FetchCorpContractItems(ctx, ch, corpID, contractID)
 	})
 }
 
 // warmContractItemsOf warms the item lists behind one stored
-// contracts snapshot kind, fetching each through fetch.
-func (app *Application) warmContractItemsOf(ctx context.Context, ch db.Character, kind string, fetch func(contractID int64) ([]byte, error)) (fetched int, limited bool) {
+// contracts snapshot kind, fetching each through fetch. With a
+// corpID the lists are the corporation's: the pass first claims the
+// corporation on app.corpContractWarm, and a server error holds it.
+func (app *Application) warmContractItemsOf(ctx context.Context, ch db.Character, kind string, corpID int64, fetch func(contractID int64) ([]byte, error)) (fetched int, limited bool) {
 	if kindExcludedByGrants(scopeSet(ch.Scopes), kind) {
 		return 0, false // the login never granted the contracts scope: not planned
 	}
@@ -168,6 +218,11 @@ func (app *Application) warmContractItemsOf(ctx context.Context, ch db.Character
 		if app.esiErrorBudgetBelow(contractItemsErrorBudgetReserve) {
 			return fetched, false // item lists wait; core sync keeps the budget
 		}
+		// Claimed only once there is something to fetch, so a
+		// character with nothing to do never keeps another off it.
+		if corpID != 0 && attempts == 0 && !app.corpContractWarm.claim(corpID, time.Now()) {
+			return fetched, false // another character warms this corporation this cycle
+		}
 
 		attempts++
 		body, err := fetch(c.ContractID)
@@ -185,7 +240,12 @@ func (app *Application) warmContractItemsOf(ctx context.Context, ch db.Character
 				// A server-side answer (520 ConStopSpamming when
 				// one character asks too fast, or ESI trouble):
 				// the next contract would get the same one, and
-				// each costs error budget. Try again next cycle.
+				// each costs error budget. Try again next cycle, or
+				// for a corporation, once its hold is over: every
+				// character in it would get the same answer.
+				if corpID != 0 {
+					app.corpContractWarm.hold(corpID, time.Now().Add(corpContractWarmHold))
+				}
 				return fetched, false
 			}
 			continue

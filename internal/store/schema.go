@@ -1132,6 +1132,12 @@ var pgStationLeaderboardBandSchema string
 //go:embed schema_pg/192_perf_indexes.sql
 var pgPerfIndexesSchema string
 
+// Step 194: drop the unused movers index on market_region_stats and
+// leave free room in its pages, so sweep updates stay in place.
+//
+//go:embed schema_pg/194_market_region_stats_hot.sql
+var pgMarketRegionStatsHotSchema string
+
 // schemaStep is one numbered file in schema_pg. Steps apply in
 // version order, each exactly once per database; schema_migrations
 // records which ones have landed.
@@ -1351,6 +1357,7 @@ func schemaSteps() []schemaStep {
 		{189, "market_movers_ranked", pgMarketMoversRankedSchema, ""},
 		{191, "station_leaderboard_band", pgStationLeaderboardBandSchema, ""},
 		{192, "perf_indexes", pgPerfIndexesSchema, ""},
+		{194, "market_region_stats_hot", pgMarketRegionStatsHotSchema, ""},
 	}
 }
 

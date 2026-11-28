@@ -1132,6 +1132,11 @@ var pgStationLeaderboardBandSchema string
 //go:embed schema_pg/192_perf_indexes.sql
 var pgPerfIndexesSchema string
 
+// Step 193: drops the per-region price cache the planner no longer reads.
+//
+//go:embed schema_pg/193_drop_market_type_prices.sql
+var pgDropMarketTypePricesSchema string
+
 // Step 194: drop the unused movers index on market_region_stats and
 // leave free room in its pages, so sweep updates stay in place.
 //
@@ -1167,7 +1172,7 @@ func schemaSteps() []schemaStep {
 		{3, "fit_metadata", pgFitMetadataSchema,
 			`SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'local_fittings' AND column_name = 'is_public'`},
 		{4, "price_cache_costindex", pgPriceCacheSchema,
-			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'market_type_prices'`},
+			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'industry_cost_indices'`},
 		{5, "restock", pgRestockSchema,
 			`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'restock_targets'`},
 		{6, "clone_names", pgCloneNamesSchema,
@@ -1357,6 +1362,7 @@ func schemaSteps() []schemaStep {
 		{189, "market_movers_ranked", pgMarketMoversRankedSchema, ""},
 		{191, "station_leaderboard_band", pgStationLeaderboardBandSchema, ""},
 		{192, "perf_indexes", pgPerfIndexesSchema, ""},
+		{193, "drop_market_type_prices", pgDropMarketTypePricesSchema, ""},
 		{194, "market_region_stats_hot", pgMarketRegionStatsHotSchema, ""},
 	}
 }

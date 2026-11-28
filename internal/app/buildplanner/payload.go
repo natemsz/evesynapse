@@ -731,9 +731,9 @@ func buildPlanPayload(res *buildplan.Result, productID int64, prices map[int64]e
 // planRegionPrices reads one region's sell rows for exactly the
 // given types (one bounded read). A type with no row is simply
 // absent; planMarket layers what is found over the guide. It
-// returns the map and the freshest row stamp.
+// returns the map and the oldest sweep time among the rows used.
 func (app *planner) planRegionPrices(ctx context.Context, ids []int64, regionID int64) (map[int64]esi.MarketPrice, time.Time, error) {
-	rows, err := app.queries.ListMarketTypePricesForTypes(ctx, db.ListMarketTypePricesForTypesParams{
+	rows, err := app.queries.ListMarketRegionStatsForTypes(ctx, db.ListMarketRegionStatsForTypesParams{
 		RegionID: regionID, Column2: ids,
 	})
 	if err != nil {
@@ -742,10 +742,10 @@ func (app *planner) planRegionPrices(ctx context.Context, ids []int64, regionID 
 	out := make(map[int64]esi.MarketPrice, len(rows))
 	var stamp time.Time
 	for _, row := range rows {
-		if row.SellPrice > 0 {
-			out[row.TypeID] = esi.MarketPrice{TypeID: row.TypeID, AveragePrice: row.SellPrice}
-			if row.FetchedAt.After(stamp) {
-				stamp = row.FetchedAt
+		if row.TypicalSell > 0 {
+			out[row.TypeID] = esi.MarketPrice{TypeID: row.TypeID, AveragePrice: row.TypicalSell}
+			if stamp.IsZero() || row.SweptAt.Before(stamp) {
+				stamp = row.SweptAt
 			}
 		}
 	}

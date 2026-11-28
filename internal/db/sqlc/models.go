@@ -1937,16 +1937,6 @@ type MarketSweepState struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-type MarketTypePrice struct {
-	RegionID   int64     `json:"region_id"`
-	TypeID     int64     `json:"type_id"`
-	BuyPrice   float64   `json:"buy_price"`
-	SellPrice  float64   `json:"sell_price"`
-	BuyVolume  int64     `json:"buy_volume"`
-	SellVolume int64     `json:"sell_volume"`
-	FetchedAt  time.Time `json:"fetched_at"`
-}
-
 type MarketWatchlist struct {
 	UserID       int64     `json:"user_id"`
 	TypeID       int64     `json:"type_id"`

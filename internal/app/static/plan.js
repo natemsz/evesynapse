@@ -1134,12 +1134,24 @@ function wireStatic() {
 // search, click to fill. The system box submits the picked NAME
 // (the server resolves names as before); the market box fills
 // a hidden field with the region id, "guide" for the pinned
-// Jita market row.
+// Jita market row. Focusing a box that still holds the rendered
+// value selects it and lists only the pinned row, so typing
+// replaces it instead of searching for it.
+var placeClosers = [];
+var placeOutsideBound = false;
+
 function wirePlaces() {
+  placeClosers = [];
+  if (!placeOutsideBound) {
+    placeOutsideBound = true;
+    document.addEventListener("click", function (ev) {
+      placeClosers.forEach(function (c) { c(ev.target); });
+    });
+  }
   wirePlace("system-q", "system-suggest", "system", null, function (item, input) {
     input.value = item.name;
   });
-  wirePlace("market-q", "market-suggest", "region",
+  wirePlace("plan-market-q", "plan-market-suggest", "region",
     { id: "guide", name: "Jita market", label: "Jita sell prices" },
     function (item, input) {
       input.value = item.id === "guide" ? "" : item.name;
@@ -1194,7 +1206,15 @@ function wirePlace(inputID, listID, kind, pinned, onPick) {
       .then(function (items) { if (mine === seq) render(items); })
       .catch(function () { if (mine === seq) render([]); });
   }
-  input.addEventListener("focus", function () { render([]); search(); });
+  input.addEventListener("focus", function () {
+    if (input.value === input.defaultValue) {
+      input.select();
+      render([]);
+      return;
+    }
+    render([]);
+    search();
+  });
   input.addEventListener("input", function () {
     if (timer) clearTimeout(timer);
     timer = setTimeout(search, 150);
@@ -1202,8 +1222,8 @@ function wirePlace(inputID, listID, kind, pinned, onPick) {
   input.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape") { close(); input.blur(); }
   });
-  document.addEventListener("click", function (ev) {
-    if (!input.parentElement.contains(ev.target)) close();
+  placeClosers.push(function (target) {
+    if (!input.parentElement.contains(target)) close();
   });
 }
 

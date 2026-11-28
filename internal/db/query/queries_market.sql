@@ -1538,22 +1538,6 @@ SELECT MAX(updated_at) AS stamp
 FROM market_station_leaderboard
 WHERE region_id = ANY(sqlc.arg(region_ids)::bigint[]);
 
--- Per-type market price TTL cache. The worker refreshes
--- only rows older than the TTL; pages read cache-only.
--- name: UpsertMarketTypePrice :exec
-INSERT INTO market_type_prices (region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at)
-VALUES ($1, $2, $3, $4, $5, $6, now())
-ON CONFLICT (region_id, type_id) DO UPDATE SET
-    buy_price   = excluded.buy_price,
-    sell_price  = excluded.sell_price,
-    buy_volume  = excluded.buy_volume,
-    sell_volume = excluded.sell_volume,
-    fetched_at  = excluded.fetched_at;
--- name: ListMarketTypePricesForTypes :many
-SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
-FROM market_type_prices
-WHERE region_id = $1 AND type_id = ANY($2::bigint[]);
-
 -- Industry cost indices per (system, activity).
 -- name: UpsertIndustryCostIndex :exec
 INSERT INTO industry_cost_indices (solar_system_id, activity, cost_index, fetched_at)

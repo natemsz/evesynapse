@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"evesynapse/internal/app/buildplanner"
 	db "evesynapse/internal/db/sqlc"
@@ -347,6 +348,9 @@ func TestPlannerJitaMarket(t *testing.T) {
 	app, _, q := buildCorpTestApp(t, transport)
 	seedPlannerSDE(t, app)
 	ctx := context.Background()
+	if _, err := app.db.ExecContext(ctx, `INSERT INTO sde_regions (region_id, name) VALUES (10000043, 'Domain') ON CONFLICT DO NOTHING`); err != nil {
+		t.Fatalf("seed domain region: %v", err)
+	}
 	user, err := q.CreateUser(ctx)
 	if err != nil {
 		t.Fatalf("create user: %v", err)
@@ -359,17 +363,16 @@ func TestPlannerJitaMarket(t *testing.T) {
 		{ItemID: 1, TypeID: 2002, Quantity: -1, MaterialEfficiency: 8, TimeEfficiency: 12, Runs: -1},
 	})
 	seedSnapshot(t, q, fixtureCharA, esi.SnapIndustryJobs, `[]`)
+	stamp := time.Now().UTC()
 	for _, row := range []struct {
-		typeID int64
-		sell   float64
+		regionID, typeID int64
+		sell             float64
 	}{
-		{34, 6}, {1001, 1100},
+		{10000002, 34, 6}, {10000002, 1001, 1100}, {10000043, 34, 7},
 	} {
-		if err := q.UpsertMarketTypePrice(ctx, db.UpsertMarketTypePriceParams{
-			RegionID: 10000002, TypeID: row.typeID, SellPrice: row.sell,
-		}); err != nil {
-			t.Fatalf("seed jita price: %v", err)
-		}
+		stat := tfRegionStat(row.regionID, row.typeID, 0, row.sell, 0, 100, 0, stamp)
+		stat.SweptAt = stamp
+		seedTFRegionStat(t, app, stat)
 	}
 	cookie := sessionCookie(t, app, user.ID, fixtureCharA, "Fixture Alpha")
 
@@ -403,14 +406,29 @@ func TestPlannerJitaMarket(t *testing.T) {
 		t.Errorf("embedded plan data differs from the JSON route: page %.200s, json %.200s", embedded, blob)
 	}
 	// The CSV comes from that same build, so it prices the
-	// mineral at the Forge sell price the header used (it was
-	// built a second time on guide prices, where this fixture
-	// has none).
+	// mineral at the swept Forge sell price the header used.
 	code, csv := getPage(t, app, cookie, "/planner/?product=1001&runs=1&market=jita&format=csv")
 	if code != http.StatusOK {
 		t.Fatalf("planner jita csv status = %d, want 200", code)
 	}
 	mustContain(t, "/planner/ csv", csv, "6.00 ISK", "30.00 ISK")
+	// A chosen region prices from its own swept rows.
+	code, body = getPage(t, app, cookie, "/planner/?product=1001&runs=1&market=10000043&format=json")
+	if code != http.StatusOK {
+		t.Fatalf("planner domain json status = %d, want 200", code)
+	}
+	var d buildplanner.Payload
+	if err := json.Unmarshal([]byte(body), &d); err != nil {
+		t.Fatalf("planner domain json decodes: %v", err)
+	}
+	if d.Market != "10000043" || !strings.Contains(d.PricesNote, "Domain sell rows as of") || !strings.Contains(d.PricesNote, "Jita market elsewhere") {
+		t.Errorf("domain market/note = %q/%q, want region id + layered note", d.Market, d.PricesNote)
+	}
+	code, csv = getPage(t, app, cookie, "/planner/?product=1001&runs=1&market=10000043&format=csv")
+	if code != http.StatusOK {
+		t.Fatalf("planner domain csv status = %d, want 200", code)
+	}
+	mustContain(t, "/planner/ domain csv", csv, "7.00 ISK")
 	if got := transport.calls.Load(); got != 0 {
 		t.Fatalf("handler made %d outbound calls, want 0", got)
 	}

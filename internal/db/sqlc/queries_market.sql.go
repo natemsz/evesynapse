@@ -3055,45 +3055,6 @@ func (q *Queries) ListMarketStatsFallbackForTypes(ctx context.Context, arg ListM
 	return items, nil
 }
 
-const listMarketTypePricesForTypes = `-- name: ListMarketTypePricesForTypes :many
-SELECT region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at
-FROM market_type_prices
-WHERE region_id = $1 AND type_id = ANY($2::bigint[])
-`
-
-type ListMarketTypePricesForTypesParams struct {
-	RegionID int64   `json:"region_id"`
-	Column2  []int64 `json:"column_2"`
-}
-
-func (q *Queries) ListMarketTypePricesForTypes(ctx context.Context, arg ListMarketTypePricesForTypesParams) ([]MarketTypePrice, error) {
-	rows, err := q.db.Query(ctx, listMarketTypePricesForTypes, arg.RegionID, arg.Column2)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []MarketTypePrice
-	for rows.Next() {
-		var i MarketTypePrice
-		if err := rows.Scan(
-			&i.RegionID,
-			&i.TypeID,
-			&i.BuyPrice,
-			&i.SellPrice,
-			&i.BuyVolume,
-			&i.SellVolume,
-			&i.FetchedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listOpenOrderLifecycleByCharacter = `-- name: ListOpenOrderLifecycleByCharacter :many
 SELECT id, character_id, order_id, type_id, location_id, region_id, is_buy_order, listed_price, volume_total, volume_remain_last, first_seen_at, last_seen_at, closed_at, close_kind, outbid_events, beaten_now, beaten_at, beating_price, beating_volume, suggested_price, unit_cost, margin_pct, tax_rate, beaten_checked
 FROM order_lifecycle
@@ -5649,40 +5610,6 @@ type UpsertMarketStatsFallbackMetaParams struct {
 
 func (q *Queries) UpsertMarketStatsFallbackMeta(ctx context.Context, arg UpsertMarketStatsFallbackMetaParams) error {
 	_, err := q.db.Exec(ctx, upsertMarketStatsFallbackMeta, arg.OrdersetID, arg.FetchedAt, arg.RowCount)
-	return err
-}
-
-const upsertMarketTypePrice = `-- name: UpsertMarketTypePrice :exec
-INSERT INTO market_type_prices (region_id, type_id, buy_price, sell_price, buy_volume, sell_volume, fetched_at)
-VALUES ($1, $2, $3, $4, $5, $6, now())
-ON CONFLICT (region_id, type_id) DO UPDATE SET
-    buy_price   = excluded.buy_price,
-    sell_price  = excluded.sell_price,
-    buy_volume  = excluded.buy_volume,
-    sell_volume = excluded.sell_volume,
-    fetched_at  = excluded.fetched_at
-`
-
-type UpsertMarketTypePriceParams struct {
-	RegionID   int64   `json:"region_id"`
-	TypeID     int64   `json:"type_id"`
-	BuyPrice   float64 `json:"buy_price"`
-	SellPrice  float64 `json:"sell_price"`
-	BuyVolume  int64   `json:"buy_volume"`
-	SellVolume int64   `json:"sell_volume"`
-}
-
-// Per-type market price TTL cache. The worker refreshes
-// only rows older than the TTL; pages read cache-only.
-func (q *Queries) UpsertMarketTypePrice(ctx context.Context, arg UpsertMarketTypePriceParams) error {
-	_, err := q.db.Exec(ctx, upsertMarketTypePrice,
-		arg.RegionID,
-		arg.TypeID,
-		arg.BuyPrice,
-		arg.SellPrice,
-		arg.BuyVolume,
-		arg.SellVolume,
-	)
 	return err
 }
 

@@ -383,6 +383,47 @@ func (s *demoSeed) wipe(ctx context.Context) error {
 			return fmt.Errorf("demo seed: wipe user rows: %w", err)
 		}
 	}
+	return s.wipeLedger(ctx)
+}
+
+// demoLedgerOwnerTables are the profit ledger tables keyed by owner,
+// demoLedgerPoolTables those keyed by matching pool, and
+// demoLedgerCharacterTables the LP tables keyed by character. Every
+// row in them for the demo pilots is derived from the seeded
+// snapshots by the ledger fold.
+var (
+	demoLedgerOwnerTables = []string{
+		"ledger_broker_alloc", "ledger_contract_items", "ledger_holes", "ledger_job_materials",
+		"ledger_jobs", "ledger_journal", "ledger_order_issues", "ledger_sale_tax", "ledger_state",
+		"ledger_txns", "profit_daily", "trade_fold_checkpoints", "trade_item_daily",
+		"trade_item_window", "trade_open_lots", "trade_positions", "trade_realized",
+	}
+	demoLedgerPoolTables      = []string{"ledger_pool_state", "lp_sale_links", "lp_store_summary", "industry_bp_summary", "trade_realized"}
+	demoLedgerCharacterTables = []string{"lp_balance_samples", "lp_purchases"}
+)
+
+// wipeLedger clears the demo pilots' profit ledger, so each seed folds
+// it from nothing. The fold is incremental: folded over a ledger an
+// earlier seed left at another time, it can land on different rows
+// than a fold from scratch, and a restore must not depend on what
+// came before it.
+func (s *demoSeed) wipeLedger(ctx context.Context) error {
+	chars := []int64{demoCharacterID, demoCharacter2ID}
+	for _, table := range demoLedgerOwnerTables {
+		if _, err := s.app.db.ExecContext(ctx, "DELETE FROM "+table+" WHERE owner_kind = $1 AND owner_id = ANY($2)", ownerChar, chars); err != nil {
+			return fmt.Errorf("demo seed: wipe %s: %w", table, err)
+		}
+	}
+	for _, table := range demoLedgerPoolTables {
+		if _, err := s.app.db.ExecContext(ctx, "DELETE FROM "+table+" WHERE (pool_kind = $1 AND pool_id = ANY($2)) OR (pool_kind = $3 AND pool_id = $4)", ownerChar, chars, poolAcct, s.userID); err != nil {
+			return fmt.Errorf("demo seed: wipe %s: %w", table, err)
+		}
+	}
+	for _, table := range demoLedgerCharacterTables {
+		if _, err := s.app.db.ExecContext(ctx, "DELETE FROM "+table+" WHERE character_id = ANY($1)", chars); err != nil {
+			return fmt.Errorf("demo seed: wipe %s: %w", table, err)
+		}
+	}
 	return nil
 }
 

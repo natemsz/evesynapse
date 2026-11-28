@@ -608,6 +608,9 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 		if err := qtx.DeleteMarketBookOrdersByRegion(ctx, regionID); err != nil {
 			return res, err
 		}
+		if err := pruneDailyStats(ctx, qtx, regionID, now); err != nil {
+			return res, fmt.Errorf("prune daily stats: %w", err)
+		}
 	} else {
 		if len(res.gone) > 0 {
 			if _, err := tx.Exec(ctx, `DELETE FROM market_region_stats WHERE region_id = $1 AND type_id = ANY($2::bigint[])`, regionID, res.gone); err != nil {
@@ -1010,6 +1013,17 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 	}
 	app.recordMarketFetch(ctx, regionSweepKind(regionID), fetchStateOK, "")
 	return res, nil
+}
+
+// marketDailyKeepDays is how many days of daily stat rows each region
+// keeps; older rows go on the region's first full write of a day.
+const marketDailyKeepDays = 400
+
+// pruneDailyStats drops regionID's daily stat rows older than
+// marketDailyKeepDays before now.
+func pruneDailyStats(ctx context.Context, q *db.Queries, regionID int64, now time.Time) error {
+	before := now.UTC().AddDate(0, 0, -marketDailyKeepDays).Format("2006-01-02")
+	return q.PruneMarketRegionStatsDaily(ctx, db.PruneMarketRegionStatsDailyParams{RegionID: regionID, Before: before})
 }
 
 // refreshMarketMoversRankedTx replaces one region's pre-ranked mover rows

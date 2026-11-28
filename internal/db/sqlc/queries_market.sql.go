@@ -4281,6 +4281,24 @@ func (q *Queries) PruneMarketChanges(ctx context.Context, arg PruneMarketChanges
 	return err
 }
 
+const pruneMarketRegionStatsDaily = `-- name: PruneMarketRegionStatsDaily :exec
+DELETE FROM market_region_stats_daily
+WHERE region_id = $1 AND day < $2::text
+`
+
+type PruneMarketRegionStatsDailyParams struct {
+	RegionID int64  `json:"region_id"`
+	Before   string `json:"before"`
+}
+
+// Drops one region's daily stat rows older than the kept window
+// (day is YYYY-MM-DD text, so text order is date order); the
+// (region_id, day) index serves it.
+func (q *Queries) PruneMarketRegionStatsDaily(ctx context.Context, arg PruneMarketRegionStatsDailyParams) error {
+	_, err := q.db.Exec(ctx, pruneMarketRegionStatsDaily, arg.RegionID, arg.Before)
+	return err
+}
+
 const pruneOldOrderLifecycle = `-- name: PruneOldOrderLifecycle :exec
 DELETE FROM order_lifecycle
 WHERE id IN (

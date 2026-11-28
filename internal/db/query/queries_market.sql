@@ -686,6 +686,12 @@ JOIN (
 WHERE h.region_id = sqlc.arg(region_id) AND h.type_id = ANY(sqlc.arg(type_ids)::bigint[])
   AND h.date >= w.window_start
 GROUP BY h.type_id;
+-- name: PruneMarketRegionStatsDaily :exec
+-- Drops one region's daily stat rows older than the kept window
+-- (day is YYYY-MM-DD text, so text order is date order); the
+-- (region_id, day) index serves it.
+DELETE FROM market_region_stats_daily
+WHERE region_id = sqlc.arg(region_id) AND day < sqlc.arg(before)::text;
 -- name: UpsertMarketRegionStatDaily :exec
 INSERT INTO market_region_stats_daily (region_id, type_id, day, best_sell, typical_sell, sell_band, best_buy, typical_buy, buy_band, sell_orders, buy_orders, sell_volume, buy_volume)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)

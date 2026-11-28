@@ -41,6 +41,11 @@ const (
 	// ReachFighter: fighters fly to the target wherever it is and
 	// apply their attack like a missile.
 	ReachFighter = "fighter"
+	// ReachBreacher: a Breacher pod's damage over time, out to the
+	// pod's flight range, whatever the target's signature, speed or
+	// resistances: the lower of DPS (its cap) and HPPercent of the
+	// target's hit points a second.
+	ReachBreacher = "breacher"
 )
 
 // WeaponReach is one fitted weapon group's sustained damage and what
@@ -67,14 +72,20 @@ type WeaponReach struct {
 	ExplosionVelocity float64
 	// DamageReduction is the explosion's application exponent.
 	DamageReduction float64
+
+	// HPPercent is a Breacher pod's share of the target's hit points
+	// a second, in percent.
+	HPPercent float64
 }
 
-// Target is what the weapons shoot at: its signature radius (m) and
-// its speed (m/s), taken as moving straight across the shooter's
-// line of fire.
+// Target is what the weapons shoot at: its signature radius (m), its
+// speed (m/s), taken as moving straight across the shooter's line of
+// fire, and its hit points (shield, armor and structure; 0 when not
+// known, which leaves a Breacher pod at its cap).
 type Target struct {
 	Signature float64
 	Velocity  float64
+	HP        float64
 }
 
 // DamageAt is the group's expected damage per second at distance d
@@ -117,6 +128,14 @@ func (w WeaponReach) DamageAt(d float64, t *Target) float64 {
 		return w.DPS * turretDamageMult(turretHitChance(at, at, w, t))
 	case ReachFighter:
 		return w.DPS * explosionApplication(w, t)
+	case ReachBreacher:
+		if d > w.Range {
+			return 0
+		}
+		if t == nil || t.HP <= 0 {
+			return w.DPS
+		}
+		return math.Min(w.DPS, t.HP*w.HPPercent/100)
 	}
 	return 0
 }
@@ -188,7 +207,7 @@ func (w WeaponReach) ReachEnd() float64 {
 		return math.Min(w.Optimal+3*w.Falloff, w.Range)
 	case ReachArea:
 		return w.Optimal
-	case ReachMissile, ReachSmartbomb, ReachDrone:
+	case ReachMissile, ReachSmartbomb, ReachDrone, ReachBreacher:
 		return w.Range
 	}
 	return 0

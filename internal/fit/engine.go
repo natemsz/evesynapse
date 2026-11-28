@@ -981,7 +981,11 @@ type Result struct {
 	DroneDPS     float64
 	SmartbombDPS float64
 	FighterDPS   float64 // launched squadrons' switched-on damage abilities
-	DPS          float64
+	// BreacherDPS is the strongest loaded Breacher pod's damage cap,
+	// counted once: a target takes one Breacher effect at a time, and
+	// the full cap only with enough hit points (Weapons has the share).
+	BreacherDPS float64
+	DPS         float64
 	// SpooledDPS is DPS with every spool-up weapon (entropic
 	// disintegrators) at its full damage bonus, reached after
 	// SpoolSeconds of continuous fire; both 0 without one.
@@ -996,7 +1000,7 @@ type Result struct {
 	Ramps []Ramp
 	// Breacher pods: up to BreacherMaxPerSec HP a second, or
 	// BreacherHPPercent of the target's hit points a second when
-	// that is lower, for BreacherSeconds per pod. Not in DPS.
+	// that is lower, for BreacherSeconds per pod.
 	BreacherMaxPerSec float64
 	BreacherHPPercent float64
 	BreacherSeconds   float64

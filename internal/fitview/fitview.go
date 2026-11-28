@@ -2659,6 +2659,7 @@ func FitBuildStats(res *fit.Result) *FitStatsView {
 		{"drones", res.DroneDPS, res.DroneVolley},
 		{"fighters", res.FighterDPS, res.FighterVolley},
 		{"smartbombs", res.SmartbombDPS, 0},
+		{"Breacher pods up to", res.BreacherDPS, 0},
 	} {
 		if src.dps <= 0 {
 			continue

@@ -12,7 +12,8 @@ import (
 
 // fitRangeTarget is one of the damage-at-range chart's targets. A
 // preset is a typical hull of its class, moving straight across the
-// line of fire at its usual speed without a propulsion module.
+// line of fire at its usual speed without a propulsion module, with
+// the hull's own hit points before skills and fittings.
 type fitRangeTarget struct {
 	Key    string      `json:"key"`
 	Label  string      `json:"label"`
@@ -22,9 +23,9 @@ type fitRangeTarget struct {
 
 var fitRangeTargets = []fitRangeTarget{
 	{Key: "any", Label: "Any target", Note: "Reach only: every hit lands in full"},
-	{Key: "frigate", Label: "Frigate", Note: "35 m signature, crossing at 400 m/s", target: &fit.Target{Signature: 35, Velocity: 400}},
-	{Key: "cruiser", Label: "Cruiser", Note: "130 m signature, crossing at 250 m/s", target: &fit.Target{Signature: 130, Velocity: 250}},
-	{Key: "battleship", Label: "Battleship", Note: "400 m signature, crossing at 120 m/s", target: &fit.Target{Signature: 400, Velocity: 120}},
+	{Key: "frigate", Label: "Frigate", Note: "35 m signature, crossing at 400 m/s, 1,300 hit points", target: &fit.Target{Signature: 35, Velocity: 400, HP: 1300}},
+	{Key: "cruiser", Label: "Cruiser", Note: "130 m signature, crossing at 250 m/s, 4,700 hit points", target: &fit.Target{Signature: 130, Velocity: 250, HP: 4700}},
+	{Key: "battleship", Label: "Battleship", Note: "400 m signature, crossing at 120 m/s, 22,000 hit points", target: &fit.Target{Signature: 400, Velocity: 120, HP: 22000}},
 }
 
 // fitRangeSeries is the most weapon groups the chart draws on their
@@ -93,7 +94,7 @@ func FitRange(res *fit.Result, nameOf func(int64) string) (data *FitRangeData, j
 	for _, w := range res.Weapons {
 		var edge float64
 		switch w.Kind {
-		case fit.ReachMissile, fit.ReachSmartbomb, fit.ReachDrone, fit.ReachSentry:
+		case fit.ReachMissile, fit.ReachSmartbomb, fit.ReachDrone, fit.ReachSentry, fit.ReachBreacher:
 			edge = w.Range
 		case fit.ReachArea:
 			edge = w.Optimal
@@ -195,6 +196,8 @@ func fitReachNote(w fit.WeaponReach) string {
 		return "Within " + km(w.Range) + " control range"
 	case fit.ReachFighter:
 		return "Fly to the target"
+	case fit.ReachBreacher:
+		return "Flight range " + km(w.Range) + ", up to " + FitFmt1(w.DPS) + " HP/s or " + FitFmt1(w.HPPercent) + "% of the target's hit points a second"
 	}
 	return ""
 }

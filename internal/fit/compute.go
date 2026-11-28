@@ -1056,6 +1056,7 @@ func (f *fitting) chargeClip(ent, charge *entity, cycle float64) (clip ChargeCli
 // and missile damage, and capacitor warfare.
 func (f *fitting) offense() {
 	snap, res := f.snap, f.res
+	var breacher WeaponReach // the strongest Breacher pod loaded
 	for _, ent := range f.fitted {
 		if ent.kind != entModule {
 			continue
@@ -1124,9 +1125,17 @@ func (f *fitting) offense() {
 		case charge != nil && charge.get(snap, AttrDotMaxDamagePerTick) > 0:
 			// Breacher pods: one damage-over-time effect per
 			// target, a tick a second, the lower of a flat cap and
-			// a share of the target's hit points. It depends on the
-			// target, so it stays out of the DPS totals.
-			res.BreacherMaxPerSec = math.Max(res.BreacherMaxPerSec, charge.get(snap, AttrDotMaxDamagePerTick))
+			// a share of the target's hit points. A second launcher
+			// adds nothing to the same target, so the strongest pod
+			// counts once (after the loop).
+			maxPerSec := charge.get(snap, AttrDotMaxDamagePerTick)
+			if maxPerSec > res.BreacherMaxPerSec {
+				breacher = WeaponReach{TypeID: ent.typeID, Kind: ReachBreacher, DPS: maxPerSec,
+					HPPercent: charge.get(snap, AttrDotMaxHPPercentPerTick),
+					Range:     charge.get(snap, AttrMaxVelocity) * charge.get(snap, attrExplosionDelay) / 1000}
+			}
+			breacher.Count += int(n)
+			res.BreacherMaxPerSec = math.Max(res.BreacherMaxPerSec, maxPerSec)
 			res.BreacherHPPercent = math.Max(res.BreacherHPPercent, charge.get(snap, AttrDotMaxHPPercentPerTick))
 			res.BreacherSeconds = math.Max(res.BreacherSeconds, charge.get(snap, AttrDotDuration)/1000)
 		case snap.HasEffect(ent.typeID, EffectLauncherFitted):
@@ -1164,6 +1173,12 @@ func (f *fitting) offense() {
 				DPS: n * volley / cycle, Range: ent.get(snap, attrEmpFieldRange)})
 			f.weaponFigures(ent, volley, cycle)
 		}
+	}
+	if breacher.DPS > 0 {
+		// Its paper figure is the cap, which a target of enough
+		// hit points takes in full; DamageAt applies the share.
+		res.BreacherDPS = breacher.DPS
+		res.Weapons = append(res.Weapons, breacher)
 	}
 }
 
@@ -1234,7 +1249,7 @@ func (f *fitting) droneStats() {
 			res.Weapons = append(res.Weapons, reach)
 		}
 	}
-	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS + res.SmartbombDPS + res.FighterDPS
+	res.DPS = res.TurretDPS + res.MissileDPS + res.DroneDPS + res.SmartbombDPS + res.FighterDPS + res.BreacherDPS
 	if f.spoolExtra > 0 {
 		res.SpooledDPS = res.DPS + f.spoolExtra
 	}

@@ -459,7 +459,7 @@ func (app *Application) afterRegionStore(ctx context.Context, regionID int64, re
 	if res.full {
 		app.refreshStatPackRegion(ctx, regionID)
 	} else {
-		app.refreshStatPackTypes(ctx, regionID, res.changed, res.gone, res.stations)
+		app.refreshStatPackTypes(ctx, regionID, res.changed, res.gone)
 	}
 	app.refreshIndustryRecipeValues(ctx, regionID, time.Now())
 }

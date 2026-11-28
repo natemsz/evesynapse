@@ -226,15 +226,14 @@ func marketRegionLabel(regionID int64) string {
 }
 
 // regionStoreResult is what one stored sweep wrote: whether it was a
-// full write, the items written and the items removed, and the
-// station rows written, which the stat pack takes in place.
+// full write, the items written and the items removed, and how many
+// station rows it wrote.
 type regionStoreResult struct {
 	full        bool
 	written     int
 	stationRows int
 	changed     []int64
 	gone        []int64
-	stations    []db.MarketStationStat
 }
 
 // regionTypeStats is one item's region figures from its book.
@@ -837,13 +836,6 @@ func (app *Application) storeRegionBook(ctx context.Context, regionID int64, nb,
 			buyOrds[i] = sacc.BuyOrders
 			sellVols[i] = sacc.SellVolume
 			buyVols[i] = sacc.BuyVolume
-			res.stations = append(res.stations, db.MarketStationStat{
-				LocationID: k.LocationID, RegionID: regionID, TypeID: k.TypeID,
-				BestSell: sacc.BestSell, BestBuy: sacc.BestBuy,
-				SellOrders: sacc.SellOrders, BuyOrders: sacc.BuyOrders,
-				SellVolume: sacc.SellVolume, BuyVolume: sacc.BuyVolume,
-				TypicalSell: sacc.TypicalSell, TypicalBuy: sacc.TypicalBuy, UpdatedAt: now,
-			})
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO market_station_stats (location_id, region_id, type_id, best_sell, best_buy, typical_sell, typical_buy, sell_orders, buy_orders, sell_volume, buy_volume, updated_at)

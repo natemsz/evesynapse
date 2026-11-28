@@ -123,3 +123,40 @@ func TestStatPackMemorySnapshotPinsServingAndLowRAM(t *testing.T) {
 		t.Errorf("refreshed pack 35 TypicalSell = %v, want 65", refreshedPacks[35].Own.TypicalSell)
 	}
 }
+
+// TestLoadStatPacksReadsRegionsOutsideThePack pins that the resident
+// stat pack holds only the hubs and the global market, and that a
+// region outside them prices from its own stored row through SQL
+// while the pack is resident, never from the estimate.
+func TestLoadStatPacksReadsRegionsOutsideThePack(t *testing.T) {
+	app, _, _ := buildCorpTestApp(t, &countingTransport{})
+	ctx := context.Background()
+	now := time.Now().UTC()
+	seedTFRegionStat(t, app, db.UpsertMarketRegionStatParams{
+		RegionID: 10000002, TypeID: 34, BestSell: 5, TypicalSell: 5, SellBand: 5, SellOrders: 1, SellVolume: 10, UpdatedAt: now,
+	})
+	seedTFRegionStat(t, app, db.UpsertMarketRegionStatParams{
+		RegionID: 10000060, TypeID: 34, BestSell: 7, TypicalSell: 7, SellBand: 7, SellOrders: 1, SellVolume: 10, UpdatedAt: now,
+	})
+	if err := app.buildStatPack(ctx); err != nil {
+		t.Fatalf("buildStatPack: %v", err)
+	}
+	app.statPackIdx.mu.RLock()
+	_, heldDelve := app.statPackIdx.snap.regionStats[statPackKey{regionID: 10000060, typeID: 34}]
+	_, heldForge := app.statPackIdx.snap.regionStats[statPackKey{regionID: 10000002, typeID: 34}]
+	app.statPackIdx.mu.RUnlock()
+	if heldDelve {
+		t.Errorf("stat pack holds a Delve row; it should hold only the hubs and the global market")
+	}
+	if !heldForge {
+		t.Errorf("stat pack is missing The Forge row")
+	}
+
+	packs, err := app.loadStatPacks(ctx, 10000060, []int64{34})
+	if err != nil {
+		t.Fatalf("loadStatPacks: %v", err)
+	}
+	if p := packs[34]; p == nil || p.Own == nil || p.Own.TypicalSell != 7 || p.FromGlobal {
+		t.Fatalf("Delve pack for type 34 = %+v, want its own row at 7", p)
+	}
+}

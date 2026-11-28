@@ -260,7 +260,7 @@ func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 	targetQty, _ := strconv.ParseInt(r.Form.Get("target_qty"), 10, 64)
 	marginPct, _ := strconv.ParseFloat(r.Form.Get("min_margin_pct"), 64)
 	if typeID <= 0 || targetQty < 0 {
-		http.Redirect(w, r, app.restockRedirectURL(r.Context(), r.Form.Get("region")), http.StatusSeeOther)
+		http.Redirect(w, r, app.restockRedirectURL(ctx, r.Form.Get("region")), http.StatusSeeOther)
 		return
 	}
 	if err := app.queries.UpsertRestockTarget(ctx, db.UpsertRestockTargetParams{
@@ -271,7 +271,7 @@ func (app *page) handleRestockSave(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		logging.Errorf("restock: upsert target user %d type %d: %v", userID, typeID, err)
 	}
-	http.Redirect(w, r, app.restockRedirectURL(r.Context(), r.Form.Get("region")), http.StatusSeeOther)
+	http.Redirect(w, r, app.restockRedirectURL(ctx, r.Form.Get("region")), http.StatusSeeOther)
 }
 
 // restockTypeByName resolves the add form's item box when no pick
@@ -317,5 +317,5 @@ func (app *page) handleRestockDelete(w http.ResponseWriter, r *http.Request) {
 			logging.Errorf("restock: delete target user %d type %d: %v", userID, typeID, err)
 		}
 	}
-	http.Redirect(w, r, app.restockRedirectURL(r.Context(), r.Form.Get("region")), http.StatusSeeOther)
+	http.Redirect(w, r, app.restockRedirectURL(ctx, r.Form.Get("region")), http.StatusSeeOther)
 }

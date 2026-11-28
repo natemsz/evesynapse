@@ -1430,11 +1430,14 @@ func (app *Application) orderLocation(ctx context.Context, locationID, systemID 
 	return app.esi.PlaceName(ctx, fmt.Sprintf("/universe/systems/%d/", systemID), systemID, fmt.Sprintf("System #%d", systemID))
 }
 
-// marketRegionLabel names a region for display: the five trade
-// hubs by their short names, anything else from the SDE region
-// table, and a placeholder for ids neither knows.
+// marketRegionLabel names a region for display: a market region by
+// marketRegionName, anything else from the SDE region names (memory,
+// then the table), and a placeholder for ids neither knows.
 func (app *Application) marketRegionLabel(ctx context.Context, regionID int64) string {
 	if name, ok := app.marketRegionName(ctx, regionID); ok {
+		return name
+	}
+	if name, ok := app.sdeRegion(regionID); ok && name != "" {
 		return name
 	}
 	if row, err := app.queries.GetSDERegion(ctx, regionID); err == nil && row.Name != "" {

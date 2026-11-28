@@ -241,17 +241,24 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 	// itself (the worker never warms the demo), so the account
 	// pool has daily profit rows with real income to test the
 	// Profit pages against.
-	profitDays := func() (int, float64) {
+	// profitDays reads the demo's profit ledger: its day count, its
+	// total income, and every row's income in a fixed order. Seeds
+	// are compared on the rows, never on the float total: summing
+	// float8 rows in a different scan order moves the last bit.
+	profitDays := func() (int, float64, string) {
 		var days int
 		var income float64
+		var rows string
 		if err := conn.QueryRowContext(ctx,
-			`SELECT count(DISTINCT day), COALESCE(sum(income), 0) FROM profit_daily WHERE owner_kind = 'char' AND owner_id IN ($1, $2)`,
-			demoCharacterID, demoCharacter2ID).Scan(&days, &income); err != nil {
+			`SELECT count(DISTINCT day), COALESCE(sum(income), 0),
+			        COALESCE(string_agg(owner_id::text || ':' || day || ':' || income::text, ',' ORDER BY owner_id, day), '')
+			 FROM profit_daily WHERE owner_kind = 'char' AND owner_id IN ($1, $2)`,
+			demoCharacterID, demoCharacter2ID).Scan(&days, &income, &rows); err != nil {
 			t.Fatal(err)
 		}
-		return days, income
+		return days, income, rows
 	}
-	daysBefore, incomeBefore := profitDays()
+	daysBefore, incomeBefore, _ := profitDays()
 	if daysBefore < 3 || incomeBefore <= 0 {
 		t.Errorf("seeded profit: %d days, %.0f income; want several days with income", daysBefore, incomeBefore)
 	}
@@ -324,7 +331,7 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 		t.Fatalf("second seed: %v", err)
 	}
 	snapsSeeded, fitsSeeded := counts()
-	daysSeeded, incomeSeeded := profitDays()
+	daysSeeded, _, rowsSeeded := profitDays()
 	if err := app.seedDemoData(ctx, seedNow); err != nil {
 		t.Fatalf("third seed: %v", err)
 	}
@@ -333,10 +340,18 @@ func TestDemoSeedIsCompleteAndIdempotent(t *testing.T) {
 		t.Errorf("second seed changed the state: snapshots %d -> %d, fits %d -> %d",
 			snapsSeeded, snapsAfter, fitsSeeded, fitsAfter)
 	}
-	daysAfter, incomeAfter := profitDays()
-	if daysAfter != daysSeeded || incomeAfter != incomeSeeded {
-		t.Errorf("second seed changed the profit ledger: days %d -> %d, income %v -> %v",
-			daysSeeded, daysAfter, incomeSeeded, incomeAfter)
+	daysAfter, _, rowsAfter := profitDays()
+	if daysAfter != daysSeeded || rowsAfter != rowsSeeded {
+		before, after := strings.Split(rowsSeeded, ","), strings.Split(rowsAfter, ",")
+		first := ""
+		for i := 0; i < len(before) && i < len(after); i++ {
+			if before[i] != after[i] {
+				first = before[i] + " -> " + after[i]
+				break
+			}
+		}
+		t.Errorf("second seed changed the profit ledger: days %d -> %d, rows %d -> %d, first change %q",
+			daysSeeded, daysAfter, len(before), len(after), first)
 	}
 }
 

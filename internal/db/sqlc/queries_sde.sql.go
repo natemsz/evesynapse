@@ -3853,7 +3853,7 @@ func (q *Queries) SearchPilotRecordsByName(ctx context.Context, lower string) ([
 
 const searchSDERegions = `-- name: SearchSDERegions :many
 SELECT region_id, name FROM sde_regions
-WHERE name ILIKE $1
+WHERE name ILIKE $1 AND region_id < 11000000
 ORDER BY name
 LIMIT 10
 `

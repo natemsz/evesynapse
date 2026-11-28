@@ -275,7 +275,7 @@ test("missing optional elements leave every view rendered", async function () {
     "plan-landed-sub", "plan-margin", "plan-margin-sub", "plan-data",
     "plan-form", "me-toggle", "me-modal", "me-apply",
     "plan-settings-toggle", "plan-settings-modal",
-    "judge-q", "judge-suggest", "system-q", "market-q", "market-value"
+    "judge-q", "judge-suggest", "system-q", "plan-market-q", "market-value"
   ];
   const els = install(capitalPayload(), { missing: missing });
   await waitFor(function () {
